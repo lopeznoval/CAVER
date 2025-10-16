@@ -7,13 +7,14 @@ import json
 from sx126x import sx126x
 
 # Configuración LoRa
+#SERIAL_PORT_LORA = "/dev/ttyAMA10"
 SERIAL_PORT_LORA = "/dev/ttyUSB0"
 FREQUENCY = 433
 NODE_ADDRESS = 2     # Dirección de la Raspberry
 POWER = 0
 
 # Configuración del robot (conexión por cable)
-SERIAL_PORT_ROBOT = "/dev/ttyAMA0"  # o /dev/ttyUSB1 según tu conexión
+SERIAL_PORT_ROBOT = "/dev/ttyACM0"  # o /dev/ttyUSB1 según tu conexión
 BAUDRATE_ROBOT = 115200
 
 def main():
@@ -26,9 +27,12 @@ def main():
         if lora.ser.in_waiting > 0:
             time.sleep(0.5)
             data = lora.ser.read(lora.ser.in_waiting)
+            #print("Tamaño del mensaje: " + len(data))
             if len(data) < 8:
                 continue
 
+            if len(data) > 0:
+                print(f"Ha llegado algo: {data}")
             dest = (data[0] << 8) | data[1]
             src  = (data[2] << 8) | data[3]
             msg_type = data[4]
@@ -39,9 +43,14 @@ def main():
                 continue  # mensaje no es para esta Raspi
 
             try:
-                cmd = json.loads(body.decode('utf-8'))
+                cmd = body.decode('utf-8')
+                #cmd_2 = '{"T": 1, "L": 0.3, "R": -0.3}'
+                #cmd = json.loads(body.decode('utf-8'))
                 print(f"📥 From {src} → CMD: {cmd}")
-                robot.write((json.dumps(cmd) + "\n").encode())
+                #robot.write((json.dumps(cmd) + "\n").encode())
+                robot.write(cmd.encode() + b'\n')
+                #robot.write((json.dumps(cmd) + "\r\n").encode())
+                #robot.flush()
             except Exception as e:
                 print(f"⚠️ Error decoding JSON: {e}")
 
