@@ -68,11 +68,12 @@ class sx126x:
             r_buff = self.ser.read(self.ser.in_waiting)
             print(f"Received: {r_buff}")
             # Extract message components
-            addr = (r_buff[0] << 8) + r_buff[1]
+            addr_dest = (r_buff[0] << 8) + r_buff[1]
+            addr_sender = (r_buff[3] << 8) + r_buff[4]
             freq = r_buff[2] + self.start_freq
             message = r_buff[3:-1].decode('utf-8', errors='ignore')
 
-            print(f"Received from {addr} @ {freq}MHz: {message}")
+            print(f"Received from {addr_sender} @ {freq}MHz: {message}")
 
             if self.rssi and len(r_buff) > 0:
                 rssi = 256 - r_buff[-1]
