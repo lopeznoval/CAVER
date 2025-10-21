@@ -11,11 +11,13 @@ SERIAL_PORT = "COM3"
 FREQUENCY = 433          # MHz
 NODE_ADDRESS = 20        # Your node address
 NODE_ADDRESS_DEST = 1    # Destination address
-RELAY_BIT = 1            # Relay flag
+RELAY_FLAG = 1            # Relay flag
 TYPE_MSG = 1             # Message type
 ID_MSG = 0               # Message ID
 POWER = 0                # dBm
 MESSAGE_INTERVAL = 6     # seconds
+
+
 
 class LoRaNode:
     def __init__(self):
@@ -38,8 +40,10 @@ class LoRaNode:
                 NODE_ADDRESS_DEST & 0xFF,       # Sender address low
                 NODE_ADDRESS >> 8,              # Sender address high
                 NODE_ADDRESS & 0xFF,            # Sender address low
-                RELAY_BIT | (TYPE_MSG & 0x7F),                # Message type
-                ID_MSG & 0xFF                   # Message ID
+                FREQUENCY,
+                (RELAY_FLAG << 7) | (TYPE_MSG & 0x7F),                # Message type
+                ID_MSG & 0xFF,                   # Message ID
+                
             ]) + message.encode()
 
             print(f"Transmited: {data}")

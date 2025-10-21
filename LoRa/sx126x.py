@@ -63,21 +63,36 @@ class sx126x:
 
     def receive(self):
         """Receive data from LoRa module"""
-        if self.ser.in_waiting > 0:
-            time.sleep(0.5)  # Wait for complete message
-            r_buff = self.ser.read(self.ser.in_waiting)
-            print(f"Received: {r_buff}")
-            # Extract message components
-            addr_dest = (r_buff[0] << 8) + r_buff[1]
-            addr_sender = (r_buff[2] << 8) + r_buff[3]
-            freq = r_buff[2] + self.start_freq
-            message = r_buff[3:-1].decode('utf-8', errors='ignore')
+        try:
+            if self.ser.in_waiting > 0:
+                time.sleep(0.5)  # Wait for complete message
+                r_buff = self.ser.read(self.ser.in_waiting)
+                print(f"Received: {r_buff}")
+                # Extract message components
+                addr_dest = (r_buff[0] << 8) + r_buff[1]
+                addr_sender = (r_buff[2] << 8) + r_buff[3]
+                freq = r_buff[4]
+                msg_type = r_buff[5] & 0x7F
+                relay_flag = r_buff[5] >> 7
+                msg_id = r_buff[6]
+                message = r_buff[7:].decode('utf-8', errors='ignore')
 
-            print(f"Received from {addr_sender} @ {freq}MHz: {message}")
+                print(f"Received from {addr_sender} @ {freq}MHz: {message}")
+                print(f"""
+                        Mensaje del nodo {addr_sender},
+                        destinado al nodo {addr_dest}.
+                        Tipo de mensaje : {msg_type}.
+                        ID del mensaje: {msg_id}.
+                        Modo relay: {bool(relay_flag)}
+                        """)
 
-            if self.rssi and len(r_buff) > 0:
-                rssi = 256 - r_buff[-1]
-                print(f"RSSI: -{rssi}dBm")
+                if self.rssi and len(r_buff) > 0:
+                    rssi = 256 - r_buff[-1]
+                    print(f"RSSI: -{rssi}dBm")
+        except Exception as e:
+
+            print("Error:", e)
+
 
     def close(self):
         """Close serial connection"""
