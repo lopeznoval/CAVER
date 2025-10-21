@@ -8,14 +8,15 @@ from sx126x import sx126x
 #SERIAL_PORT = "/dev/ttyUSB0"
 SERIAL_PORT = "COM3"
 
-FREQUENCY = 433          # MHz
+FREQUENCY = 410          # MHz
 NODE_ADDRESS = 20        # Your node address
 NODE_ADDRESS_DEST = 1    # Destination address
 RELAY_FLAG = 1            # Relay flag
 TYPE_MSG = 1             # Message type
-ID_MSG = 0               # Message ID
+ID_MSG = 69               # Message ID
 POWER = 0                # dBm
 MESSAGE_INTERVAL = 6     # seconds
+FREQ_OFFSET = 18
 
 
 
@@ -40,10 +41,10 @@ class LoRaNode:
                 NODE_ADDRESS_DEST & 0xFF,       # Sender address low
                 NODE_ADDRESS >> 8,              # Sender address high
                 NODE_ADDRESS & 0xFF,            # Sender address low
-                FREQUENCY,
+                FREQ_OFFSET,
                 (RELAY_FLAG << 7) | (TYPE_MSG & 0x7F),                # Message type
                 ID_MSG & 0xFF,                   # Message ID
-                
+
             ]) + message.encode()
 
             print(f"Transmited: {data}")
