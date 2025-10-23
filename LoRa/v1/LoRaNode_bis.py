@@ -73,7 +73,7 @@ class LoRaNode:
             msg = f"Auto-message #{count} from {self.addr}"
             data = self.pack_message(node_address, msg_type, msg_id, msg)
             self.node.send_bytes(data)
-            print(f"[{time.strftime('%H:%M:%S')}] Sent: {msg}")
+            print(f"[{time.strftime('%H:%M:%S')}] Sent: {msg}, con data: {data}")
             count += 1
             time.sleep(6) # intervalos de 6 segundos entre envío y envío
 
@@ -112,10 +112,11 @@ class LoRaNode:
         if self.robot_port and self.robot_baudrate:
             self.connect_robot()
         threading.Thread(target=self.periodic_send, daemon=True).start()
-        threading.Thread(target=self.receive_loop, daemon=True).start()
+        # threading.Thread(target=self.receive_loop, daemon=True).start()
         print("LoRaNode running... Ctrl+C to stop")
         try:
             while True:
+                self.receive_loop()
                 if self.EB:
                     # Estación base puede hacer otras tareas
                     pass

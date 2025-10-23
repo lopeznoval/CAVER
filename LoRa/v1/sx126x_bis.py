@@ -41,10 +41,12 @@ class sx126x:
         self.ser.flushInput()
 
     def send_bytes(self, data):
+        print(f"Sending bytes: {data}")
         self.ser.write(data)
 
     def receive_bytes(self):
         if self.ser.in_waiting > 0:
+            print(f"Receiving bytes...")
             return self.ser.read(self.ser.in_waiting)
         return None
 
