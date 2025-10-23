@@ -90,7 +90,11 @@ class LoRaNode:
             if not msg:
                 time.sleep(0.05)
                 continue            # salgo del loop si no hay mensaje
-            addr_sender, addr_dest, msg_type, msg_id, relay_flag, message = self.unpack_message(msg)
+            try:
+                addr_sender, addr_dest, msg_type, msg_id, relay_flag, message = self.unpack_message(msg)
+            except Exception as e:
+                print(f"Error unpacking message: {e}")
+                continue
             print(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender}: {message}")
             if addr_dest != self.addr:
                 continue            # No es para este nodo (hay que poner la lógica del relay aquí)
