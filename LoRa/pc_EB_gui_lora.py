@@ -122,6 +122,10 @@ class RobotGUI:
         self.master.bind("<space>", lambda e: self.move_robot("stop"))
 
         self.master.protocol("WM_DELETE_WINDOW", self.on_close)
+        
+        self.listen_thread = threading.Thread(target=self.listen_lora, daemon=True)
+        self.listen_thread.start()
+        
 
     # --- Movement logic ---
     def move_robot(self, direction):
@@ -161,10 +165,15 @@ class RobotGUI:
         self.lora.send(packet)
         self._append_output(f"📡 LoRa sent: {message}")
 
+        if hasattr(self, "ip_entry"):
+            ip = self.ip_entry.get().strip()
+            if ip:
+                threading.Thread(target=self._send_request, args=(ip, cmd), daemon=True).start()
+
         # Enviar por IP
-        ip = self.ip_entry.get().strip()
-        if ip:
-            threading.Thread(target=self._send_request, args=(ip, cmd), daemon=True).start()
+        #ip = self.ip_entry.get().strip()
+        #if ip:
+            #threading.Thread(target=self._send_request, args=(ip, cmd), daemon=True).start()
 
     def _send_request(self, ip, cmd):
         try:
@@ -194,16 +203,24 @@ class RobotGUI:
         self._append_output("🛑 Auto feedback stopped.\n")
 
     def _feedback_loop(self):
-        ip = self.ip_entry.get().strip()
+        """Solicita periódicamente feedback al robot vía LoRa."""
         while self.feedback_running:
-            if ip:
-                try:
-                    url = f"http://{ip}/js?json={json.dumps({'T':130})}"
-                    r = requests.get(url, timeout=3)
-                    self._append_output(f"[Feedback] {r.text.strip()}\n")
-                except Exception as e:
-                    self._append_output(f"⚠️ Feedback error: {e}\n")
+            try:
+                # Enviar comando por LoRa para solicitar feedback
+                self.send_cmd({"T": 130})
+            except Exception as e:
+                self._append_output(f"⚠️ Feedback error: {e}\n")
             time.sleep(1)
+        # ip = self.ip_entry.get().strip()
+        # while self.feedback_running:
+        #     if ip:
+        #         try:
+        #             url = f"http://{ip}/js?json={json.dumps({'T':130})}"
+        #             r = requests.get(url, timeout=3)
+        #             self._append_output(f"[Feedback] {r.text.strip()}\n")
+        #         except Exception as e:
+        #             self._append_output(f"⚠️ Feedback error: {e}\n")
+        #     time.sleep(1)
 
     def _append_output(self, text):
         self.output.insert(tk.END, text + "\n")
@@ -212,6 +229,22 @@ class RobotGUI:
     def on_close(self):
         self.feedback_running = False
         self.master.destroy()
+        
+    def listen_lora(self):
+        """Escucha los mensajes que llegan por LoRa desde la Raspberry/Robot."""
+        while True:
+            if self.lora.ser.in_waiting > 0:
+                data = self.lora.ser.read(self.lora.ser.in_waiting)
+                if len(data) >= 8:
+                    src = (data[2] << 8) | data[3]
+                    body = data[6:]
+                    try:
+                        msg = body.decode('utf-8', errors='ignore').strip()
+                        if msg:
+                            self._append_output(f"From {src}: {msg}")
+                    except Exception as e:
+                        self._append_output(f"Error decodificando: {e}")
+            time.sleep(0.1)
 
 
 if __name__ == "__main__":

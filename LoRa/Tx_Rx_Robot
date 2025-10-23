@@ -12,13 +12,30 @@ from sx126x import sx126x
 SERIAL_PORT_LORA = "/dev/ttyUSB0"
 FREQUENCY = 433
 NODE_ADDRESS = 2     # Dirección de la Raspberry
-POWER = 0
+POWER = 0            # Dirección de la EB
+EB_ADDRESS = 20
+RELAY_BIT = 1
+TYPE_MSG = 1
+ID_MSG = 0
 
 # Configuración del robot (conexión por cable)
 SERIAL_PORT_ROBOT = "/dev/ttyACM0"  # o /dev/ttyUSB1 según tu conexión
 BAUDRATE_ROBOT = 115200
 
-def escuchar_robot(robot):
+def enviar_al_pc(lora, message):
+    """Envía por LoRa un mensaje de texto al PC."""
+    packet = bytes([
+        EB_ADDRESS >> 8,
+        EB_ADDRESS & 0xFF,
+        NODE_ADDRESS >> 8,
+        NODE_ADDRESS & 0xFF,
+        RELAY_BIT | (TYPE_MSG & 0x7F),
+        ID_MSG & 0xFF
+    ]) + message.encode('utf-8', errors='ignore')
+    lora.send(packet)
+    print(f"Enviado a PC → {message}")
+
+def escuchar_robot(robot, lora):
     "Hilo para escuchar respuestas del robot"
     while True:
         if robot.in_waiting > 0:
@@ -26,6 +43,7 @@ def escuchar_robot(robot):
                 response = robot.readline().decode('utf-8').strip()
                 if response:
                     print(f"Respuesta del robot: {response}")
+                    enviar_al_pc(lora, response)
             except Exception as e:
                 print(f"Error leyendo del robot: {e}")
         time.sleep(0.05)
@@ -38,7 +56,7 @@ def main():
     print("Conectado al robot en", SERIAL_PORT_ROBOT)
     
     # Crear hilo para escuchar al robot
-    robot_thread = threading.Thread(target=escuchar_robot, args=(robot,), daemon=True)
+    robot_thread = threading.Thread(target=escuchar_robot, args=(robot,lora), daemon=True)
     robot_thread.start()
     
     while True:
@@ -62,10 +80,10 @@ def main():
 
             try:
                 cmd = body.decode('utf-8')
-                print(f"📥 From {src} → CMD: {cmd}")
+                print(f"From {src} → Comando: {cmd}")
                 robot.write(cmd.encode() + b'\n')
             except Exception as e:
-                print(f"⚠️ Error decoding JSON: {e}")
+                print(f"Error decoding JSON: {e}")
 
         time.sleep(0.1)
 
