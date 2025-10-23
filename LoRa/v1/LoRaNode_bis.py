@@ -6,7 +6,7 @@ from sx126x_bis import sx126x
 from parameters import *
 
 class LoRaNode:
-    def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, EB=0):  # EB = 1 si es estación base
+    def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, EB=0, robot_port=None, robot_baudrate=None):  # EB = 1 si es estación base
         self.running = True
         self.node = sx126x(serial_num=ser_port, freq=freq,
                            addr=addr, power=pw, rssi=rssi)
@@ -20,11 +20,14 @@ class LoRaNode:
         self.freq = freq
         self.power = pw
 
+        self.robot_port = robot_port
+        self.robot_baudrate = robot_baudrate
+
     # -------------------- SERIAL ROBOT --------------------
     def connect_robot(self):
         try:
-            self.robot = serial.Serial(SERIAL_PORT_ROBOT, BAUDRATE_ROBOT, timeout=1)
-            print(f"Connected to robot on {SERIAL_PORT_ROBOT}")
+            self.robot = serial.Serial(self.robot_port, self.robot_baudrate, timeout=1)
+            print(f"Connected to robot on {self.robot_port}")
             self.robot_listener = threading.Thread(target=self.receive_from_robot)
             self.robot_listener.daemon = True
             self.robot_listener.start()
@@ -64,7 +67,7 @@ class LoRaNode:
         return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message
 
     # -------------------- HILOS --------------------
-    def periodic_send(self, node_address=NODE_ADDRESS_DEST, msg_type=TYPE_MSG, msg_id=ID_MSG):
+    def periodic_send(self, node_address=0xFFFF, msg_type=TYPE_MSG, msg_id=ID_MSG):
         count = 0
         while self.running:
             msg = f"Auto-message #{count} from {self.addr}"
@@ -72,7 +75,7 @@ class LoRaNode:
             self.node.send_bytes(data)
             print(f"[{time.strftime('%H:%M:%S')}] Sent: {msg}")
             count += 1
-            time.sleep(MESSAGE_INTERVAL)
+            time.sleep(6) # intervalos de 6 segundos entre envío y envío
 
     def send_message(self, addr_dest, msg_type, msg_id, message, relay_flag=0, callback=None):
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
@@ -106,7 +109,8 @@ class LoRaNode:
 
     # -------------------- EJECUCIÓN --------------------
     def run(self):
-        #self.connect_robot()
+        if self.robot_port and self.robot_baudrate:
+            self.connect_robot()
         threading.Thread(target=self.periodic_send, daemon=True).start()
         threading.Thread(target=self.receive_loop, daemon=True).start()
         print("LoRaNode running... Ctrl+C to stop")
