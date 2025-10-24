@@ -125,6 +125,7 @@ class RobotGUI:
         
         self.listen_thread = threading.Thread(target=self.listen_lora, daemon=True)
         self.listen_thread.start()
+        self.waiting_for_response = False
         
 
     # --- Movement logic ---
@@ -185,6 +186,7 @@ class RobotGUI:
 
     # --- Feedback ---
     def start_feedback(self):
+        self.waiting_for_response = True
         if self.feedback_running:
             messagebox.showinfo("Info", "Auto feedback already running.")
             return
@@ -204,6 +206,7 @@ class RobotGUI:
 
     def _feedback_loop(self):
         """Solicita periódicamente feedback al robot vía LoRa."""
+        self.waiting_for_response = True
         while self.feedback_running:
             try:
                 # Enviar comando por LoRa para solicitar feedback
@@ -231,7 +234,9 @@ class RobotGUI:
         self.master.destroy()
         
     def listen_lora(self):
-        """Escucha los mensajes que llegan por LoRa desde la Raspberry/Robot."""
+        """Escucha los mensajes que llegan por LoRa desde la Raspberry/Robot y reconstruye JSON completos."""
+        buffer = ""  # almacena fragmentos de mensajes
+
         while True:
             if self.lora.ser.in_waiting > 0:
                 data = self.lora.ser.read(self.lora.ser.in_waiting)
@@ -239,13 +244,33 @@ class RobotGUI:
                     src = (data[2] << 8) | data[3]
                     body = data[6:]
                     try:
-                        msg = body.decode('utf-8', errors='ignore').strip()
-                        if msg:
-                            self._append_output(f"From {src}: {msg}")
-                    except Exception as e:
-                        self._append_output(f"Error decodificando: {e}")
-            time.sleep(0.1)
+                        msg_part = body.decode('utf-8', errors='ignore')
+                        buffer += msg_part  # acumulamos el fragmento recibido
 
+                        # Mientras haya un JSON completo en el buffer
+                        while "{" in buffer and "}" in buffer:
+                            start = buffer.find("{")
+                            end = buffer.find("}", start)
+                            if end == -1:
+                                break
+
+                            # Extraer mensaje completo
+                            complete_msg = buffer[start:end+1]
+                            buffer = buffer[end+1:]
+
+                            # Solo mostramos si se ha solicitado desde la GUI
+                            if self.waiting_for_response:
+                                print(f"From {src}: {complete_msg}")
+                                self._append_output(f"From {src}: {complete_msg}")
+
+                                # Si solo esperas una respuesta, puedes resetear la bandera:
+                                self.waiting_for_response = False
+
+                    except Exception as e:
+                        print(f"Error decodificando: {e}")
+                        self._append_output(f"Error decodificando: {e}")
+
+            time.sleep(0.1)
 
 if __name__ == "__main__":
     root = tk.Tk()
