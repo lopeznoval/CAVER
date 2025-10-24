@@ -57,6 +57,10 @@ class LoRaNode:
         return header + message.encode()
 
     def unpack_message(self, r_buff):
+        if len(r_buff) < 7:
+            print(f"⚠️ Paquete recibido demasiado corto: len={len(r_buff)} -> {r_buff}")
+            return 
+        
         addr_dest = (r_buff[0] << 8) + r_buff[1]
         addr_sender = (r_buff[2] << 8) + r_buff[3]
         freq = r_buff[4]
@@ -64,6 +68,8 @@ class LoRaNode:
         relay_flag = r_buff[5] >> 7
         msg_id = r_buff[6]
         message = r_buff[7:].decode(errors='ignore')
+
+        print(f"Message raw ({type(message)}): {message!r}")
         print(f"Unpacked message: from {addr_sender} to {addr_dest}, type {msg_type}, id {msg_id}, relay {relay_flag}, msg: {message}")
         return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message
 
