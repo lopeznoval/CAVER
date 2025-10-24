@@ -42,7 +42,6 @@ def escuchar_robot(robot, lora):
             try: 
                 response = robot.readline().decode('utf-8').strip()
                 if response:
-                    print(f"Respuesta del robot: {response}")
                     enviar_al_pc(lora, response)
             except Exception as e:
                 print(f"Error leyendo del robot: {e}")
