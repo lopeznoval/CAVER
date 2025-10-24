@@ -4,7 +4,6 @@ import threading
 import serial
 from sx126x_bis import sx126x
 from parameters import *
-import tkinter as tk
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, EB=0, robot_port=None, robot_baudrate=None):  # EB = 1 si es estación base
@@ -41,12 +40,12 @@ class LoRaNode:
             if data:
                 print(f"Received from robot: {data}")
 
-    def send_to_robot(self, command):
+    def send_to_robot(self, command: str):
         if self.robot and self.robot.is_open:
             self.robot.write(command.encode())
 
     # -------------------- MENSAJES --------------------
-    def pack_message(self, addr_dest, msg_type, msg_id, message, relay_flag=0):
+    def pack_message(self, addr_dest:int, msg_type: int, msg_id: int, message: str, relay_flag: int =0):
         offset_freq = self.freq - 410 # assuming base freq is 410MHz
         header = bytes([
             (addr_dest >> 8) & 0xFF, addr_dest & 0xFF,
@@ -109,14 +108,14 @@ class LoRaNode:
                 self.send_to_robot(message)
                 # Enviar ACK
                 ack = self.pack_message(addr_sender, 1, msg_id, "OK")
-                self.node.send(ack)
+                self.node.send_bytes(ack)
 
 
     # -------------------- EJECUCIÓN --------------------
     def run(self):
         if self.robot_port and self.robot_baudrate:
             self.connect_robot()
-        threading.Thread(target=self.periodic_send, daemon=True).start()
+        # threading.Thread(target=self.periodic_send, daemon=True).start()
         threading.Thread(target=self.receive_loop, daemon=True).start()
         print("LoRaNode running... Ctrl+C to stop")
         # try:
