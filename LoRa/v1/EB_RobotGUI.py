@@ -1,26 +1,29 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import json, threading, time
-from sx126x import sx126x  # Tu clase LoRa
+from LoRaNode_bis import LoRaNode  # Tu clase LoRa
 import requests
 
 # ==== Configuración LoRa ====
-SERIAL_PORT = "COM4"        # puerto LoRa en Windows, en RPi "/dev/ttyUSB0"
-FREQUENCY = 433
-NODE_ADDRESS = 20            # dirección del PC
-DEST_ADDRESS = 2             # dirección del robot
-POWER = 0
-RELAY_BIT = 1
-TYPE_MSG = 1
-ID_MSG = 0
+# SERIAL_PORT = "COM4"        # puerto LoRa en Windows, en RPi "/dev/ttyUSB0"
+# FREQUENCY = 433
+# NODE_ADDRESS = 20            # dirección del PC
+# DEST_ADDRESS = 2             # dirección del robot
+# POWER = 0
+# RELAY_BIT = 1
+# TYPE_MSG = 1
+# ID_MSG = 0
 
 
 class EB_RobotGUI:
-    def __init__(self, master):
+    def __init__(self, master, loranode: LoRaNode = None):
         self.master = master
         self.master.title("UGV02 Robot Control Panel")
         self.master.geometry("600x750")
         self.master.configure(bg="#f4f4f4")
+
+        self.loranode = loranode
+        self.msg_id = 0
 
         self.feedback_running = False
         self.feedback_thread = None
@@ -95,6 +98,33 @@ class EB_RobotGUI:
 
         ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=10)
 
+        # --- LoRa Commands ---
+        # --- LoRa Commands ---
+        ttk.Label(main_frame, text="📤 Custom LoRa Command", font=("Segoe UI", 11, "bold")).pack(pady=(10, 5))
+        lora_frame = tk.Frame(main_frame, bg="#f4f4f4")
+        lora_frame.pack(pady=5)
+
+        # Nodo destino
+        tk.Label(lora_frame, text="Dest Node:", bg="#f4f4f4").grid(row=0, column=0, padx=5, pady=3, sticky="e")
+        self.dest_entry = ttk.Entry(lora_frame, width=8)
+        self.dest_entry.insert(0, "2")  # Valor por defecto
+        self.dest_entry.grid(row=0, column=1, padx=5, pady=3)
+
+        # Tipo de mensaje (1–30)
+        tk.Label(lora_frame, text="Msg Type:", bg="#f4f4f4").grid(row=0, column=2, padx=5, pady=3, sticky="e")
+        self.type_combo = ttk.Combobox(lora_frame, values=list(range(1, 31)), width=5, state="readonly")
+        self.type_combo.set(1)
+        self.type_combo.grid(row=0, column=3, padx=5, pady=3)
+
+        # Relay Bit (0 o 1)
+        tk.Label(lora_frame, text="Relay Bit:", bg="#f4f4f4").grid(row=0, column=4, padx=5, pady=3, sticky="e")
+        self.relay_combo = ttk.Combobox(lora_frame, values=[0, 1], width=5, state="readonly")
+        self.relay_combo.set(1)
+        self.relay_combo.grid(row=0, column=5, padx=5, pady=3)
+
+        # Botón de envío
+        ttk.Button(main_frame, text="Send Custom Command", width=25,
+                   command=self.send_cmd).pack(pady=8)
         # --- Response Log ---
         ttk.Label(main_frame, text="📄 Response Log", font=("Segoe UI", 11, "bold")).pack()
         log_frame = tk.Frame(main_frame, bg="#f4f4f4")
@@ -139,6 +169,12 @@ class EB_RobotGUI:
 
     # --- Send command ---
     def send_cmd(self, cmd):
+        dest = int(self.dest_entry.get())
+        msg_type = int(self.type_combo.get())
+        relay = int(self.relay_combo.get())
+        self.msg_id += 1
+
+        self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
         self._append_output(f"📡 LoRa sent: {cmd}")
 
     # --- Feedback ---
