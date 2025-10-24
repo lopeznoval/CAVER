@@ -11,7 +11,7 @@ import RPi.GPIO as GPIO
 DHT_SENSOR = Adafruit_DHT.DHT22
 DHT_PIN = 14              # Pin GPIO (no número físico del conector)
 LED_PIN = 12              # Pin GPIO para LED indicador
-SERVER_URL = "http://10.38.20.189:1880/esp32"   # Cambia por la IP de tu servidor Node-RED
+SERVER_URL = "http://10.38.9.114:1880/"   # Cambia por la IP de tu servidor Node-RED
 
 # ==== CONFIGURAR GPIO ====
 GPIO.setmode(GPIO.BCM)

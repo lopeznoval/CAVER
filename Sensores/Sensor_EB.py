@@ -2,18 +2,42 @@ import serial
 import time
 import requests
 
-lora_pc = serial.Serial('COM3', 115200, timeout=2)  # Ajusta el puerto
-print("Estación base lista")
+#Parámetros ESP32
+Puerto = '/dev/ttyUSB0'
+BAU = 115200
+
+#Parámetros Servidor NODE-RED
+SERVER_URL = "http://10.38.9.114:1880/CAVER"   # Cambia por la IP de tu servidor Node-RED
+#Para monitorizar los valores de temperatura y humedad poner en el buscador: http://10.38.9.114:1880/ui
+
+ser = serial.Serial(Puerto, BAU, timeout=2)  # Ajusta el puerto
+time.sleep(2)  # Espera a que el puerto inicialice
+
+print("Leyendo datos del ESP32...\n")
 
 while True:
-    comando = input("Comando (MEASURE/MOVE/...): ").strip()
-    lora_pc.write((comando + "\n").encode('utf-8'))
+    try:
+        line = ser.readline().decode('utf-8', errors='ignore').strip()
+        if line:
+            if line.startswith("H") and "T" in line:
+                # Ejemplo de línea:Humidity:72% Temperature:21ºC
+                parts = line.split()
+                hum = float(parts[0].split(':')[1].replace('%',''))
+                temp = float(parts[1].split(':')[1].replace('°C',''))
+                print(f"Temperatura: {temp:.1f}°C  |  Humedad: {hum:.1f}%")
 
-    time.sleep(1)
-    if lora_pc.in_waiting > 0:
-        respuesta = lora_pc.readline().decode('utf-8').strip()
-        print("Respuesta del robot:", respuesta)
-        
-    #Para enviarselo al servidor NODE-RED
-    requests.post("http://localhost:1880/CAVER", json={"temp": 23.4, "hum": 56.1})
-    #Con esto en la terminal funciona: curl -X POST http://localhost:1880/CAVER -H "Content-Type: application/json" -d '{"temperature":25,"humidity":60}'
+                #Envio a NODE-RED
+                payload = {
+                    "temperature": temp,
+                    "humidity": hum
+                }
+                try: 
+                    response = requests.post(SERVER_URL, json=payload, timeout=2)
+                    if response.status_code == 200:
+                        print("Datos enviados a Node-RED")
+                    else:
+                        print(f"Error Node-RED: {response.status_code}")
+                except requests.exceptions.RequestException as e:
+                    print("Error leyendo el ESP32:", e)
+    except Exception as e:
+        print("Error leyendo el ESP32:", e)
