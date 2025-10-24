@@ -40,7 +40,7 @@ class LoRaNode:
             if data:
                 print(f"Received from robot: {data}")
 
-    def send_to_robot(self, command: str):
+    def send_to_robot(self, addr_dest: int, msg_id: int, command: str):
         if self.robot and self.robot.is_open:
             self.robot.write(command.encode())
 
@@ -64,6 +64,7 @@ class LoRaNode:
         relay_flag = r_buff[5] >> 7
         msg_id = r_buff[6]
         message = r_buff[7:].decode(errors='ignore')
+        print(f"Unpacked message: from {addr_sender} to {addr_dest}, type {msg_type}, id {msg_id}, relay {relay_flag}, msg: {message}")
         return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message
 
     # -------------------- HILOS --------------------
@@ -103,9 +104,11 @@ class LoRaNode:
                 with self.lock:
                     if msg_id in self.pending_requests:
                         callback = self.pending_requests.pop(msg_id)
-                        callback(message)           
+                        callback(message) 
+            # if msg_type == 5:  # Connectate con el robot
+            #     self.connect_robot(message)          
             elif msg_type == 6:  # Comando de orden al robot
-                self.send_to_robot(message)
+                self.send_to_robot(addr_dest, msg_id, message)
                 # Enviar ACK
                 ack = self.pack_message(addr_sender, 1, msg_id, "OK")
                 self.node.send_bytes(ack)
