@@ -30,7 +30,7 @@ class LoRaNode:
             print(f"Connected to robot on {self.robot_port}")
             self.robot_listener = threading.Thread(target=self.receive_from_robot)
             self.robot_listener.daemon = True
-            self.robot_listener.start()
+            # self.robot_listener.start()
         except serial.SerialException as e:
             print(f"Failed to connect to robot: {e}")
 
