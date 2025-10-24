@@ -1,2 +1,17 @@
-# No se sube la carpeta parameters
-.\LoRa\v1\parameters.py
+# Ignorar cachés de Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Ignorar archivos locales de configuración
+LoRa/v1/parameters.py
+
+# (Opcional) Ignorar entornos virtuales
+venv/
+.env/
+
+# (Opcional) Ignorar archivos temporales de tu editor
+*.log
+*.tmp
+.vscode/
+.idea/

@@ -4,6 +4,7 @@ import threading
 import serial
 from sx126x_bis import sx126x
 from parameters import *
+import tkinter as tk
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, EB=0, robot_port=None, robot_baudrate=None):  # EB = 1 si es estación base
@@ -14,7 +15,7 @@ class LoRaNode:
         self.pending_requests = {}                                  # msg_id -> callback/event
         self.lock = threading.Lock()
         self.robot = None
-        self.EB = EB  # External Board reference
+        self.is_base = EB  # External Board reference
 
         self.addr = addr
         self.freq = freq
@@ -116,17 +117,15 @@ class LoRaNode:
         if self.robot_port and self.robot_baudrate:
             self.connect_robot()
         threading.Thread(target=self.periodic_send, daemon=True).start()
-        # threading.Thread(target=self.receive_loop, daemon=True).start()
+        threading.Thread(target=self.receive_loop, daemon=True).start()
         print("LoRaNode running... Ctrl+C to stop")
-        try:
-            while True:
-                self.receive_loop()
-                if self.EB:
-                    # Estación base puede hacer otras tareas
-                    pass
-                time.sleep(1)
-        except KeyboardInterrupt:
-            self.stop()
+        # try:
+        #     while True:
+        #         # self.receive_loop()
+        #         time.sleep(1)
+        # except KeyboardInterrupt:
+        #     self.stop()
+    
 
     def stop(self):
         print("Stopping LoRaNode...")
