@@ -77,7 +77,7 @@ class EB_RobotGUI:
 
         ttk.Button(main_frame, text="Send to OLED", width=20, command=self.send_oled).pack(pady=4)
         ttk.Button(main_frame, text="Restore OLED", width=20,
-                   command=lambda: self.send_cmd({"T": -3})).pack(pady=2)
+                   command=lambda: self.send_cmd(json.dumps({"T": -3}))).pack(pady=2)
 
         ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=10)
 
@@ -87,9 +87,9 @@ class EB_RobotGUI:
         info_frame.pack(pady=5)
 
         ttk.Button(info_frame, text="Get IMU Data", width=20,
-                   command=lambda: self.send_cmd({"T": 126})).grid(row=0, column=0, padx=5, pady=3)
+                   command=lambda: self.send_cmd(json.dumps({"T": 126}))).grid(row=0, column=0, padx=5, pady=3)
         ttk.Button(info_frame, text="Get Chassis Feedback", width=20,
-                   command=lambda: self.send_cmd({"T": 130})).grid(row=0, column=1, padx=5, pady=3)
+                   command=lambda: self.send_cmd(json.dumps({"T": 130}))).grid(row=0, column=1, padx=5, pady=3)
 
         ttk.Button(info_frame, text="Start Auto Feedback", width=20,
                    command=self.start_feedback).grid(row=1, column=0, padx=5, pady=3)
@@ -123,8 +123,7 @@ class EB_RobotGUI:
         self.relay_combo.grid(row=0, column=5, padx=5, pady=3)
 
         # Botón de envío
-        ttk.Button(main_frame, text="Send Custom Command", width=25,
-                   command=self.send_cmd).pack(pady=8)
+        ttk.Button(main_frame, text="Send Custom Command", width=25, command=self.send_cmd).pack(pady=8)
         # --- Response Log ---
         ttk.Label(main_frame, text="📄 Response Log", font=("Segoe UI", 11, "bold")).pack()
         log_frame = tk.Frame(main_frame, bg="#f4f4f4")
@@ -155,7 +154,7 @@ class EB_RobotGUI:
         }
         cmd = commands.get(direction)
         if cmd:
-            self.send_cmd(cmd)
+            self.send_cmd(json.dumps(cmd))
 
     # --- OLED ---
     def send_oled(self):
@@ -163,7 +162,7 @@ class EB_RobotGUI:
             line = int(self.line_var.get())
             text = self.text_entry.get()
             cmd = {"T": 3, "lineNum": line, "Text": text}
-            self.send_cmd(cmd)
+            self.send_cmd(json.dumps(cmd))
         except ValueError:
             messagebox.showerror("Error", "Line number must be 0–3.")
 
@@ -183,7 +182,7 @@ class EB_RobotGUI:
             messagebox.showinfo("Info", "Auto feedback already running.")
             return
         self.feedback_running = True
-        self.send_cmd({"T": 131, "cmd": 1})
+        self.send_cmd(json.dumps({"T": 131, "cmd": 1}))
         self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
         self.feedback_thread.start()
         self._append_output("✅ Auto feedback started.\n")
@@ -193,7 +192,7 @@ class EB_RobotGUI:
             messagebox.showinfo("Info", "Auto feedback is not active.")
             return
         self.feedback_running = False
-        self.send_cmd({"T": 131, "cmd": 0})
+        self.send_cmd(json.dumps({"T": 131, "cmd": 0}))
         self._append_output("🛑 Auto feedback stopped.\n")
 
     def _feedback_loop(self):
