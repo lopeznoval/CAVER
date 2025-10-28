@@ -142,6 +142,27 @@ class LoRaNode:
                 # Enviar ACK
                 ack = self.pack_message(addr_sender, 1, msg_id, "OK")
                 self.node.send_bytes(ack)  
+            
+            elif msg_type == 200:  # Comando para capturar foto
+                try:
+                    # Crear stream en memoria y tomar foto
+                    stream = io.BytesIO()
+                    camera = PiCamera()
+                    camera.capture(stream, format='jpeg')
+                    camera.close()
+
+                    # Convertir a Base64
+                    img_b64 = base64.b64encode(stream.getvalue()).decode('utf-8')
+
+                    # Crear mensaje T:201 con la imagen
+                    resp = {"T": 201, "image": img_b64}
+                    data = self.pack_message(addr_sender, 201, msg_id, json.dumps(resp))
+                    self.node.send_bytes(data)
+
+                    print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
+                except Exception as e:
+                    print(f"Error tomando/enviando foto: {e}")
+
 
     # -------------------- EJECUCIÓN --------------------
     def run(self):
