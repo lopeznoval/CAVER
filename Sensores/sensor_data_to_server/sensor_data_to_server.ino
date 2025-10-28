@@ -8,8 +8,8 @@
 
 DHT dht(DHTPIN, DHTTYPE);
 const int ledPin = 12;
-const char* ssid = "iPhone de Diego";
-const char* password = "eork3004";
+const char* ssid = "Ordenador";
+const char* password = "2j4891QU";
 
 void setup() {
   Serial.begin(115200);
@@ -63,34 +63,35 @@ void loop() {
   }
 
   // === Receive data from server ===
-  HTTPClient http;
-  http.begin("http://10.216.199.26:3000/data");  // Replace with your actual server IP
-  Serial.print("➡️ Connecting to server for GET... ");
-  int httpCode = http.GET();
+  // HTTPClient http;
+  // http.begin(" http://127.0.0.1:1880/data");  // Replace with your actual server IP
+  // Serial.print("➡️ Connecting to server for GET... ");
+  // int httpCode = http.GET();
 
-  if (httpCode > 0) {
-    Serial.print("✅ Response code: ");
-    Serial.println(httpCode);
-    String response = http.getString();
-    Serial.println(response);
-  } else {
-    Serial.print("❌ GET failed, error: ");
-    Serial.println(httpCode);
-  }
-  http.end();  // Clean up
+  // if (httpCode > 0) {
+  //   Serial.print("✅ Response code: ");
+  //   Serial.println(httpCode);
+  //   String response = http.getString();
+  //   Serial.println(response);
+  // } else {
+  //   Serial.print("❌ GET failed, error: ");
+  //   Serial.println(httpCode);
+  // }
+  // http.end();  // Clean up
 
   // === Send data to server ===
   HTTPClient postHttp;
-  postHttp.begin("http://10.216.199.26:3000/data");  // Same or different endpoint
+  postHttp.begin("http://10.38.20.189:1880/esp32");  // Same or different endpoint
   postHttp.addHeader("Content-Type", "application/json");
 
   String payload = String("{\"temperature\":") + t + ",\"humidity\":" + h + "}";
-
+  Serial.println(payload);
   int postCode = postHttp.POST(payload);
 
   if (postCode > 0) {
     Serial.print("✅ POST Success: ");
     Serial.println(postCode);
+    Serial.print("Se envía: ");
     Serial.println(postHttp.getString());
   } else {
     Serial.print("❌ POST failed: ");
