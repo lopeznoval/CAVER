@@ -226,9 +226,7 @@ class EB_RobotGUI_bis(QWidget):
         self.feedback_running = False
         self.feedback_thread = None
 
-        self.message_received.connect(self._append_input)
-        self.receiver_thread = threading.Thread(target=self._receiver_loop, daemon=True)
-        self.receiver_thread.start()
+        self.loranode.on_message = self._on_lora_message
 
         self.setWindowTitle("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
         self.setGeometry(200, 100, 1200, 700)
@@ -462,16 +460,6 @@ class EB_RobotGUI_bis(QWidget):
         self.input.append(text)
         self.input.ensureCursorVisible()
 
-    def _receiver_loop(self):
-        """Bucle que escucha mensajes del LoRaNode y los muestra en pantalla"""
-        while True:
-            try:
-                msg = self.loranode.receive_loop()  # <-- tu función LoRaNode
-                if msg:
-                    # Envía la señal con el texto recibido
-                    self.message_received.emit(f"📩 Recibido: {msg}")
-            except Exception as e:
-                #self.message_received.emit(f"⚠️ Error recibiendo: {e}")
-                ...
-            time.sleep(0.1)  # evita saturar CPU
+    def _on_lora_message(self, msg: str):
+        self._append_input(msg)
 

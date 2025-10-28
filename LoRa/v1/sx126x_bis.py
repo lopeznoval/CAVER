@@ -48,7 +48,7 @@ class sx126x:
         """
         # if isinstance(data, str):
         #     data = data.encode()  # Convertir string a bytes si hace falta
-        packet = data + END_CHAR
+        packet = data
         print(f"Sending bytes: {packet}")
         self.ser.write(packet)
 
@@ -57,23 +57,11 @@ class sx126x:
         Recibe bytes desde el puerto serie hasta encontrar END_CHAR.
         Devuelve None si no hay datos.
         """
-        if self.ser.in_waiting == 0:
-            return None
+        if self.ser.in_waiting > 0:
+            time.sleep(0.5)  # Wait for complete message
+            r_buff = self.ser.read(self.ser.in_waiting)
 
-        buffer = bytearray()
-        while True:
-            byte = self.ser.read(1)
-            if not byte:
-                break  # No hay más datos
-            buffer += byte
-            if byte == END_CHAR:
-                break  # Fin de mensaje
-
-        if not buffer:
-            return None
-
-        print(f"Received {len(buffer)} bytes: {buffer}")
-        return bytes(buffer[:-1])  # Quitamos el END_CHAR antes de devolver
+            return r_buff
 
 
     def close(self):

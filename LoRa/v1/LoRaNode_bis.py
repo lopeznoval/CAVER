@@ -23,6 +23,8 @@ class LoRaNode:
         self.robot_port = robot_port
         self.robot_baudrate = robot_baudrate
 
+        self.on_message = None
+
     # -------------------- SERIAL ROBOT --------------------
     def connect_robot(self):
         try:
@@ -89,7 +91,6 @@ class LoRaNode:
         msg_id = r_buff[6]
         message = r_buff[7:].decode(errors='ignore')
 
-        print(f"Message raw ({type(message)}): {message!r}")
         print(f"Unpacked message: from {addr_sender} to {addr_dest}, type {msg_type}, id {msg_id}, relay {relay_flag}, msg: {message}")
         return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message
 
@@ -123,9 +124,12 @@ class LoRaNode:
                 print(f"Error unpacking message: {e}")
                 continue
             print(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender}: {message}")
+            
             if addr_dest != self.addr:
-                continue            # No es para este nodo (hay que poner la lógica del relay aquí)
+                self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE DESCARTA-")
+                continue            
             # -------------------- HANDLER DE TIPOS --------------------
+            self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
             if msg_type == 1:  # Respuesta
                 with self.lock:
                     if msg_id in self.pending_requests:
@@ -137,11 +141,7 @@ class LoRaNode:
                 self.send_to_robot(addr_dest, msg_id, message)
                 # Enviar ACK
                 ack = self.pack_message(addr_sender, 1, msg_id, "OK")
-                self.node.send_bytes(ack)
-        
-        if addr_sender is not None:
-            return (f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender}: {message}")
-
+                self.node.send_bytes(ack)  
 
     # -------------------- EJECUCIÓN --------------------
     def run(self):
