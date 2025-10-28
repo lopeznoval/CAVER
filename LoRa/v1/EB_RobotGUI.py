@@ -1,138 +1,119 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
-import json, threading, time
-from LoRaNode_bis import LoRaNode  # Tu clase LoRa
-import requests
+import customtkinter as ctk
+from tkinter import messagebox
+from LoRaNode_bis import LoRaNode
+import json, threading, time, requests
 
-# ==== Configuración LoRa ====
-# SERIAL_PORT = "COM4"        # puerto LoRa en Windows, en RPi "/dev/ttyUSB0"
-# FREQUENCY = 433
-# NODE_ADDRESS = 20            # dirección del PC
-# DEST_ADDRESS = 2             # dirección del robot
-# POWER = 0
-# RELAY_BIT = 1
-# TYPE_MSG = 1
-# ID_MSG = 0
+# ==== Configuración general de CustomTkinter ====
+ctk.set_appearance_mode("dark")  # Cambia a "light" si lo prefieres
+ctk.set_default_color_theme("blue")
 
 
 class EB_RobotGUI:
     def __init__(self, master, loranode: LoRaNode = None):
         self.master = master
-        self.master.title("UGV02 Robot Control Panel")
-        self.master.geometry("600x750")
-        self.master.configure(bg="#f4f4f4")
+        self.master.title("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
+        self.master.geometry("1100x700")
 
         self.loranode = loranode
         self.msg_id = 0
-
         self.feedback_running = False
         self.feedback_thread = None
 
-        style = ttk.Style()
-        style.configure("TButton", font=("Segoe UI", 10, "bold"), padding=6)
-        style.configure("TLabel", background="#f4f4f4", font=("Segoe UI", 10))
-
-        main_frame = tk.Frame(master, bg="#f4f4f4")
+        # === Estructura general (3 columnas) ===
+        main_frame = ctk.CTkFrame(master, fg_color=("gray10", "gray15"))
         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # --- IP Entry ---
-        # ttk.Label(main_frame, text="Robot IP Address:").pack(pady=(5, 3))
-        # self.ip_entry = ttk.Entry(main_frame, width=30, font=("Consolas", 10))
-        # self.ip_entry.insert(0, "192.168.4.1")
-        # self.ip_entry.pack()
+        # Dividimos en 3 columnas
+        main_frame.grid_columnconfigure((0, 1, 2), weight=1, uniform="cols")
 
-        # ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=10)
+        # -------- Columna 1: Movimiento y OLED --------
+        col1 = ctk.CTkFrame(main_frame, corner_radius=10, fg_color=("gray20", "gray25"))
+        col1.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
 
-        # --- Movement Control ---
-        ttk.Label(main_frame, text="🕹️ Movement Control", font=("Segoe UI", 11, "bold")).pack()
-        move_frame = tk.Frame(main_frame, bg="#f4f4f4")
-        move_frame.pack(pady=8)
+        title1 = ctk.CTkLabel(col1, text="🕹️ Movimiento", font=("Segoe UI", 18, "bold"))
+        title1.pack(pady=(10, 5))
 
-        ttk.Button(move_frame, text="↑ Forward", width=14,
-                   command=lambda: self.move_robot("forward")).grid(row=0, column=1, pady=3)
-        ttk.Button(move_frame, text="← Left", width=14,
-                   command=lambda: self.move_robot("left")).grid(row=1, column=0, padx=3)
-        ttk.Button(move_frame, text="Stop", width=14,
-                   command=lambda: self.move_robot("stop")).grid(row=1, column=1, pady=3)
-        ttk.Button(move_frame, text="→ Right", width=14,
-                   command=lambda: self.move_robot("right")).grid(row=1, column=2, padx=3)
-        ttk.Button(move_frame, text="↓ Backward", width=14,
-                   command=lambda: self.move_robot("backward")).grid(row=2, column=1, pady=3)
+        move_frame = ctk.CTkFrame(col1, fg_color=("gray25", "gray30"))
+        move_frame.pack(pady=10)
 
-        ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=10)
+        btn_cfg = {"width": 100, "height": 35, "corner_radius": 8}
+        ctk.CTkButton(move_frame, text="↑", **btn_cfg, command=lambda: self.move_robot("forward")).grid(row=0, column=1, pady=5)
+        ctk.CTkButton(move_frame, text="←", **btn_cfg, command=lambda: self.move_robot("left")).grid(row=1, column=0, padx=5)
+        ctk.CTkButton(move_frame, text="Stop", **btn_cfg, fg_color="red", hover_color="#c0392b", command=lambda: self.move_robot("stop")).grid(row=1, column=1)
+        ctk.CTkButton(move_frame, text="→", **btn_cfg, command=lambda: self.move_robot("right")).grid(row=1, column=2, padx=5)
+        ctk.CTkButton(move_frame, text="↓", **btn_cfg, command=lambda: self.move_robot("backward")).grid(row=2, column=1, pady=5)
 
         # --- OLED Control ---
-        ttk.Label(main_frame, text="🖥️ OLED Screen Control", font=("Segoe UI", 11, "bold")).pack()
-        oled_frame = tk.Frame(main_frame, bg="#f4f4f4")
-        oled_frame.pack(pady=5)
+        ctk.CTkLabel(col1, text="🖥️ OLED", font=("Segoe UI", 16, "bold")).pack(pady=(20, 5))
+        oled_frame = ctk.CTkFrame(col1, fg_color=("gray25", "gray30"))
+        oled_frame.pack(padx=10, pady=5)
 
-        tk.Label(oled_frame, text="Line (0–3):", bg="#f4f4f4").grid(row=0, column=0, padx=5)
-        self.line_var = tk.StringVar(value="0")
-        self.line_entry = ttk.Entry(oled_frame, width=5, textvariable=self.line_var)
-        self.line_entry.grid(row=0, column=1, padx=5)
+        self.line_var = ctk.StringVar(value="0")
+        ctk.CTkLabel(oled_frame, text="Línea (0–3):").grid(row=0, column=0, padx=5, pady=5)
+        self.line_entry = ctk.CTkEntry(oled_frame, textvariable=self.line_var, width=50)
+        self.line_entry.grid(row=0, column=1, padx=5, pady=5)
 
-        tk.Label(oled_frame, text="Text:", bg="#f4f4f4").grid(row=1, column=0, padx=5, pady=3)
-        self.text_entry = ttk.Entry(oled_frame, width=40)
-        self.text_entry.grid(row=1, column=1, padx=5, pady=3)
+        ctk.CTkLabel(oled_frame, text="Texto:").grid(row=1, column=0, padx=5, pady=5)
+        self.text_entry = ctk.CTkEntry(oled_frame, width=180)
+        self.text_entry.grid(row=1, column=1, padx=5, pady=5)
 
-        ttk.Button(main_frame, text="Send to OLED", width=20, command=self.send_oled).pack(pady=4)
-        ttk.Button(main_frame, text="Restore OLED", width=20,
-                   command=lambda: self.send_cmd(json.dumps({"T": -3}))).pack(pady=2)
+        ctk.CTkButton(col1, text="Enviar a OLED", width=180, command=self.send_oled).pack(pady=5)
+        ctk.CTkButton(col1, text="Restaurar OLED", width=180, command=lambda: self.send_cmd(json.dumps({"T": -3}))).pack(pady=5)
 
-        ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=10)
+        # -------- Columna 2: Comandos --------
+        col2 = ctk.CTkFrame(main_frame, corner_radius=10, fg_color=("gray20", "gray25"))
+        col2.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
 
-        # --- Retrieve Info ---
-        ttk.Label(main_frame, text="📡 Retrieve Information", font=("Segoe UI", 11, "bold")).pack()
-        info_frame = tk.Frame(main_frame, bg="#f4f4f4")
-        info_frame.pack(pady=5)
+        ctk.CTkLabel(col2, text="⚙️ Comandos", font=("Segoe UI", 18, "bold")).pack(pady=(10, 5))
 
-        ttk.Button(info_frame, text="Get IMU Data", width=20,
-                   command=lambda: self.send_cmd(json.dumps({"T": 126}))).grid(row=0, column=0, padx=5, pady=3)
-        ttk.Button(info_frame, text="Get Chassis Feedback", width=20,
-                   command=lambda: self.send_cmd(json.dumps({"T": 130}))).grid(row=0, column=1, padx=5, pady=3)
+        info_frame = ctk.CTkFrame(col2, fg_color=("gray25", "gray30"))
+        info_frame.pack(padx=10, pady=10)
 
-        ttk.Button(info_frame, text="Start Auto Feedback", width=20,
-                   command=self.start_feedback).grid(row=1, column=0, padx=5, pady=3)
-        ttk.Button(info_frame, text="Stop Auto Feedback", width=20,
-                   command=self.stop_feedback).grid(row=1, column=1, padx=5, pady=3)
+        ctk.CTkButton(info_frame, text="IMU Data", width=180, command=lambda: self.send_cmd(json.dumps({"T": 126}))).grid(row=0, column=0, padx=5, pady=5)
+        ctk.CTkButton(info_frame, text="Chassis Feedback", width=180, command=lambda: self.send_cmd(json.dumps({"T": 130}))).grid(row=0, column=1, padx=5, pady=5)
 
-        ttk.Separator(main_frame, orient='horizontal').pack(fill='x', pady=10)
+        ctk.CTkButton(info_frame, text="Start Feedback", width=180, command=self.start_feedback).grid(row=1, column=0, padx=5, pady=5)
+        ctk.CTkButton(info_frame, text="Stop Feedback", width=180, fg_color="red", hover_color="#c0392b", command=self.stop_feedback).grid(row=1, column=1, padx=5, pady=5)
 
-        # --- LoRa Commands ---
-        # --- LoRa Commands ---
-        ttk.Label(main_frame, text="📤 Custom LoRa Command", font=("Segoe UI", 11, "bold")).pack(pady=(10, 5))
-        lora_frame = tk.Frame(main_frame, bg="#f4f4f4")
-        lora_frame.pack(pady=5)
+        # --- Comando LoRa ---
+        ctk.CTkLabel(col2, text="📤 Comando LoRa", font=("Segoe UI", 16, "bold")).pack(pady=(10, 5))
+        lora_frame = ctk.CTkFrame(col2, fg_color=("gray25", "gray30"))
+        lora_frame.pack(padx=10, pady=5)
 
-        # Nodo destino
-        tk.Label(lora_frame, text="Dest Node:", bg="#f4f4f4").grid(row=0, column=0, padx=5, pady=3, sticky="e")
-        self.dest_entry = ttk.Entry(lora_frame, width=8)
-        self.dest_entry.insert(0, "2")  # Valor por defecto
+        ctk.CTkLabel(lora_frame, text="Dest Node:").grid(row=0, column=0, padx=5, pady=3)
+        self.dest_entry = ctk.CTkEntry(lora_frame, width=60)
+        self.dest_entry.insert(0, "2")
         self.dest_entry.grid(row=0, column=1, padx=5, pady=3)
 
-        # Tipo de mensaje (1–30)
-        tk.Label(lora_frame, text="Msg Type:", bg="#f4f4f4").grid(row=0, column=2, padx=5, pady=3, sticky="e")
-        self.type_combo = ttk.Combobox(lora_frame, values=list(range(1, 31)), width=5, state="readonly")
-        self.type_combo.set(1)
+        ctk.CTkLabel(lora_frame, text="Msg Type:").grid(row=0, column=2, padx=5, pady=3)
+        self.type_combo = ctk.CTkComboBox(lora_frame, values=[str(i) for i in range(1, 31)], width=80)
+        self.type_combo.set("1")
         self.type_combo.grid(row=0, column=3, padx=5, pady=3)
 
-        # Relay Bit (0 o 1)
-        tk.Label(lora_frame, text="Relay Bit:", bg="#f4f4f4").grid(row=0, column=4, padx=5, pady=3, sticky="e")
-        self.relay_combo = ttk.Combobox(lora_frame, values=[0, 1], width=5, state="readonly")
-        self.relay_combo.set(1)
+        ctk.CTkLabel(lora_frame, text="Relay Bit:").grid(row=0, column=4, padx=5, pady=3)
+        self.relay_combo = ctk.CTkComboBox(lora_frame, values=["0", "1"], width=60)
+        self.relay_combo.set("1")
         self.relay_combo.grid(row=0, column=5, padx=5, pady=3)
 
-        # Botón de envío
-        ttk.Button(main_frame, text="Send Custom Command", width=25, command=self.send_cmd).pack(pady=8)
-        # --- Response Log ---
-        ttk.Label(main_frame, text="📄 Response Log", font=("Segoe UI", 11, "bold")).pack()
-        log_frame = tk.Frame(main_frame, bg="#f4f4f4")
-        log_frame.pack(fill="both", expand=True)
+        ctk.CTkButton(col2, text="Enviar Comando", width=200, command=self.send_cmd).pack(pady=10)
 
-        self.output = scrolledtext.ScrolledText(
-            log_frame, wrap=tk.WORD, font=("Consolas", 9), height=12
-        )
-        self.output.pack(fill="both", expand=True, padx=5, pady=5)
+        # -------- Columna 3: Logs --------
+        col3 = ctk.CTkFrame(main_frame, corner_radius=10, fg_color=("gray20", "gray25"))
+        col3.grid(row=0, column=2, sticky="nsew", padx=10, pady=10)
+
+        col3.grid_columnconfigure(0, weight=1)
+        col3.grid_rowconfigure(1, weight=1)  
+        col3.grid_rowconfigure(3, weight=1) 
+
+        ctk.CTkLabel(col3, text="💬 Registro de Mensajes Salientes", font=("Segoe UI", 18, "bold")).grid(row=0, column=0, pady=(10, 5))
+        self.output = ctk.CTkTextbox(col3, font=("Consolas", 11))
+        self.output.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
+
+        ctk.CTkLabel(col3, text="💬 Registro de Mensajes Entrantes", font=("Segoe UI", 18, "bold")).grid(row=2, column=0, pady=(10, 5))
+        self.input = ctk.CTkTextbox(col3, font=("Consolas", 11))
+        self.input.grid(row=3, column=0, sticky="nsew", padx=10, pady=(0, 10))
+
+
 
         # --- Key bindings ---
         self.master.bind("<Up>", lambda e: self.move_robot("forward"))
@@ -140,10 +121,16 @@ class EB_RobotGUI:
         self.master.bind("<Left>", lambda e: self.move_robot("left"))
         self.master.bind("<Right>", lambda e: self.move_robot("right"))
         self.master.bind("<space>", lambda e: self.move_robot("stop"))
-
         self.master.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    # --- Movement logic ---
+        main_frame.grid_rowconfigure(0, weight=1)
+        main_frame.grid_columnconfigure(0, weight=1)
+        main_frame.grid_columnconfigure(1, weight=1)
+        main_frame.grid_columnconfigure(2, weight=1)  # <-- Columna 3 (Logs)
+
+
+    # ===================== FUNCIONES =====================
+
     def move_robot(self, direction):
         commands = {
             "forward": {"T": 1, "L": 0.5, "R": 0.5},
@@ -156,7 +143,6 @@ class EB_RobotGUI:
         if cmd:
             self.send_cmd(json.dumps(cmd))
 
-    # --- OLED ---
     def send_oled(self):
         try:
             line = int(self.line_var.get())
@@ -164,39 +150,38 @@ class EB_RobotGUI:
             cmd = {"T": 3, "lineNum": line, "Text": text}
             self.send_cmd(json.dumps(cmd))
         except ValueError:
-            messagebox.showerror("Error", "Line number must be 0–3.")
+            messagebox.showerror("Error", "El número de línea debe ser 0–3.")
 
-    # --- Send command ---
-    def send_cmd(self, cmd):
+    def send_cmd(self, cmd=None):
+        if cmd is None:
+            cmd = json.dumps({"T": 0})
         dest = int(self.dest_entry.get())
         msg_type = int(self.type_combo.get())
         relay = int(self.relay_combo.get())
         self.msg_id += 1
-
         self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
-        self._append_output(f"📡 LoRa sent: {cmd}")
+        self._append_output(f"📡 Enviado: {cmd}")
 
-    # --- Feedback ---
     def start_feedback(self):
         if self.feedback_running:
-            messagebox.showinfo("Info", "Auto feedback already running.")
+            messagebox.showinfo("Info", "Auto feedback ya está activo.")
             return
         self.feedback_running = True
         self.send_cmd(json.dumps({"T": 131, "cmd": 1}))
         self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
         self.feedback_thread.start()
-        self._append_output("✅ Auto feedback started.\n")
+        self._append_output("✅ Auto feedback iniciado.\n")
 
     def stop_feedback(self):
         if not self.feedback_running:
-            messagebox.showinfo("Info", "Auto feedback is not active.")
+            messagebox.showinfo("Info", "Auto feedback no está activo.")
             return
         self.feedback_running = False
         self.send_cmd(json.dumps({"T": 131, "cmd": 0}))
-        self._append_output("🛑 Auto feedback stopped.\n")
+        self._append_output("🛑 Auto feedback detenido.\n")
 
     def _feedback_loop(self):
-        ip = self.ip_entry.get().strip()
+        ip = "192.168.4.1"  # se puede añadir un Entry si deseas editarlo
         while self.feedback_running:
             if ip:
                 try:
@@ -204,13 +189,289 @@ class EB_RobotGUI:
                     r = requests.get(url, timeout=3)
                     self._append_output(f"[Feedback] {r.text.strip()}\n")
                 except Exception as e:
-                    self._append_output(f"⚠️ Feedback error: {e}\n")
+                    self._append_output(f"⚠️ Error feedback: {e}\n")
             time.sleep(1)
 
     def _append_output(self, text):
-        self.output.insert(tk.END, text + "\n")
-        self.output.see(tk.END)
+        self.output.insert("end", text + "\n")
+        self.output.see("end")
 
     def on_close(self):
         self.feedback_running = False
         self.master.destroy()
+
+# ===================== FIN DE LA CLASE =====================
+
+import sys
+import json
+import threading
+import time
+import requests
+from PyQt6.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy
+)
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from LoRaNode_bis import LoRaNode
+
+
+class EB_RobotGUI_bis(QWidget):
+
+    message_received = pyqtSignal(str)
+
+    def __init__(self, loranode: LoRaNode = None):
+        super().__init__()
+        self.loranode = loranode
+        self.msg_id = 0
+        self.feedback_running = False
+        self.feedback_thread = None
+
+        self.message_received.connect(self._append_input)
+        self.receiver_thread = threading.Thread(target=self._receiver_loop, daemon=True)
+        self.receiver_thread.start()
+
+        self.setWindowTitle("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
+        self.setGeometry(200, 100, 1200, 700)
+
+        main_layout = QHBoxLayout(self)
+
+        # === COLUMNA 1: Pestañas ===
+        col1 = QVBoxLayout()
+        tabs = QTabWidget()
+
+        # ------------------ TAB 1: Movimiento ------------------
+        tab_move = QWidget()
+        move_layout = QGridLayout()
+
+        self.btn_forward = QPushButton("↑")
+        self.btn_left = QPushButton("←")
+        self.btn_stop = QPushButton("Stop")
+        self.btn_right = QPushButton("→")
+        self.btn_backward = QPushButton("↓")
+
+        buttons = [
+            (self.btn_forward, 0, 1, "forward"),
+            (self.btn_left, 1, 0, "left"),
+            (self.btn_stop, 1, 1, "stop"),
+            (self.btn_right, 1, 2, "right"),
+            (self.btn_backward, 2, 1, "backward"),
+        ]
+
+        for btn, r, c, cmd in buttons:
+            btn.setFixedSize(100, 35)
+            btn.clicked.connect(lambda _, d=cmd: self.move_robot(d))
+            move_layout.addWidget(btn, r, c)
+
+        tab_move.setLayout(move_layout)
+        tabs.addTab(tab_move, "🕹️ Movimiento")
+
+        # ------------------ TAB 2: OLED ------------------
+        tab_oled = QWidget()
+        oled_layout = QGridLayout()
+
+        oled_layout.addWidget(QLabel("Línea (0–3):"), 0, 0)
+        self.line_entry = QLineEdit("0")
+        self.line_entry.setFixedWidth(50)
+        oled_layout.addWidget(self.line_entry, 0, 1)
+
+        oled_layout.addWidget(QLabel("Texto:"), 1, 0)
+        self.text_entry = QLineEdit()
+        self.text_entry.setFixedWidth(180)
+        oled_layout.addWidget(self.text_entry, 1, 1)
+
+        self.btn_send_oled = QPushButton("Enviar a OLED")
+        self.btn_send_oled.clicked.connect(self.send_oled)
+        oled_layout.addWidget(self.btn_send_oled, 2, 0, 1, 2)
+
+        self.btn_reset_oled = QPushButton("Restaurar OLED")
+        self.btn_reset_oled.clicked.connect(lambda: self.send_cmd(json.dumps({"T": -3})))
+        self.btn_reset_oled.setObjectName("danger")
+        oled_layout.addWidget(self.btn_reset_oled, 3, 0, 1, 2)
+
+        tab_oled.setLayout(oled_layout)
+        tabs.addTab(tab_oled, "🖥️ OLED")
+
+        # ------------------ TAB 3: Comandos ------------------
+        tab_cmd = QWidget()
+        cmd_layout = QGridLayout()
+
+        self.btn_imu = QPushButton("IMU Data")
+        self.btn_feedback = QPushButton("Chassis Feedback")
+        self.btn_imu.clicked.connect(lambda: self.send_cmd(json.dumps({"T": 126})))
+        self.btn_feedback.clicked.connect(lambda: self.send_cmd(json.dumps({"T": 130})))
+
+        cmd_layout.addWidget(self.btn_imu, 0, 0)
+        cmd_layout.addWidget(self.btn_feedback, 0, 1)
+
+        self.btn_start_feedback = QPushButton("Start Feedback")
+        self.btn_stop_feedback = QPushButton("Stop Feedback")
+        self.btn_start_feedback.clicked.connect(self.start_feedback)
+        self.btn_stop_feedback.clicked.connect(self.stop_feedback)
+        self.btn_stop_feedback.setObjectName("danger")
+
+        cmd_layout.addWidget(self.btn_start_feedback, 1, 0)
+        cmd_layout.addWidget(self.btn_stop_feedback, 1, 1)
+
+        tab_cmd.setLayout(cmd_layout)
+        tabs.addTab(tab_cmd, "⚙️ Comandos")
+
+        # ------------------ Añadir pestañas a la columna ------------------
+        col1.addWidget(tabs)
+
+
+        # === Layout principal para columnas 2 y 3 ===
+        right_layout = QVBoxLayout()  # Contendrá la fila de comandos y la fila de logs
+
+        # ------------------ FILA 1: Comandos LoRa ------------------
+        lora_group = QGroupBox("📤 Comando LoRa")
+        lora_layout = QGridLayout()
+
+        lora_layout.addWidget(QLabel("Dest Node:"), 0, 0)
+        self.dest_entry = QLineEdit("2")
+        self.dest_entry.setFixedWidth(60)
+        lora_layout.addWidget(self.dest_entry, 0, 1)
+
+        lora_layout.addWidget(QLabel("Msg Type:"), 0, 2)
+        self.type_combo = QComboBox()
+        self.type_combo.addItems([str(i) for i in range(1, 31)])
+        lora_layout.addWidget(self.type_combo, 0, 3)
+
+        lora_layout.addWidget(QLabel("Relay Bit:"), 0, 4)
+        self.relay_combo = QComboBox()
+        self.relay_combo.addItems(["0", "1"])
+        self.relay_combo.setCurrentText("1")
+        lora_layout.addWidget(self.relay_combo, 0, 5)
+
+        self.btn_send_cmd = QPushButton("Enviar Comando")
+        self.btn_send_cmd.clicked.connect(self.send_cmd)
+        #lora_layout.addWidget(self.btn_send_cmd, 1, 0, 1, 6)  # Botón ocupa toda la fila
+
+        lora_group.setLayout(lora_layout)
+        right_layout.addWidget(lora_group, 1)
+
+        # ------------------ FILA 2: Logs ------------------
+        logs_layout = QHBoxLayout()  # Divide en dos columnas
+
+        # Mensajes salientes
+        out_group = QGroupBox("💬 Registro de Mensajes Salientes")
+        out_layout = QVBoxLayout()
+        self.output = QTextEdit()
+        self.output.setReadOnly(True)
+        out_layout.addWidget(self.output)
+        out_group.setLayout(out_layout)
+        logs_layout.addWidget(out_group)
+
+        # Mensajes entrantes
+        in_group = QGroupBox("💬 Registro de Mensajes Entrantes")
+        in_layout = QVBoxLayout()
+        self.input = QTextEdit()
+        self.input.setReadOnly(True)
+        in_layout.addWidget(self.input)
+        in_group.setLayout(in_layout)
+        logs_layout.addWidget(in_group)
+
+        # Añadir la fila de logs al layout principal de la derecha
+        right_layout.addLayout(logs_layout, 1)
+
+        # ------------------ Agregar columnas al layout principal ------------------
+        main_layout.addLayout(col1, 1)        # Columna 1: Movimiento/OLED/Comandos
+        main_layout.addLayout(right_layout, 2)  # Columna 2+3 reorganizada
+
+    # ===================== FUNCIONES =====================
+
+    def keyPressEvent(self, event):
+        key_map = {
+            Qt.Key.Key_Up: "forward",
+            Qt.Key.Key_Down: "backward",
+            Qt.Key.Key_Left: "left",
+            Qt.Key.Key_Right: "right",
+            Qt.Key.Key_Space: "stop",
+        }
+        direction = key_map.get(event.key())
+        if direction:
+            self.move_robot(direction)
+
+    def move_robot(self, direction):
+        commands = {
+            "forward": {"T": 1, "L": 0.5, "R": 0.5},
+            "backward": {"T": 1, "L": -0.5, "R": -0.5},
+            "left": {"T": 1, "L": -0.3, "R": 0.3},
+            "right": {"T": 1, "L": 0.3, "R": -0.3},
+            "stop": {"T": 1, "L": 0, "R": 0},
+        }
+        cmd = commands.get(direction)
+        if cmd:
+            self.send_cmd(json.dumps(cmd))
+
+    def send_oled(self):
+        try:
+            line = int(self.line_entry.text())
+            text = self.text_entry.text()
+            cmd = {"T": 3, "lineNum": line, "Text": text}
+            self.send_cmd(json.dumps(cmd))
+        except ValueError:
+            QMessageBox.critical(self, "Error", "El número de línea debe ser 0–3.")
+
+    def send_cmd(self, cmd=None):
+        if cmd is None:
+            cmd = "Null"
+        dest = int(self.dest_entry.text())
+        msg_type = int(self.type_combo.currentText())
+        relay = int(self.relay_combo.currentText())
+        self.msg_id += 1
+        print("Sending command:", cmd)
+        self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
+        self._append_output(f"📡 Enviado: {cmd}")
+
+    def start_feedback(self):
+        if self.feedback_running:
+            QMessageBox.information(self, "Info", "Auto feedback ya está activo.")
+            return
+        self.feedback_running = True
+        self.send_cmd(json.dumps({"T": 131, "cmd": 1}))
+        self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
+        self.feedback_thread.start()
+        self._append_output("✅ Auto feedback iniciado.\n")
+
+    def stop_feedback(self):
+        if not self.feedback_running:
+            QMessageBox.information(self, "Info", "Auto feedback no está activo.")
+            return
+        self.feedback_running = False
+        self.send_cmd(json.dumps({"T": 131, "cmd": 0}))
+        self._append_output("🛑 Auto feedback detenido.\n")
+
+    def _feedback_loop(self):
+        ip = "192.168.4.1"
+        while self.feedback_running:
+            if ip:
+                try:
+                    url = f"http://{ip}/js?json={json.dumps({'T':130})}"
+                    r = requests.get(url, timeout=3)
+                    self._append_output(f"[Feedback] {r.text.strip()}\n")
+                except Exception as e:
+                    self._append_output(f"⚠️ Error feedback: {e}\n")
+            time.sleep(1)
+
+    def _append_output(self, text):
+        self.output.append(text)
+        self.output.ensureCursorVisible()
+
+    def _append_input(self, text):
+        """Añade texto al panel de mensajes entrantes"""
+        self.input.append(text)
+        self.input.ensureCursorVisible()
+
+    def _receiver_loop(self):
+        """Bucle que escucha mensajes del LoRaNode y los muestra en pantalla"""
+        while True:
+            try:
+                msg = self.loranode.receive_loop()  # <-- tu función LoRaNode
+                if msg:
+                    # Envía la señal con el texto recibido
+                    self.message_received.emit(f"📩 Recibido: {msg}")
+            except Exception as e:
+                #self.message_received.emit(f"⚠️ Error recibiendo: {e}")
+                ...
+            time.sleep(0.1)  # evita saturar CPU
+

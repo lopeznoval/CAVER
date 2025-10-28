@@ -1,0 +1,103 @@
+/* ========================== GLOBAL ========================== */
+QWidget {
+    background-color: #2b2b2b;   /* Fondo general gris oscuro */
+    color: #f0f0f0;              /* Texto blanco */
+    font-family: "Segoe UI", sans-serif;
+    font-size: 12px;
+}
+
+/* ========================== QTabWidget ========================== */
+QTabWidget::pane {
+    border: 1px solid #444;       /* Borde del panel */
+    background-color: #2e2e2e;    /* Fondo de la columna */
+    border-radius: 5px;
+}
+
+QTabBar::tab {
+    background: #3a3a3a;          /* Color de pestaña inactiva */
+    color: white;
+    padding: 8px;
+    margin-right: 2px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+
+QTabBar::tab:selected {
+    background: #5a5a5a;          /* Color de pestaña activa */
+    font-weight: bold;
+}
+
+QTabBar::tab:hover {
+    background: #4a4a4a;          /* Hover */
+}
+
+/* ========================== QPushButton ========================== */
+QPushButton {
+    background-color: #4a4a4a;     /* gris medio */
+    color: white;
+    border: 1px solid #666;
+    border-radius: 5px;
+    padding: 6px;
+    min-width: 80px;
+}
+
+QPushButton:hover {
+    background-color: #6a6a6a;    /* hover más claro */
+}
+
+QPushButton:pressed {
+    background-color: #2e2e2e;    /* presionado oscuro */
+}
+
+QPushButton#danger {
+    background-color: #c0392b;     /* botones de alerta */
+    color: white;
+    border: 1px solid #922b21;
+}
+
+QPushButton#danger:hover {
+    background-color: #e74c3c;
+}
+
+QPushButton#danger:pressed {
+    background-color: #922b21;
+}
+
+/* ========================== QLineEdit ========================== */
+QLineEdit {
+    background-color: #3a3a3a;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 4px;
+    color: white;
+}
+
+QLineEdit:focus {
+    border: 1px solid #66afe9;
+}
+
+/* ========================== QTextEdit (Logs) ========================== */
+QTextEdit {
+    background-color: #1e1e1e;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 5px;
+    color: #dcdcdc;
+    font-family: "Consolas", monospace;
+    font-size: 11px;
+}
+
+/* ========================== QGroupBox ========================== */
+QGroupBox {
+    border: 1px solid #555;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+
+QGroupBox:title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    padding: 0 3px;
+    color: #ffffff;
+    font-weight: bold;
+}

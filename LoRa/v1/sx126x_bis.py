@@ -1,6 +1,8 @@
 import serial
 import time
 
+END_CHAR = b'\n\r'
+
 class sx126x:
         # Configuration registers
     cfg_reg = [0xC2, 0x00, 0x09, 0x00, 0x00, 0x00, 0x62, 0x00, 0x12, 0x43, 0x00, 0x00]
@@ -41,14 +43,38 @@ class sx126x:
         self.ser.flushInput()
 
     def send_bytes(self, data):
-        print(f"Sending bytes: {data}")
-        self.ser.write(data)
+        """
+        Envía datos al puerto serie añadiendo un carácter de fin de mensaje.
+        """
+        # if isinstance(data, str):
+        #     data = data.encode()  # Convertir string a bytes si hace falta
+        packet = data + END_CHAR
+        print(f"Sending bytes: {packet}")
+        self.ser.write(packet)
 
     def receive_bytes(self):
-        if self.ser.in_waiting > 0:
-            print(f"Receiving bytes...")
-            return self.ser.read(self.ser.in_waiting)
-        return None
+        """
+        Recibe bytes desde el puerto serie hasta encontrar END_CHAR.
+        Devuelve None si no hay datos.
+        """
+        if self.ser.in_waiting == 0:
+            return None
+
+        buffer = bytearray()
+        while True:
+            byte = self.ser.read(1)
+            if not byte:
+                break  # No hay más datos
+            buffer += byte
+            if byte == END_CHAR:
+                break  # Fin de mensaje
+
+        if not buffer:
+            return None
+
+        print(f"Received {len(buffer)} bytes: {buffer}")
+        return bytes(buffer[:-1])  # Quitamos el END_CHAR antes de devolver
+
 
     def close(self):
         self.ser.close()

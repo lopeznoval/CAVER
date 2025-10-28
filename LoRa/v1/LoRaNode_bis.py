@@ -40,9 +40,29 @@ class LoRaNode:
             if data:
                 print(f"Received from robot: {data}")
 
-    def send_to_robot(self, addr_dest: int, msg_id: int, command: str):
-        if self.robot and self.robot.is_open:
-            self.robot.write(command.encode())
+    def send_to_robot(self, addr_dest: int, msg_id: int, command: str) -> str:
+        """Envía un comando al robot y devuelve la respuesta."""
+        if not self.robot or not self.robot.is_open:
+            print("Robot not connected")
+            return ""
+
+        # Limpia el buffer antes de enviar
+        self.robot.reset_input_buffer()
+
+        # Envía el comando
+        self.robot.write((command + "\n").encode('utf-8'))
+
+        # Espera la respuesta
+        start_time = time.time()
+        response = b""
+        while time.time() - start_time < 2:  # timeout de 2 segundos
+            if self.robot.in_waiting > 0:
+                response += self.robot.read(self.robot.in_waiting)
+                if b"\n" in response:  # fin de línea como delimitador
+                    break
+            time.sleep(0.01)
+
+        return response.decode('utf-8').strip()
 
     # -------------------- MENSAJES --------------------
     def pack_message(self, addr_dest:int, msg_type: int, msg_id: int, message: str, relay_flag: int =0):
@@ -118,6 +138,9 @@ class LoRaNode:
                 # Enviar ACK
                 ack = self.pack_message(addr_sender, 1, msg_id, "OK")
                 self.node.send_bytes(ack)
+        
+        if addr_sender is not None:
+            return (f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender}: {message}")
 
 
     # -------------------- EJECUCIÓN --------------------
