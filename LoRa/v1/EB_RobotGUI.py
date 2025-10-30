@@ -209,7 +209,7 @@ import time
 import requests
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy
+    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from LoRaNode_bis import LoRaNode
@@ -222,11 +222,12 @@ class EB_RobotGUI_bis(QWidget):
     def __init__(self, loranode: LoRaNode = None):
         super().__init__()
         self.loranode = loranode
-        self.msg_id = 0
+        self.msg_id = 1
         self.feedback_running = False
         self.feedback_thread = None
 
         self.loranode.on_message = self._on_lora_message
+        self.loranode.on_alert = self._on_general_log
 
         self.setWindowTitle("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
         self.setGeometry(200, 100, 1200, 700)
@@ -313,6 +314,38 @@ class EB_RobotGUI_bis(QWidget):
         tab_cmd.setLayout(cmd_layout)
         tabs.addTab(tab_cmd, "⚙️ Comandos")
 
+        # ----------------------- TAB 4: Imagen -----------------------
+        tab_video = QWidget()
+        video_layout = QVBoxLayout()
+
+        self.btn_take_photo = QPushButton("Tomar Foto 📸")
+        self.btn_take_photo.clicked.connect(self.take_photo)
+        video_layout.addWidget(self.btn_take_photo)
+
+        # Placeholder para la imagen recibida
+        self.photo_label = QLabel("Aquí se mostrará la foto")
+        self.photo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.photo_label.setFixedSize(400, 300)
+        video_layout.addWidget(self.photo_label)
+
+        tab_video.setLayout(video_layout)
+        tabs.addTab(tab_video, "📹 Video")
+
+        # ----------------------- TAB 5: Logs generales -----------------------
+        tab_logs = QWidget()
+        logs_layout = QVBoxLayout()
+
+        # QTextEdit para mostrar todos los logs del nodo
+        self.general_logs = QTextEdit()
+        self.general_logs.setReadOnly(True)
+        self.general_logs.setPlaceholderText("Aquí se mostrará todo lo que sucede en el nodo...")
+
+        logs_layout.addWidget(self.general_logs)
+        tab_logs.setLayout(logs_layout)
+
+        # Añadir el tab al QTabWidget
+        tabs.addTab(tab_logs, "📝 Logs")
+
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
 
@@ -321,7 +354,7 @@ class EB_RobotGUI_bis(QWidget):
         right_layout = QVBoxLayout()  # Contendrá la fila de comandos y la fila de logs
 
         # ------------------ FILA 1: Comandos LoRa ------------------
-        lora_group = QGroupBox("📤 Comando LoRa")
+        lora_group = QGroupBox("📤 Configuración del comando")
         lora_layout = QGridLayout()
 
         lora_layout.addWidget(QLabel("Dest Node:"), 0, 0)
@@ -339,13 +372,23 @@ class EB_RobotGUI_bis(QWidget):
         self.relay_combo.addItems(["0", "1"])
         self.relay_combo.setCurrentText("1")
         lora_layout.addWidget(self.relay_combo, 0, 5)
-
-        self.btn_send_cmd = QPushButton("Enviar Comando")
-        self.btn_send_cmd.clicked.connect(self.send_cmd)
-        #lora_layout.addWidget(self.btn_send_cmd, 1, 0, 1, 6)  # Botón ocupa toda la fila
-
+        
         lora_group.setLayout(lora_layout)
         right_layout.addWidget(lora_group, 1)
+                
+        self.btn_send_cmd = QPushButton("Enviar Comando")
+        self.btn_send_cmd.clicked.connect(self.send_cmd)
+        lora_layout.addWidget(self.btn_send_cmd, 1, 0, 1, 6)  # Botón ocupa toda la fila
+
+        # === Lista de pending_requests ===
+        requests_group = QGroupBox("📋 Peticiones pendientes")
+        requests_layout = QVBoxLayout()
+
+        self.requests_list = QListWidget()
+        requests_layout.addWidget(self.requests_list)
+
+        requests_group.setLayout(requests_layout)
+        right_layout.addWidget(requests_group)
 
         # ------------------ FILA 2: Logs ------------------
         logs_layout = QHBoxLayout()  # Divide en dos columnas
@@ -411,15 +454,40 @@ class EB_RobotGUI_bis(QWidget):
             QMessageBox.critical(self, "Error", "El número de línea debe ser 0–3.")
 
     def send_cmd(self, cmd=None):
-        if cmd is None:
-            cmd = "Null"
+        print(cmd)
+        if type(cmd) is not str:
+            cmd = ""
         dest = int(self.dest_entry.text())
         msg_type = int(self.type_combo.currentText())
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
-        print("Sending command:", cmd)
+        if msg_type == 5:
+            alert = "PING"
+        elif msg_type == 6:
+            alert = "STATUS"
+        elif msg_type == 7:
+            alert = "REBOOT"
+        elif msg_type == 8:
+            alert = "RELAY_FLAG"
+        elif 9 < msg_type < 20:
+            alert = "ROBOT"
+        elif 19 < msg_type < 25:
+            alert = "SENSOR"
+        elif 24 < msg_type < 31:
+            alert = "CAMERA/RADAR"
+
+        self.append_general_log(f"Sending command to {dest}: {alert}")
         self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
-        self._append_output(f"📡 Enviado: {cmd}")
+        self._append_output(f"📡 Enviado: {msg_type} to {dest}")
+    
+    def take_photo(self):
+        dest = int(self.dest_entry.text())
+        msg_type = 30
+        relay = int(self.relay_combo.currentText())
+        self.msg_id += 1
+        self.append_general_log(f"📸 Comando enviado para tomar foto")
+        self.loranode.send_message(dest, msg_type, self.msg_id, "", relay)
+        self._append_output(f"📡 Enviado: {msg_type}")
 
     def start_feedback(self):
         if self.feedback_running:
@@ -452,6 +520,7 @@ class EB_RobotGUI_bis(QWidget):
             time.sleep(1)
 
     def _append_output(self, text):
+        """Añade texto al panel de mensajes salientes"""
         self.output.append(text)
         self.output.ensureCursorVisible()
 
@@ -459,7 +528,17 @@ class EB_RobotGUI_bis(QWidget):
         """Añade texto al panel de mensajes entrantes"""
         self.input.append(text)
         self.input.ensureCursorVisible()
+    
+    def append_general_log(self, text):
+        """Añade texto al panel de logs generales"""
+        self.general_logs.append(text)
+        self.general_logs.ensureCursorVisible()
 
     def _on_lora_message(self, msg: str):
+        """Manejador de mensajes entrantes desde LoRaNode"""
         self._append_input(msg)
+
+    def _on_general_log(self, msg: str):
+        """Manejador de mensajes entrantes desde LoRaNode"""
+        self.append_general_log(msg)
 
