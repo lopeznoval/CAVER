@@ -1,6 +1,6 @@
 # Ignorar cachés de Python
 __pycache__/
-v1/__pycache__/
+LoRa/v1/__pycache__/
 *.pyc
 *.pyo
 
