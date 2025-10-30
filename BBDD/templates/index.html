@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Sensores</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>Dashboard Sensores</h1>
+
+    <h2>Temperatura (°C)</h2>
+    <div id="temp_chart"></div>
+
+    <h2>Humedad (%)</h2>
+    <div id="hum_chart"></div>
+
+    <h2>Presión (hPa)</h2>
+    <div id="pres_chart"></div>
+
+    <script>
+        async function fetchData() {
+            const response = await fetch('/datos');
+            const data = await response.json();
+            return data;
+        }
+
+        async function drawCharts() {
+            const data = await fetchData();
+            const fechas = data.map(d => d.fecha);
+
+            // Temperatura
+            const temp_trace = { x: fechas, y: data.map(d => d.temperatura), type: 'scatter', name: 'Temperatura' };
+            Plotly.newPlot('temp_chart', [temp_trace], {title: 'Temperatura vs Tiempo'});
+
+            // Humedad
+            const hum_trace = { x: fechas, y: data.map(d => d.humedad), type: 'scatter', name: 'Humedad', line: {color: 'green'} };
+            Plotly.newPlot('hum_chart', [hum_trace], {title: 'Humedad vs Tiempo'});
+
+            // Presión
+            const pres_trace = { x: fechas, y: data.map(d => d.presion), type: 'scatter', name: 'Presión', line: {color: 'orange'} };
+            Plotly.newPlot('pres_chart', [pres_trace], {title: 'Presión vs Tiempo'});
+        }
+
+        drawCharts();
+        // Refrescar cada 10 segundos
+        setInterval(drawCharts, 10000);
+    </script>
+</body>
+</html>
