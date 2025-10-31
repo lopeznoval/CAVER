@@ -1,217 +1,16 @@
-import customtkinter as ctk
-from tkinter import messagebox
 from LoRaNode_bis import LoRaNode
 import json, threading, time, requests
-
-# ==== Configuración general de CustomTkinter ====
-ctk.set_appearance_mode("dark")  # Cambia a "light" si lo prefieres
-ctk.set_default_color_theme("blue")
-
-
-class EB_RobotGUI:
-    def __init__(self, master, loranode: LoRaNode = None):
-        self.master = master
-        self.master.title("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
-        self.master.geometry("1100x700")
-
-        self.loranode = loranode
-        self.msg_id = 0
-        self.feedback_running = False
-        self.feedback_thread = None
-
-        # === Estructura general (3 columnas) ===
-        main_frame = ctk.CTkFrame(master, fg_color=("gray10", "gray15"))
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-        # Dividimos en 3 columnas
-        main_frame.grid_columnconfigure((0, 1, 2), weight=1, uniform="cols")
-
-        # -------- Columna 1: Movimiento y OLED --------
-        col1 = ctk.CTkFrame(main_frame, corner_radius=10, fg_color=("gray20", "gray25"))
-        col1.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
-
-        title1 = ctk.CTkLabel(col1, text="🕹️ Movimiento", font=("Segoe UI", 18, "bold"))
-        title1.pack(pady=(10, 5))
-
-        move_frame = ctk.CTkFrame(col1, fg_color=("gray25", "gray30"))
-        move_frame.pack(pady=10)
-
-        btn_cfg = {"width": 100, "height": 35, "corner_radius": 8}
-        ctk.CTkButton(move_frame, text="↑", **btn_cfg, command=lambda: self.move_robot("forward")).grid(row=0, column=1, pady=5)
-        ctk.CTkButton(move_frame, text="←", **btn_cfg, command=lambda: self.move_robot("left")).grid(row=1, column=0, padx=5)
-        ctk.CTkButton(move_frame, text="Stop", **btn_cfg, fg_color="red", hover_color="#c0392b", command=lambda: self.move_robot("stop")).grid(row=1, column=1)
-        ctk.CTkButton(move_frame, text="→", **btn_cfg, command=lambda: self.move_robot("right")).grid(row=1, column=2, padx=5)
-        ctk.CTkButton(move_frame, text="↓", **btn_cfg, command=lambda: self.move_robot("backward")).grid(row=2, column=1, pady=5)
-
-        # --- OLED Control ---
-        ctk.CTkLabel(col1, text="🖥️ OLED", font=("Segoe UI", 16, "bold")).pack(pady=(20, 5))
-        oled_frame = ctk.CTkFrame(col1, fg_color=("gray25", "gray30"))
-        oled_frame.pack(padx=10, pady=5)
-
-        self.line_var = ctk.StringVar(value="0")
-        ctk.CTkLabel(oled_frame, text="Línea (0–3):").grid(row=0, column=0, padx=5, pady=5)
-        self.line_entry = ctk.CTkEntry(oled_frame, textvariable=self.line_var, width=50)
-        self.line_entry.grid(row=0, column=1, padx=5, pady=5)
-
-        ctk.CTkLabel(oled_frame, text="Texto:").grid(row=1, column=0, padx=5, pady=5)
-        self.text_entry = ctk.CTkEntry(oled_frame, width=180)
-        self.text_entry.grid(row=1, column=1, padx=5, pady=5)
-
-        ctk.CTkButton(col1, text="Enviar a OLED", width=180, command=self.send_oled).pack(pady=5)
-        ctk.CTkButton(col1, text="Restaurar OLED", width=180, command=lambda: self.send_cmd(json.dumps({"T": -3}))).pack(pady=5)
-
-        # -------- Columna 2: Comandos --------
-        col2 = ctk.CTkFrame(main_frame, corner_radius=10, fg_color=("gray20", "gray25"))
-        col2.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-
-        ctk.CTkLabel(col2, text="⚙️ Comandos", font=("Segoe UI", 18, "bold")).pack(pady=(10, 5))
-
-        info_frame = ctk.CTkFrame(col2, fg_color=("gray25", "gray30"))
-        info_frame.pack(padx=10, pady=10)
-
-        ctk.CTkButton(info_frame, text="IMU Data", width=180, command=lambda: self.send_cmd(json.dumps({"T": 126}))).grid(row=0, column=0, padx=5, pady=5)
-        ctk.CTkButton(info_frame, text="Chassis Feedback", width=180, command=lambda: self.send_cmd(json.dumps({"T": 130}))).grid(row=0, column=1, padx=5, pady=5)
-
-        ctk.CTkButton(info_frame, text="Start Feedback", width=180, command=self.start_feedback).grid(row=1, column=0, padx=5, pady=5)
-        ctk.CTkButton(info_frame, text="Stop Feedback", width=180, fg_color="red", hover_color="#c0392b", command=self.stop_feedback).grid(row=1, column=1, padx=5, pady=5)
-
-        # --- Comando LoRa ---
-        ctk.CTkLabel(col2, text="📤 Comando LoRa", font=("Segoe UI", 16, "bold")).pack(pady=(10, 5))
-        lora_frame = ctk.CTkFrame(col2, fg_color=("gray25", "gray30"))
-        lora_frame.pack(padx=10, pady=5)
-
-        ctk.CTkLabel(lora_frame, text="Dest Node:").grid(row=0, column=0, padx=5, pady=3)
-        self.dest_entry = ctk.CTkEntry(lora_frame, width=60)
-        self.dest_entry.insert(0, "2")
-        self.dest_entry.grid(row=0, column=1, padx=5, pady=3)
-
-        ctk.CTkLabel(lora_frame, text="Msg Type:").grid(row=0, column=2, padx=5, pady=3)
-        self.type_combo = ctk.CTkComboBox(lora_frame, values=[str(i) for i in range(1, 31)], width=80)
-        self.type_combo.set("1")
-        self.type_combo.grid(row=0, column=3, padx=5, pady=3)
-
-        ctk.CTkLabel(lora_frame, text="Relay Bit:").grid(row=0, column=4, padx=5, pady=3)
-        self.relay_combo = ctk.CTkComboBox(lora_frame, values=["0", "1"], width=60)
-        self.relay_combo.set("1")
-        self.relay_combo.grid(row=0, column=5, padx=5, pady=3)
-
-        ctk.CTkButton(col2, text="Enviar Comando", width=200, command=self.send_cmd).pack(pady=10)
-
-        # -------- Columna 3: Logs --------
-        col3 = ctk.CTkFrame(main_frame, corner_radius=10, fg_color=("gray20", "gray25"))
-        col3.grid(row=0, column=2, sticky="nsew", padx=10, pady=10)
-
-        col3.grid_columnconfigure(0, weight=1)
-        col3.grid_rowconfigure(1, weight=1)  
-        col3.grid_rowconfigure(3, weight=1) 
-
-        ctk.CTkLabel(col3, text="💬 Registro de Mensajes Salientes", font=("Segoe UI", 18, "bold")).grid(row=0, column=0, pady=(10, 5))
-        self.output = ctk.CTkTextbox(col3, font=("Consolas", 11))
-        self.output.grid(row=1, column=0, sticky="nsew", padx=10, pady=(0, 10))
-
-        ctk.CTkLabel(col3, text="💬 Registro de Mensajes Entrantes", font=("Segoe UI", 18, "bold")).grid(row=2, column=0, pady=(10, 5))
-        self.input = ctk.CTkTextbox(col3, font=("Consolas", 11))
-        self.input.grid(row=3, column=0, sticky="nsew", padx=10, pady=(0, 10))
-
-
-
-        # --- Key bindings ---
-        self.master.bind("<Up>", lambda e: self.move_robot("forward"))
-        self.master.bind("<Down>", lambda e: self.move_robot("backward"))
-        self.master.bind("<Left>", lambda e: self.move_robot("left"))
-        self.master.bind("<Right>", lambda e: self.move_robot("right"))
-        self.master.bind("<space>", lambda e: self.move_robot("stop"))
-        self.master.protocol("WM_DELETE_WINDOW", self.on_close)
-
-        main_frame.grid_rowconfigure(0, weight=1)
-        main_frame.grid_columnconfigure(0, weight=1)
-        main_frame.grid_columnconfigure(1, weight=1)
-        main_frame.grid_columnconfigure(2, weight=1)  # <-- Columna 3 (Logs)
-
-
-    # ===================== FUNCIONES =====================
-
-    def move_robot(self, direction):
-        commands = {
-            "forward": {"T": 1, "L": 0.5, "R": 0.5},
-            "backward": {"T": 1, "L": -0.5, "R": -0.5},
-            "left": {"T": 1, "L": -0.3, "R": 0.3},
-            "right": {"T": 1, "L": 0.3, "R": -0.3},
-            "stop": {"T": 1, "L": 0, "R": 0},
-        }
-        cmd = commands.get(direction)
-        if cmd:
-            self.send_cmd(json.dumps(cmd))
-
-    def send_oled(self):
-        try:
-            line = int(self.line_var.get())
-            text = self.text_entry.get()
-            cmd = {"T": 3, "lineNum": line, "Text": text}
-            self.send_cmd(json.dumps(cmd))
-        except ValueError:
-            messagebox.showerror("Error", "El número de línea debe ser 0–3.")
-
-    def send_cmd(self, cmd=None):
-        if cmd is None:
-            cmd = json.dumps({"T": 0})
-        dest = int(self.dest_entry.get())
-        msg_type = int(self.type_combo.get())
-        relay = int(self.relay_combo.get())
-        self.msg_id += 1
-        self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
-        self._append_output(f"📡 Enviado: {cmd}")
-
-    def start_feedback(self):
-        if self.feedback_running:
-            messagebox.showinfo("Info", "Auto feedback ya está activo.")
-            return
-        self.feedback_running = True
-        self.send_cmd(json.dumps({"T": 131, "cmd": 1}))
-        self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
-        self.feedback_thread.start()
-        self._append_output("✅ Auto feedback iniciado.\n")
-
-    def stop_feedback(self):
-        if not self.feedback_running:
-            messagebox.showinfo("Info", "Auto feedback no está activo.")
-            return
-        self.feedback_running = False
-        self.send_cmd(json.dumps({"T": 131, "cmd": 0}))
-        self._append_output("🛑 Auto feedback detenido.\n")
-
-    def _feedback_loop(self):
-        ip = "192.168.4.1"  # se puede añadir un Entry si deseas editarlo
-        while self.feedback_running:
-            if ip:
-                try:
-                    url = f"http://{ip}/js?json={json.dumps({'T':130})}"
-                    r = requests.get(url, timeout=3)
-                    self._append_output(f"[Feedback] {r.text.strip()}\n")
-                except Exception as e:
-                    self._append_output(f"⚠️ Error feedback: {e}\n")
-            time.sleep(1)
-
-    def _append_output(self, text):
-        self.output.insert("end", text + "\n")
-        self.output.see("end")
-
-    def on_close(self):
-        self.feedback_running = False
-        self.master.destroy()
-
-# ===================== FIN DE LA CLASE =====================
-
 import sys
 import json
 import threading
 import time
 import requests
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu,
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QAction
 from LoRaNode_bis import LoRaNode
 
 
@@ -233,6 +32,7 @@ class EB_RobotGUI_bis(QWidget):
         self.setGeometry(200, 100, 1200, 700)
 
         main_layout = QHBoxLayout(self)
+        
 
         # === COLUMNA 1: Pestañas ===
         col1 = QVBoxLayout()
@@ -351,9 +151,10 @@ class EB_RobotGUI_bis(QWidget):
 
 
         # === Layout principal para columnas 2 y 3 ===
-        right_layout = QVBoxLayout()  # Contendrá la fila de comandos y la fila de logs
+        right_layout = QVBoxLayout()  
 
-        # ------------------ FILA 1: Comandos LoRa ------------------
+        # ------------------ FILA 1: Comandos LoRa & Lista de Reports ------------------
+        # === Comandos LoRa ===
         lora_group = QGroupBox("📤 Configuración del comando")
         lora_layout = QGridLayout()
 
@@ -362,23 +163,84 @@ class EB_RobotGUI_bis(QWidget):
         self.dest_entry.setFixedWidth(60)
         lora_layout.addWidget(self.dest_entry, 0, 1)
 
-        lora_layout.addWidget(QLabel("Msg Type:"), 0, 2)
-        self.type_combo = QComboBox()
-        self.type_combo.addItems([str(i) for i in range(1, 31)])
-        lora_layout.addWidget(self.type_combo, 0, 3)
+        lora_layout.addWidget(QLabel("Msg Type:"), 0, 3)
+        # self.type_combo = QComboBox()
+        # self.type_combo.addItems([str(i) for i in range(1, 31)])
+        # lora_layout.addWidget(self.type_combo, 0, 3)
 
-        lora_layout.addWidget(QLabel("Relay Bit:"), 0, 4)
+        self.type_button = QPushButton("Seleccionar tipo de mensaje")
+        lora_layout.addWidget(self.type_button, 0, 4)
+
+        # --- Menú principal
+        menu = QMenu(self)
+
+        self.grups = {
+            "Respuestas (1–4)": {
+                1: "Confirmación de recepción",
+                2: "Error en transmisión",
+                3: "Respuesta de estado",
+                4: "Fin de comunicación"
+            },
+            "Consultas (5–9)": {
+                5: "Petición de datos",
+                6: "Solicitud de conexión",
+                7: "Ping de latencia",
+                8: "Consulta de estado",
+                9: "Solicitud de versión"
+            },
+            "Robot (10–19)": {
+                10: "FeedBack",
+                11: "Movimiento",
+                12: "Oled",
+                13: "",
+                14: "",
+                15: "",
+                19: ""
+            },
+            "Sensores (20–24)": {
+                20: "Lectura de temperatura",
+                21: "Lectura de presión",
+                22: "Lectura de humedad",
+                23: "Lectura de luz ambiental",
+                24: "Lectura de proximidad"
+            },
+            "Cámara/Radar (25–30)": {
+                25: "Captura de imagen",
+                26: "Iniciar streaming",
+                27: "Detección de movimiento",
+                28: "Seguimiento de objetivo",
+                30: "Reset del módulo"
+            },
+            "CRelay Flag (31)": {
+                31: "Activar/Desactivar relay flag"
+            }
+        }
+
+        # --- Crear submenús dinámicamente
+        for grupo, elementos in self.grups.items():
+            submenu = QMenu(grupo, self)
+            for num, desc in elementos.items():
+                action = QAction(f"{num} - {desc}", self)
+                action.setToolTip(desc)  #
+                action.triggered.connect(lambda checked, n=num, d=desc: self.set_selected_type(n, d))
+                submenu.addAction(action)
+            menu.addMenu(submenu)
+
+        self.type_button.setMenu(menu)
+        self.selected_type = 0
+
+        lora_layout.addWidget(QLabel("Relay Bit:"), 0, 6)
         self.relay_combo = QComboBox()
         self.relay_combo.addItems(["0", "1"])
         self.relay_combo.setCurrentText("1")
-        lora_layout.addWidget(self.relay_combo, 0, 5)
+        lora_layout.addWidget(self.relay_combo, 0, 7)
         
         lora_group.setLayout(lora_layout)
         right_layout.addWidget(lora_group, 1)
                 
         self.btn_send_cmd = QPushButton("Enviar Comando")
         self.btn_send_cmd.clicked.connect(self.send_cmd)
-        lora_layout.addWidget(self.btn_send_cmd, 1, 0, 1, 6)  # Botón ocupa toda la fila
+        lora_layout.addWidget(self.btn_send_cmd, 1, 0, 1, 8)  # Botón ocupa toda la fila
 
         # === Lista de pending_requests ===
         requests_group = QGroupBox("📋 Peticiones pendientes")
@@ -389,6 +251,10 @@ class EB_RobotGUI_bis(QWidget):
 
         requests_group.setLayout(requests_layout)
         right_layout.addWidget(requests_group)
+
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_requests_list)
+        self.timer.start(1000)
 
         # ------------------ FILA 2: Logs ------------------
         logs_layout = QHBoxLayout()  # Divide en dos columnas
@@ -420,7 +286,26 @@ class EB_RobotGUI_bis(QWidget):
 
     # ===================== FUNCIONES =====================
 
+    def update_requests_list(self):
+        """Actualiza la lista con los elementos de self.pending_requests"""
+        self.requests_list.clear()
+        for dest, msg_ids in self.loranode.pending_requests.items():
+            # Convertimos la lista de msg_id a una cadena separada por comas
+            msg_str = ", ".join(str(mid) for mid in msg_ids)
+            self.requests_list.addItem(f"{dest}: {msg_str}")
+
+    def set_selected_type(self, msg_type, desc):
+        """Cuando el usuario selecciona un tipo de mensaje"""
+        self.selected_type = msg_type
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Tipo seleccionado: {self.selected_type}")
+        self.type_button.setText(f"{msg_type} (📖 {desc})")
+        if int(self.selected_type) < 4 or int(self.selected_type) > 9 or int(self.selected_type) is not 31:
+            self.btn_send_cmd.setEnabled(False)
+        else:
+            self.btn_send_cmd.setEnabled(True)
+
     def keyPressEvent(self, event):
+        """Actuador de eventos del movimiento de flechas."""
         key_map = {
             Qt.Key.Key_Up: "forward",
             Qt.Key.Key_Down: "backward",
@@ -441,6 +326,7 @@ class EB_RobotGUI_bis(QWidget):
             "stop": {"T": 1, "L": 0, "R": 0},
         }
         cmd = commands.get(direction)
+        self.set_selected_type(11, self.grups["Robot (10–19)"][11])
         if cmd:
             self.send_cmd(json.dumps(cmd))
 
@@ -449,16 +335,16 @@ class EB_RobotGUI_bis(QWidget):
             line = int(self.line_entry.text())
             text = self.text_entry.text()
             cmd = {"T": 3, "lineNum": line, "Text": text}
+            self.set_selected_type(12, self.grups["Robot (10–19)"][12])
             self.send_cmd(json.dumps(cmd))
         except ValueError:
             QMessageBox.critical(self, "Error", "El número de línea debe ser 0–3.")
 
-    def send_cmd(self, cmd=None):
-        print(cmd)
-        if type(cmd) is not str:
+    def send_cmd(self, cmd:str =None):
+        if cmd is False or type(cmd) is not str:
             cmd = ""
         dest = int(self.dest_entry.text())
-        msg_type = int(self.type_combo.currentText())
+        msg_type = int(self.selected_type)
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
         if msg_type == 5:
@@ -476,18 +362,18 @@ class EB_RobotGUI_bis(QWidget):
         elif 24 < msg_type < 31:
             alert = "CAMERA/RADAR"
 
-        self.append_general_log(f"Sending command to {dest}: {alert}")
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Sending command to {dest}: {alert}")
         self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
-        self._append_output(f"📡 Enviado: {msg_type} to {dest}")
+        self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type} to {dest}")
     
     def take_photo(self):
         dest = int(self.dest_entry.text())
         msg_type = 30
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
-        self.append_general_log(f"📸 Comando enviado para tomar foto")
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 📸 Comando enviado para tomar foto")
         self.loranode.send_message(dest, msg_type, self.msg_id, "", relay)
-        self._append_output(f"📡 Enviado: {msg_type}")
+        self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type}")
 
     def start_feedback(self):
         if self.feedback_running:
@@ -495,9 +381,10 @@ class EB_RobotGUI_bis(QWidget):
             return
         self.feedback_running = True
         self.send_cmd(json.dumps({"T": 131, "cmd": 1}))
+        self.set_selected_type(10, self.grups["Robot (10–19)"][10])
         self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
         self.feedback_thread.start()
-        self._append_output("✅ Auto feedback iniciado.\n")
+        self._append_output(f"[{time.strftime('%H:%M:%S')}] ✅ Auto feedback iniciado.\n")
 
     def stop_feedback(self):
         if not self.feedback_running:
@@ -505,7 +392,8 @@ class EB_RobotGUI_bis(QWidget):
             return
         self.feedback_running = False
         self.send_cmd(json.dumps({"T": 131, "cmd": 0}))
-        self._append_output("🛑 Auto feedback detenido.\n")
+        self.set_selected_type(10, self.grups["Robot (10–19)"][10])
+        self._append_output(f"[{time.strftime('%H:%M:%S')}] 🛑 Auto feedback detenido.\n")
 
     def _feedback_loop(self):
         ip = "192.168.4.1"
@@ -514,9 +402,9 @@ class EB_RobotGUI_bis(QWidget):
                 try:
                     url = f"http://{ip}/js?json={json.dumps({'T':130})}"
                     r = requests.get(url, timeout=3)
-                    self._append_output(f"[Feedback] {r.text.strip()}\n")
+                    self._append_output(f"[{time.strftime('%H:%M:%S')}] [Feedback] {r.text.strip()}\n")
                 except Exception as e:
-                    self._append_output(f"⚠️ Error feedback: {e}\n")
+                    self._append_output(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error feedback: {e}\n")
             time.sleep(1)
 
     def _append_output(self, text):
@@ -541,4 +429,5 @@ class EB_RobotGUI_bis(QWidget):
     def _on_general_log(self, msg: str):
         """Manejador de mensajes entrantes desde LoRaNode"""
         self.append_general_log(msg)
+
 

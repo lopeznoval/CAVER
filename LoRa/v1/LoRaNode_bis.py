@@ -83,9 +83,7 @@ class LoRaNode:
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
         self.node.send_bytes(data)
-        if callback:
-            with self.lock:
-                self.pending_requests[msg_id] = callback
+        self.add_pending(addr_dest, msg_id)
 
     def receive_loop(self):
         while self.running:
@@ -115,13 +113,12 @@ class LoRaNode:
             
             try:    
                 if 1 < msg_type < 5:  # Respuesta
-                    callback = None
                     with self.lock:
-                        if msg_id in self.pending_requests:
-                            callback = self.pending_requests.pop(msg_id)
-                    if callback is not None:
-                        callback(message)
-                    self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender}")
+                        rm = self.remove_pending(addr_dest, msg_id)
+                        if not rm:
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
+                            continue
+                    self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
 
                 elif 4 < msg_type < 10:  # Comandos generales
                     if msg_type == 5:  # Ping
@@ -164,6 +161,26 @@ class LoRaNode:
             except Exception as e:
                 print(f"Error processing message: {e}")
 
+    # ------------------- PENDING REQUESTS -----------------
+
+    def add_pending(self, addr_dest: int, msg_id: int):
+        with self.lock:
+            self.pending_requests.setdefault(addr_dest, []).append(msg_id)
+        self.on_alert(f"[{time.strftime('%H:%M:%S')}] Added pending request: {msg_id} to {addr_dest}")
+
+    def remove_pending(self, addr_dest: int, msg_id: int) -> bool:
+        with self.lock:
+            if addr_dest in self.pending_requests:
+                try:
+                    self.pending_requests[addr_dest].remove(msg_id) 
+                    if not self.pending_requests[addr_dest]:
+                        del self.pending_requests[addr_dest]
+                    self.on_alert(f"[{time.strftime('%H:%M:%S')}] Removed pending request: {msg_id} to {addr_dest}")
+                    return True
+                except ValueError:
+                    pass  
+            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Unavailable pending request: {msg_id} to {addr_dest}")
+            return False
 
     # -------------------- SERIAL ROBOT --------------------
     def connect_robot(self):

@@ -1,9 +1,9 @@
 import sys
 import LoRaNode_bis as LRN
 from parameters import *
-
+import time
 import tkinter as tk
-from EB_RobotGUI import EB_RobotGUI, EB_RobotGUI_bis
+from EB_RobotGUI import EB_RobotGUI_bis
 from PyQt6.QtWidgets import QApplication
 import os
 
@@ -23,3 +23,9 @@ if __name__ == "__main__":
         gui = EB_RobotGUI_bis(node)
         gui.show()
         sys.exit(app.exec())
+    else:
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            node.stop()
