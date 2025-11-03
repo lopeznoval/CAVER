@@ -140,7 +140,7 @@ class LoRaNode:
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
                     if self.robot.is_open and self.robot:
                         self.send_to_robot(addr_dest, msg_id, message) # resp = 
-                        # self.send_message(addr_sender, 3, msg_id, "OK")
+                        self.send_message(addr_sender, 3, msg_id, "OK")
                     else:
                         self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
 
