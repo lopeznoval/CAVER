@@ -192,7 +192,9 @@ class LoRaNode:
     # -------------------- SERIAL ROBOT --------------------
     def connect_robot(self):
         try:
-            self.robot = serial.Serial(self.robot_port, self.robot_baudrate, timeout=1)
+            self.robot = serial.Serial(self.robot_port, self.robot_baudrate, timeout=1, dsrdtr=None)
+            self.robot.setRTS(False)
+            self.robot.setDTR(False)
             print(f"Connected to robot on {self.robot_port}")
             # self.robot_listener = threading.Thread(target=self.receive_from_robot)
             # self.robot_listener.daemon = True
@@ -210,18 +212,18 @@ class LoRaNode:
         """Envía un comando al robot y devuelve la respuesta."""
         if self.running and self.robot and self.robot.is_open:
             self.robot.reset_input_buffer()
-            self.robot.write((command + "\r\n").encode('utf-8'))
+            self.robot.write((command + "\n").encode('utf-8'))
             print("Enviando comando al robot.")
             time.sleep(0.1)  
-            line = self.robot.readline().decode('utf-8').strip()
-            if line:
+            response = self.robot.readline().decode('utf-8') #.strip()
+            if response:
                 try:
-                    response = json.loads(line)
                     return response
                 except json.JSONDecodeError:
                     print("Error decoding JSON from robot response.")
             else:
                 print("No response from robot.")  
+
                      
     # -------------------- VÍDEO --------------------
     def stream_recording(self):
@@ -237,6 +239,18 @@ class LoRaNode:
             return img_b64
         else:
             return None
+        
+    # -------------------- SENSORES --------------------
+    def connect_sensors(self):
+        self.sensores = serial.Serial('/dev/ttyUSB0', 115200, timeout=2)  # Ajusta el puerto
+        time.sleep(2)  # Espera a que el puerto inicialice
+        print("Connected to sensors on /dev/ttyUSB0.\n")
+
+    # -------------------- RADAR ------------------------
+    def connect_radar(self):
+        # self.CLIport = serial.Serial('COM6', 115200)
+        # self.Dataport = serial.Serial('COM7', 921600)
+        print("Connected to radar on COM6 and COM7.\n")
 
     # -------------------- EJECUCIÓN --------------------
     def run(self):

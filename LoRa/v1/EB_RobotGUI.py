@@ -148,8 +148,8 @@ class EB_RobotGUI_bis(QWidget):
 
         self.btn_imu = QPushButton("IMU Data")
         self.btn_feedback = QPushButton("Chassis Feedback")
-        self.btn_imu.clicked.connect(lambda: self.send_cmd(json.dumps({"T": 126})))
-        self.btn_feedback.clicked.connect(lambda: self.send_cmd(json.dumps({"T": 130})))
+        self.btn_imu.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 126})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
+        self.btn_feedback.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 130})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
 
         cmd_layout.addWidget(self.btn_imu, 0, 0)
         cmd_layout.addWidget(self.btn_feedback, 0, 1)
@@ -351,7 +351,7 @@ class EB_RobotGUI_bis(QWidget):
         self.selected_type = msg_type
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Tipo seleccionado: {self.selected_type}")
         self.type_button.setText(f"{msg_type} (📖 {desc})")
-        if int(self.selected_type) < 4 or int(self.selected_type) > 9 or int(self.selected_type) != 31:
+        if (int(self.selected_type) < 4 or int(self.selected_type) > 9) and int(self.selected_type) != 31:
             self.btn_send_cmd.setEnabled(False)
         else:
             self.btn_send_cmd.setEnabled(True)
@@ -413,6 +413,8 @@ class EB_RobotGUI_bis(QWidget):
             alert = "SENSOR"
         elif 24 < msg_type < 31:
             alert = "CAMERA/RADAR"
+        else:
+            alert = "GENERAL"
 
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Sending command to {dest}: {alert}")
         self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
