@@ -115,12 +115,12 @@ class LoRaNode:
             
             try:    
                 if 1 < msg_type < 5:  # Respuesta
-                    with self.lock:
-                        rm = self.remove_pending(addr_sender, msg_id)
-                        if not rm:
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
-                            continue
-                    self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
+                    # with self.lock:
+                    #     rm = self.remove_pending(addr_sender, msg_id)
+                    #     if not rm:
+                    #         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
+                    #         continue
+                    # self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
                     continue
 
                 elif 4 < msg_type < 10:  # Comandos generales
@@ -141,8 +141,8 @@ class LoRaNode:
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
                     if self.robot.is_open and self.robot:
-                        self.send_to_robot(addr_dest, msg_id, message) # resp = 
-                        self.send_message(addr_sender, 3, msg_id, "OK")
+                        resp = self.send_to_robot(addr_dest, msg_id, message)
+                        self.send_message(addr_sender, 3, msg_id, resp)
                     else:
                         self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
 
