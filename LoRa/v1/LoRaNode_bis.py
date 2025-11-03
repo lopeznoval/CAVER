@@ -1,5 +1,6 @@
 # LoRaNode organizado
 import io
+import json
 import time
 import threading
 import serial
@@ -115,11 +116,12 @@ class LoRaNode:
             try:    
                 if 1 < msg_type < 5:  # Respuesta
                     with self.lock:
-                        rm = self.remove_pending(addr_dest, msg_id)
+                        rm = self.remove_pending(addr_sender, msg_id)
                         if not rm:
                             self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
                             continue
                     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
+                    continue
 
                 elif 4 < msg_type < 10:  # Comandos generales
                     if msg_type == 5:  # Ping
@@ -160,7 +162,11 @@ class LoRaNode:
                     self.node.send_bytes(self.pack_message(addr_sender, 1, msg_id, "OK")) 
 
             except Exception as e:
-                print(f"Error processing message: {e}")
+                self.on_alert(f"Error processing message: {e}")
+
+            finally:
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Finished processing message.")
+                time.sleep(0.1)
 
     # ------------------- PENDING REQUESTS -----------------
 
@@ -186,7 +192,9 @@ class LoRaNode:
     # -------------------- SERIAL ROBOT --------------------
     def connect_robot(self):
         try:
-            self.robot = serial.Serial(self.robot_port, self.robot_baudrate, timeout=1)
+            self.robot = serial.Serial(self.robot_port, self.robot_baudrate, timeout=1, dsrdtr=None)
+            self.robot.setRTS(False)
+            self.robot.setDTR(False)
             print(f"Connected to robot on {self.robot_port}")
             # self.robot_listener = threading.Thread(target=self.receive_from_robot)
             # self.robot_listener.daemon = True
@@ -206,18 +214,17 @@ class LoRaNode:
             self.robot.reset_input_buffer()
             self.robot.write((command + "\n").encode('utf-8'))
             print("Enviando comando al robot.")
-            # response = self.robot.readline().decode('utf-8').strip()
-            # time.sleep(0.1)  
-            # response = self.robot.readline().decode('utf-8').strip()
-            # start_time = time.time()
-            # response = b""
-            # if self.robot.in_waiting > 0:
-            #     response += self.robot.readline(self.robot.in_waiting)
-            #     if b"\n" in response:  
-            #         response = response.decode('utf-8').strip()
-            # time.sleep(0.01)
-            
-        # return response
+            time.sleep(0.1)  
+            response = self.robot.readline().decode('utf-8') #.strip()
+            if response:
+                try:
+                    return response
+                except json.JSONDecodeError:
+                    print("Error decoding JSON from robot response.")
+            else:
+                print("No response from robot.")  
+
+                     
     # -------------------- VÍDEO --------------------
     def stream_recording(self):
         if self.camera is not None:
@@ -232,6 +239,18 @@ class LoRaNode:
             return img_b64
         else:
             return None
+        
+    # -------------------- SENSORES --------------------
+    def connect_sensors(self):
+        self.sensores = serial.Serial('/dev/ttyUSB0', 115200, timeout=2)  # Ajusta el puerto
+        time.sleep(2)  # Espera a que el puerto inicialice
+        print("Connected to sensors on /dev/ttyUSB0.\n")
+
+    # -------------------- RADAR ------------------------
+    def connect_radar(self):
+        # self.CLIport = serial.Serial('COM6', 115200)
+        # self.Dataport = serial.Serial('COM7', 921600)
+        print("Connected to radar on COM6 and COM7.\n")
 
     # -------------------- EJECUCIÓN --------------------
     def run(self):
