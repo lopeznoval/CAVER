@@ -1,6 +1,7 @@
 # LoRaNode organizado
 import io
 import json
+import queue
 import time
 import threading
 import serial
@@ -27,6 +28,7 @@ class LoRaNode:
 
         self.robot_port = robot_port
         self.robot_baudrate = robot_baudrate
+        self.response_queue = queue.Queue()
 
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
@@ -208,7 +210,11 @@ class LoRaNode:
         while self.robot:
             data = self.robot.readline().decode('utf-8')
             if data:
-                print(f"Received from robot: {data}")
+                try:
+                    print(f"Received from robot: {data}")
+                    self.response_queue.put(data)  # Guarda cada respuesta
+                except Exception as e:
+                    print(f"Error reading: {e}")
 
 
     def send_to_robot(self, addres_dest, msg_id, command: str) -> str:
@@ -217,6 +223,15 @@ class LoRaNode:
             self.robot.reset_input_buffer()
             self.robot.write((command + "\r\n").encode('utf-8'))
             print("Enviando comando al robot.")  
+
+            try:
+                # Esperar la respuesta de la cola   
+                response = self.response_queue.get(timeout=5)
+                return response
+            except queue.Empty:
+                return "⏰ Timeout esperando respuesta del robot."
+        else:
+            return "❌ Robot no conectado o no activo."
             
 
                      
