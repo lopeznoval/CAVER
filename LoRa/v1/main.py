@@ -3,18 +3,16 @@ import LoRaNode_bis as LRN
 from parameters import *
 import time
 import tkinter as tk
-from EB_RobotGUI import EB_RobotGUI_bis
-from PyQt6.QtWidgets import QApplication
+
 import os
 
 if __name__ == "__main__":
-    node = LRN.LoRaNode(SERIAL_PORT, NODE_ADDRESS, FREQUENCY, POWER, rssi=True, EB=1, robot_port=SERIAL_PORT_ROBOT, robot_baudrate=BAUDRATE_ROBOT)
+    node = LRN.LoRaNode(SERIAL_PORT, NODE_ADDRESS, FREQUENCY, POWER, rssi=True, EB=EB, robot_port=SERIAL_PORT_ROBOT, robot_baudrate=BAUDRATE_ROBOT)
     node.run()
 
     if node.is_base:
-        # root = tk.Tk()
-        # gui = EB_RobotGUI(root, node)
-        # root.mainloop()
+        from EB_RobotGUI import EB_RobotGUI_bis
+        from PyQt6.QtWidgets import QApplication #type: ignore
         base_path = os.path.dirname(os.path.abspath(__file__))
         app = QApplication(sys.argv)
         with open(os.path.join(base_path, "styles.qss"), "r") as f:

@@ -31,13 +31,13 @@ class LoRaNode:
         self.on_message = None
         self.on_bytes = None
 
-        if platform.system() == "Linux":
-            from picamera import PiCamera # type: ignore
-            self.camera = PiCamera()
-            self.stream = io.BytesIO()
-        else:
-            self.camera = None
-            self.stream = None
+        # if platform.system() == "Linux":
+        #     from picamera2 import PiCamera2 # type: ignore
+        #     self.camera = PiCamera2()
+        #     self.stream = io.BytesIO()
+        # else:
+        #     self.camera = None
+        #     self.stream = None
 
     # -------------------- MENSAJES --------------------
     def pack_message(self, addr_dest:int, msg_type: int, msg_id: int, message: str, relay_flag: int =0) -> bytes:
@@ -83,7 +83,8 @@ class LoRaNode:
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
         self.node.send_bytes(data)
-        self.add_pending(addr_dest, msg_id)
+        if self.is_base:
+            self.add_pending(addr_dest, msg_id)
 
     def receive_loop(self):
         while self.running:
@@ -109,7 +110,7 @@ class LoRaNode:
                     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received message not for this node (dest: {addr_dest}), discarding.")
                 continue            
             # -------------------- HANDLER DE TIPOS --------------------
-            self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
+            # self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
             
             try:    
                 if 1 < msg_type < 5:  # Respuesta
@@ -138,8 +139,8 @@ class LoRaNode:
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
                     if self.robot.is_open and self.robot:
-                        resp = self.send_to_robot(addr_dest, msg_id, message)
-                        self.send_message(addr_sender, 3, msg_id, resp)
+                        self.send_to_robot(addr_dest, msg_id, message) # resp = 
+                        # self.send_message(addr_sender, 3, msg_id, "OK")
                     else:
                         self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
 
@@ -187,8 +188,8 @@ class LoRaNode:
         try:
             self.robot = serial.Serial(self.robot_port, self.robot_baudrate, timeout=1)
             print(f"Connected to robot on {self.robot_port}")
-            self.robot_listener = threading.Thread(target=self.receive_from_robot)
-            self.robot_listener.daemon = True
+            # self.robot_listener = threading.Thread(target=self.receive_from_robot)
+            # self.robot_listener.daemon = True
             # self.robot_listener.start()
         except serial.SerialException as e:
             print(f"Failed to connect to robot: {e}")
@@ -199,24 +200,24 @@ class LoRaNode:
             if data:
                 print(f"Received from robot: {data}")
 
-    def send_to_robot(self, command: str) -> str:
+    def send_to_robot(self, addres_dest, msg_id, command: str) -> str:
         """Envía un comando al robot y devuelve la respuesta."""
         if self.running and self.robot and self.robot.is_open:
             self.robot.reset_input_buffer()
             self.robot.write((command + "\n").encode('utf-8'))
+            print("Enviando comando al robot.")
+            # response = self.robot.readline().decode('utf-8').strip()
             # time.sleep(0.1)  
             # response = self.robot.readline().decode('utf-8').strip()
-            start_time = time.time()
-            response = b""
-            while time.time() - start_time < 2:  # timeout de 2 segundos (probablemente bajar o ver si lo de arriba está correcto)
-                if self.robot.in_waiting > 0:
-                    response += self.robot.read(self.robot.in_waiting)
-                    if b"\n" in response:  
-                        response = response.decode('utf-8').strip()
-                        break
-                time.sleep(0.01)
+            # start_time = time.time()
+            # response = b""
+            # if self.robot.in_waiting > 0:
+            #     response += self.robot.readline(self.robot.in_waiting)
+            #     if b"\n" in response:  
+            #         response = response.decode('utf-8').strip()
+            # time.sleep(0.01)
             
-        return response
+        # return response
     # -------------------- VÍDEO --------------------
     def stream_recording(self):
         if self.camera is not None:
