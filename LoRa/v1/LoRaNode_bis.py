@@ -114,12 +114,13 @@ class LoRaNode:
             
             try:    
                 if 1 < msg_type < 5:  # Respuesta
-                    with self.lock:
-                        rm = self.remove_pending(addr_dest, msg_id)
-                        if not rm:
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
-                            continue
-                    self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
+                    # with self.lock:
+                    #     rm = self.remove_pending(addr_dest, msg_id)
+                    #     if not rm:
+                    #         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
+                    #         continue
+                    # self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
+                    continue
 
                 elif 4 < msg_type < 10:  # Comandos generales
                     if msg_type == 5:  # Ping
@@ -160,7 +161,11 @@ class LoRaNode:
                     self.node.send_bytes(self.pack_message(addr_sender, 1, msg_id, "OK")) 
 
             except Exception as e:
-                print(f"Error processing message: {e}")
+                self.on_alert(f"Error processing message: {e}")
+
+            finally:
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Finished processing message.")
+                time.sleep(0.1)
 
     # ------------------- PENDING REQUESTS -----------------
 
