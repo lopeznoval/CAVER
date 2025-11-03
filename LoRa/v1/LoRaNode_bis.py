@@ -143,8 +143,8 @@ class LoRaNode:
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
                     if self.robot.is_open and self.robot:
-                        self.send_to_robot(addr_dest, msg_id, message)
-                        self.send_message(addr_sender, 3, msg_id, "OK")
+                        resp = self.send_to_robot(addr_dest, msg_id, message)
+                        self.send_message(addr_sender, 3, msg_id, resp)
                     else:
                         self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
 
@@ -223,15 +223,13 @@ class LoRaNode:
             self.robot.reset_input_buffer()
             self.robot.write((command + "\r\n").encode('utf-8'))
             print("Enviando comando al robot.")  
-
             try:
-                # Esperar la respuesta de la cola   
                 response = self.response_queue.get(timeout=5)
                 return response
             except queue.Empty:
-                return "⏰ Timeout esperando respuesta del robot."
+                return "OK"
         else:
-            return "❌ Robot no conectado o no activo."
+            return "OK"
             
 
                      
