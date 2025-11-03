@@ -27,9 +27,9 @@ class LoRaNode:
         self.robot_port = robot_port
         self.robot_baudrate = robot_baudrate
 
-        self.on_alert = None
-        self.on_message = None
-        self.on_bytes = None
+        self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
+        self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
+        self.on_bytes = lambda data: print(f"📦 [BYTES] {data}")
 
         # if platform.system() == "Linux":
         #     from picamera2 import PiCamera2 # type: ignore
@@ -110,7 +110,7 @@ class LoRaNode:
                     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received message not for this node (dest: {addr_dest}), discarding.")
                 continue            
             # -------------------- HANDLER DE TIPOS --------------------
-            # self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
+            self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
             
             try:    
                 if 1 < msg_type < 5:  # Respuesta
