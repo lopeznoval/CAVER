@@ -192,37 +192,38 @@ class LoRaNode:
     # -------------------- SERIAL ROBOT --------------------
     def connect_robot(self):
         try:
-            self.robot = serial.Serial(self.robot_port, self.robot_baudrate, timeout=1, dsrdtr=None)
+            self.robot = serial.Serial(self.robot_port, self.robot_baudrate, timeout=1000, dsrdtr=None, rtscts=False)
             self.robot.setRTS(False)
             self.robot.setDTR(False)
+            self.robot.reset_input_buffer()
+            self.robot.write(("{\"T\":143,\"cmd\":0}" + "\n").encode('utf-8'))
             print(f"Connected to robot on {self.robot_port}")
-            # self.robot_listener = threading.Thread(target=self.receive_from_robot)
-            # self.robot_listener.daemon = True
-            # self.robot_listener.start()
+            self.robot_listener = threading.Thread(target=self.receive_from_robot)
+            self.robot_listener.daemon = True
+            self.robot_listener.start()
         except serial.SerialException as e:
             print(f"Failed to connect to robot: {e}")
 
     def receive_from_robot(self):
-        while self.running and self.robot and self.robot.is_open:
-            data = self.robot.readline().decode('utf-8').strip()
+        while self.robot:
+            data = self.robot.readline().decode('utf-8')
             if data:
                 print(f"Received from robot: {data}")
+
 
     def send_to_robot(self, addres_dest, msg_id, command: str) -> str:
         """Envía un comando al robot y devuelve la respuesta."""
         if self.running and self.robot and self.robot.is_open:
             self.robot.reset_input_buffer()
             self.robot.write((command + "\n").encode('utf-8'))
-            print("Enviando comando al robot.")
-            time.sleep(0.1)  
-            response = self.robot.readline().decode('utf-8') #.strip()
-            if response:
+            print("Enviando comando al robot.")  
+            response = self.robot.readline().decode('utf-8')
+            while response.strip() != "T:1001":
                 try:
-                    return response
+                    response = self.robot.readline().decode('utf-8')
                 except json.JSONDecodeError:
                     print("Error decoding JSON from robot response.")
-            else:
-                print("No response from robot.")  
+            return response
 
                      
     # -------------------- VÍDEO --------------------
