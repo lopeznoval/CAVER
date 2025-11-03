@@ -1,5 +1,6 @@
 # LoRaNode organizado
 import io
+import json
 import time
 import threading
 import serial
@@ -114,12 +115,12 @@ class LoRaNode:
             
             try:    
                 if 1 < msg_type < 5:  # Respuesta
-                    # with self.lock:
-                    #     rm = self.remove_pending(addr_dest, msg_id)
-                    #     if not rm:
-                    #         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
-                    #         continue
-                    # self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
+                    with self.lock:
+                        rm = self.remove_pending(addr_sender, msg_id)
+                        if not rm:
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
+                            continue
+                    self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
                     continue
 
                 elif 4 < msg_type < 10:  # Comandos generales
@@ -209,20 +210,19 @@ class LoRaNode:
         """Envía un comando al robot y devuelve la respuesta."""
         if self.running and self.robot and self.robot.is_open:
             self.robot.reset_input_buffer()
-            self.robot.write((command + "\n").encode('utf-8'))
+            self.robot.write((command + "\r\n").encode('utf-8'))
             print("Enviando comando al robot.")
-            # response = self.robot.readline().decode('utf-8').strip()
-            # time.sleep(0.1)  
-            # response = self.robot.readline().decode('utf-8').strip()
-            # start_time = time.time()
-            # response = b""
-            # if self.robot.in_waiting > 0:
-            #     response += self.robot.readline(self.robot.in_waiting)
-            #     if b"\n" in response:  
-            #         response = response.decode('utf-8').strip()
-            # time.sleep(0.01)
-            
-        # return response
+            time.sleep(0.1)  
+            line = self.robot.readline().decode('utf-8').strip()
+            if line:
+                try:
+                    response = json.loads(line)
+                    return response
+                except json.JSONDecodeError:
+                    print("Error decoding JSON from robot response.")
+            else:
+                print("No response from robot.")  
+                     
     # -------------------- VÍDEO --------------------
     def stream_recording(self):
         if self.camera is not None:

@@ -10,3 +10,4 @@ RELAY_FLAG = 1            # Relay flag
 TYPE_MSG = 1             # Message type
 ID_MSG = 69               # Message ID
 POWER = 0                # dBm
+EB=1                    # 1-Si / 0-No

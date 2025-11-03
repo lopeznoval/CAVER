@@ -513,4 +513,4 @@ class EB_RobotGUI_bis(QWidget):
 
 #     def on_close(self):
 #         self.feedback_running = False
-#         self.master.destroy()
+#         self.master.destroy()0
