@@ -141,8 +141,8 @@ class LoRaNode:
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
                     if self.robot.is_open and self.robot:
-                        resp = self.send_to_robot(addr_dest, msg_id, message)
-                        self.send_message(addr_sender, 3, msg_id, resp)
+                        self.send_to_robot(addr_dest, msg_id, message)
+                        self.send_message(addr_sender, 3, msg_id, "OK")
                     else:
                         self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
 
@@ -192,11 +192,11 @@ class LoRaNode:
     # -------------------- SERIAL ROBOT --------------------
     def connect_robot(self):
         try:
-            self.robot = serial.Serial(self.robot_port, self.robot_baudrate, timeout=1000, dsrdtr=None, rtscts=False)
+            self.robot = serial.Serial(self.robot_port, self.robot_baudrate, dsrdtr=None, rtscts=False)
             self.robot.setRTS(False)
             self.robot.setDTR(False)
-            self.robot.reset_input_buffer()
-            self.robot.write(("{\"T\":143,\"cmd\":0}" + "\n").encode('utf-8'))
+            self.robot.write(("{\"T\":131,\"cmd\":0}" + "\r\n").encode('utf-8'))      # activar/desactivar cahsis feedback
+            # self.robot.write(("{\"T\":142,\"cmd\":10000}" + "\r\n").encode('utf-8'))  # timer cahsis feedback
             print(f"Connected to robot on {self.robot_port}")
             self.robot_listener = threading.Thread(target=self.receive_from_robot)
             self.robot_listener.daemon = True
@@ -215,15 +215,9 @@ class LoRaNode:
         """Envía un comando al robot y devuelve la respuesta."""
         if self.running and self.robot and self.robot.is_open:
             self.robot.reset_input_buffer()
-            self.robot.write((command + "\n").encode('utf-8'))
+            self.robot.write((command + "\r\n").encode('utf-8'))
             print("Enviando comando al robot.")  
-            response = self.robot.readline().decode('utf-8')
-            while response.strip() != "T:1001":
-                try:
-                    response = self.robot.readline().decode('utf-8')
-                except json.JSONDecodeError:
-                    print("Error decoding JSON from robot response.")
-            return response
+            
 
                      
     # -------------------- VÍDEO --------------------
