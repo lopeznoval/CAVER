@@ -360,15 +360,13 @@ def update():
             # para que el bucle MAIN los pueda guardar
             detObj = filtered_detObj 
             
-            # --- ¡NUEVO BLOQUE DE PRINT! ---
             print(f"--- Detectados {filtered_detObj['numObj']} objetos (los {MAX_OBJECTS_TO_CONSIDER} más cercanos) ---")
             for i in range(filtered_detObj['numObj']):
                 x_val = filtered_detObj['x'][i]
                 y_val = filtered_detObj['y'][i]
                 z_val = filtered_detObj['z'][i]
                 r_val = filtered_detObj['range'][i]
-                print(f"  Obj {i}: (X={x_val:.2f}, Y={y_val:.2f}, Z={z_val:.2f}) m | Distancia: {r_val:.2f} m")
-            # --- FIN DEL NUEVO BLOQUE ---
+                # print(f"  Obj {i}: (X={x_val:.2f}, Y={y_val:.2f}, Z={z_val:.2f}) m | Distancia: {r_val:.2f} m")
 
             x = -filtered_detObj["x"]
             y = filtered_detObj["y"]
@@ -382,11 +380,9 @@ def update():
             # s.setData([],[]) # Limpia la gráfica
             app.processEvents()
             
-    # --- AÑADE ESTE 'ELSE' PARA SABER SI ESTÁ VIVO ---
     else:
         # Si dataOk es 0, imprime esto para saber que el script sigue corriendo
         print("Esperando datos del radar...") 
-    # --- Fin de la modificación ---
         
     return dataOk
 
@@ -403,16 +399,16 @@ configParameters = parseConfigFile(configFileName)
 app = QtWidgets.QApplication([])
 
 # Set the plot 
-# pg.setConfigOption('background','w')
-# win = pg.GraphicsLayoutWidget()      # 1. Cambia GraphicsWindow por GraphicsLayoutWidget
-# win.setWindowTitle('2D scatter plot') # 2. Establece el título de la ventana de esta forma
-# win.show()                          # 3. Añade esta línea para mostrar la ventana
-# p = win.addPlot()                   # 4. Esta línea se mantiene igual
-# p.setXRange(-0.5,0.5)
-# p.setYRange(0,1.5)
-# p.setLabel('left', text = 'Y position (m)')
-# p.setLabel('bottom', text= 'X position (m)')
-# s = p.plot([],[],pen=None,symbol='o')
+pg.setConfigOption('background','w')
+win = pg.GraphicsLayoutWidget()      # 1. Cambia GraphicsWindow por GraphicsLayoutWidget
+win.setWindowTitle('2D scatter plot') # 2. Establece el título de la ventana de esta forma
+win.show()                          # 3. Añade esta línea para mostrar la ventana
+p = win.addPlot()                   # 4. Esta línea se mantiene igual
+p.setXRange(-0.5,0.5)
+p.setYRange(0,1.5)
+p.setLabel('left', text = 'Y position (m)')
+p.setLabel('bottom', text= 'X position (m)')
+s = p.plot([],[],pen=None,symbol='o')
     
    
 # Main loop 
