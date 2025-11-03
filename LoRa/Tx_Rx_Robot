@@ -33,7 +33,7 @@ def enviar_al_pc(lora, message):
         ID_MSG & 0xFF
     ]) + message.encode('utf-8', errors='ignore')
     lora.send(packet)
-    print(f"Enviado a PC → {message}")
+    #print(f"Enviado a PC → {message}")
 
 def escuchar_robot(robot, lora):
     "Hilo para escuchar respuestas del robot"
