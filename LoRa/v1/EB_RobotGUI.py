@@ -5,13 +5,16 @@ import json
 import threading
 import time
 import requests
+import pyqtgraph as pg
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
-    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget
+    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget, QCheckBox
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction
 from LoRaNode_bis import LoRaNode
+
+
 
 
 class EB_RobotGUI_bis(QWidget):
@@ -209,6 +212,40 @@ class EB_RobotGUI_bis(QWidget):
 
         # Añadir el tab al QTabWidget
         tabs.addTab(tab_logs, "📝 Logs")
+
+        # ------------------ TAB 6: Posición ------------------
+        tab_position = QWidget()
+        pos_layout = QVBoxLayout()
+
+        # Checkbox para enviar posición por LoRa
+        self.send_position_checkbox = QCheckBox("📡 Enviar posición al EB")
+        self.send_position_checkbox.setChecked(True)
+        pos_layout.addWidget(self.send_position_checkbox)
+
+        # Botón para resetear posición
+        self.btn_reset_position = QPushButton("🔄 Reset posición")
+        self.btn_reset_position.clicked.connect(self.reset_position)
+        pos_layout.addWidget(self.btn_reset_position)
+
+        # --- Plot de trayectoria (usando pyqtgraph) ---
+        self.plot_widget = pg.PlotWidget()
+        self.plot_widget.setBackground('w')
+        self.plot_widget.setTitle("Trayectoria estimada del robot", color='b', size='12pt')
+        self.plot_widget.setLabel('left', 'Z (m)')
+        self.plot_widget.setLabel('bottom', 'X (m)')
+        self.plot_widget.showGrid(x=True, y=True)
+
+        self.path_curve = self.plot_widget.plot([], [], pen=pg.mkPen(color='r', width=2))
+
+        pos_layout.addWidget(self.plot_widget)
+
+        tab_position.setLayout(pos_layout)
+        tabs.addTab(tab_position, "📍 Posición")
+
+        # Timer para actualizar el gráfico cada 100 ms
+        self.plot_timer = QTimer()
+        self.plot_timer.timeout.connect(self.update_position_plot)
+        self.plot_timer.start(100)
 
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
@@ -508,13 +545,11 @@ class EB_RobotGUI_bis(QWidget):
 # -------------------- IMU inicio --------------------
         try:
             data = json.loads(msg)
-            
-            # Filtrar solo mensajes de IMU: 
-            # - tipo IMU (T==13) o
-            # - que tengan al menos los campos ax, ay, az
-            if (data.get("T") == 13) or ("ax" in data and "ay" in data and "az" in data):
+
+            if data.get("T") == 1002:  # Filtrar solo mensajes de IMU
                 self.last_imu = data
-                # Opcional: iniciar origen la primera vez que llega IMU si aún no está activo
+
+                # Establecer origen si aún no lo hay
                 if self.imu_active and not self.origin_set:
                     self.origin_set = True
                     self.origin = {"x": 0, "y": 0, "z": 0}
@@ -532,54 +567,120 @@ class EB_RobotGUI_bis(QWidget):
 
 # -------------------- IMU inicio --------------------
 #  Se asume respuesta asi:
-# {
-#   "T":126,
-#   "Roll":0.5,
-#   "Pitch":1.2,
-#   "Yaw":90.3,
-#   "ax":0.01,
-#   "ay":-0.02,
-#   "az":0.77,
-#   "Temp":32.5
-# }
+# {"T":1002, "r":-89.04126934, "p":-0.895245861, "ax":-0.156085625, "ay":-9.987277031, "az":0.167132765, 
+# "gx":0.00786881, "gy":0.0033449, "gz":0.00259476, "mx":1.261048317, "my":-14.89113426, "mz":118.1274872, "temp":30.20118523}
 
     def _imu_loop(self):
-        dt = 0.05  # cada 50ms
+        """
+        Bucle de integración IMU con filtro complementario.
+        Calcula posición y orientación estimada a partir de ax, ay, az, gx, gy, gz.
+        """
+        dt = 0.05  # periodo 50 ms
+        alpha = 0.98  # peso del giroscopio
+        roll, pitch = 0.0, 0.0  # ángulos iniciales
+
         while self.imu_active:
             if self.last_imu:
                 imu = self.last_imu
-                if not self.origin_set:
-                    self.origin = {"x":0,"y":0,"z":0}  # Podrías usar las primeras lecturas si quieres offset
-                    self.origin_set = True
 
-                # Integrar aceleración para obtener velocidad
-                self.vx += imu["ax"] * dt
-                self.vy += imu["ay"] * dt
-                self.vz += imu["az"] * dt
+                # === Lecturas crudas ===
+                ax = imu.get("ax", 0)
+                ay = imu.get("ay", 0)
+                az = imu.get("az", 0)
+                gx = imu.get("gx", 0)
+                gy = imu.get("gy", 0)
+                gz = imu.get("gz", 0)
 
-                # Integrar velocidad para obtener posición relativa
+                # === Calcular orientación desde acelerómetro (inclinación absoluta) ===
+                import math
+                roll_acc = math.degrees(math.atan2(az, ay))
+                pitch_acc = math.degrees(math.atan2(-ax, math.sqrt(ay**2 + az**2)))
+
+                # === Integrar giroscopio (velocidad angular) ===
+                roll_gyro = roll + gx * dt * 180 / math.pi
+                pitch_gyro = pitch + gy * dt * 180 / math.pi
+
+                # === Filtro complementario ===
+                roll = alpha * roll_gyro + (1 - alpha) * roll_acc
+                pitch = alpha * pitch_gyro + (1 - alpha) * pitch_acc
+
+                # === Compensar gravedad en eje principal (asumimos eje Y vertical) ===
+                ay_corrected = ay + 9.81 if abs(ay) > abs(ax) and abs(ay) > abs(az) else ay
+
+                # === Integrar aceleración para obtener velocidad y posición ===
+                self.vx += ax * dt
+                self.vy += ay_corrected * dt
+                self.vz += az * dt
+
                 self.position["x"] += self.vx * dt
-                self.position["y"] += self.vy * dt
+                # self.position["y"] += self.vy * dt
+                self.position["y"] = 0.0
                 self.position["z"] += self.vz * dt
 
-                # Mostrar en logs o GUI
-                # self.append_general_log(f"Posición estimada: x={self.position['x']:.2f}, y={self.position['y']:.2f}, z={self.position['z']:.2f}")
+                # === Enviar posición periódicamente ===
+                if not hasattr(self, "_imu_counter"):
+                    self._imu_counter = 0
+                self._imu_counter += 1
+
+                if self._imu_counter % 20 == 0 and self.send_position_checkbox.isChecked():
+                    self.send_position_update()
+
+                # === Mostrar orientación en log cada segundo ===
+                if self._imu_counter % 20 == 0:
+                    self.append_general_log(
+                        f"🎯 IMU | Roll={roll:.1f}°, Pitch={pitch:.1f}° | "
+                        f"X={self.position['x']:.2f}, Y={self.position['y']:.2f}"
+                    )
 
             time.sleep(dt)
 
 
+    def send_position_update(self):
+        """Envía la posición actual estimada al nodo EB (Estación Base)."""
+        if not self.loranode:
+            return
+
+        dest = 10  # dirección del nodo EB (cámbiala según tu red LoRa)
+        msg_type = 2001  # tipo de mensaje para la posición
+        relay = int(self.relay_combo.currentText())
+
+        # Crea el JSON de posición
+        payload = {
+            "T": msg_type,
+            "x": self.position["x"],
+            "y": self.position["y"],
+            "z": self.position["z"],
+            "timestamp": time.time()
+        }
+
+        self.msg_id += 1
+        msg_str = json.dumps(payload)
+        self.loranode.send_message(dest, msg_type, self.msg_id, msg_str, relay)
+        self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Posición enviada a EB: {msg_str}")
+
+    def update_position_plot(self):
+        """Actualiza el gráfico de trayectoria en tiempo real."""
+        if hasattr(self, 'path_curve'):
+            x = self.position["x"]
+            y = self.position["z"]
+            if not hasattr(self, '_path_points'):
+                self._path_points = {"x": [x], "y": [y]}
+            else:
+                self._path_points["x"].append(x)
+                self._path_points["y"].append(y)
+
+            self.path_curve.setData(self._path_points["x"], self._path_points["y"])
+
+    def reset_position(self):
+        """Resetea posición y limpia el gráfico."""
+        self.origin_set = False
+        self.position = {"x": 0, "y": 0, "z": 0}
+        self.vx, self.vy, self.vz = 0, 0, 0
+        self._path_points = {"x": [0], "y": [0]}
+        self.path_curve.clear()
+        self.append_general_log("📍 Posición y trayectoria reseteadas.")
+
+
 # -------------------- IMU final --------------------
 
-# BOTON PARA RESETEAR POSICIÓN ---------- IMU
-
-# self.btn_reset_position = QPushButton("Reset Posición")
-# self.btn_reset_position.clicked.connect(self.reset_position)
-
-# def reset_position(self):
-#     self.origin_set = False
-#     self.position = {"x":0, "y":0, "z":0}
-#     self.vx, self.vy, self.vz = 0,0,0
-#     self.append_general_log("📍 Posición reseteada")
-
-# BOTON PARA RESETEAR POSICIÓN ---------- IMU
 
