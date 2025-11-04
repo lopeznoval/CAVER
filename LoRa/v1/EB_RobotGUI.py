@@ -27,9 +27,10 @@ class EB_RobotGUI_bis(QWidget):
         self.msg_id = 1
         self.feedback_running = False
         self.feedback_thread = None
-
-        self.loranode.on_message = self._on_lora_message
-        self.loranode.on_alert = self._on_general_log
+        
+        if loranode is not None:
+            self.loranode.on_message = self._on_lora_message
+            self.loranode.on_alert = self._on_general_log
 
 # -------------------- IMU inicio --------------------
 
@@ -43,7 +44,10 @@ class EB_RobotGUI_bis(QWidget):
 # -------------------- IMU final --------------------
 
 
-        self.setWindowTitle("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
+        if loranode is None:
+            self.setWindowTitle("UGV02 Robot Control Dashboard: LoRaNode not initialized")
+        else:
+            self.setWindowTitle("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
         self.setGeometry(200, 100, 1200, 700)
 
         main_layout = QHBoxLayout(self)
