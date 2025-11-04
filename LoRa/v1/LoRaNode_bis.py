@@ -9,6 +9,7 @@ from sx126x_bis import sx126x
 from parameters import *
 import platform
 import base64
+import math
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, EB=0, robot_port=None, robot_baudrate=None):  # EB = 1 si es estación base
@@ -33,6 +34,9 @@ class LoRaNode:
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
         self.on_bytes = lambda data: print(f"📦 [BYTES] {data}")
+        self.on_position = lambda pos: print(f"{pos}")
+
+        
 
         # if platform.system() == "Linux":
         #     from picamera2 import PiCamera2 # type: ignore
@@ -115,8 +119,12 @@ class LoRaNode:
             # -------------------- HANDLER DE TIPOS --------------------
             self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
             
-            try:    
-                if 1 < msg_type < 5:  # Respuesta
+            try: 
+                if msg_type == 0:
+                    if msg_id == 63: #imu
+                        self.imu_pos(message)
+
+                elif 1 < msg_type < 5:  # Respuesta
                     # with self.lock:
                     #     rm = self.remove_pending(addr_sender, msg_id)
                     #     if not rm:
@@ -142,11 +150,28 @@ class LoRaNode:
                         ...
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
+                    if msg_type == 13: # pedir o parar datos imu
+                        payload = message.decode("utf-8").strip().lower()
+                        if "start" in payload:
+                            if getattr(self, "imu_thread", None) and self.imu_thread.is_alive():
+                                self.on_alert("⚠️ IMU loop ya estaba activo.")
+                            else:
+                                self.stop_imu_flag = False
+                                self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
+                                self.imu_thread.start()
+                                self.on_alert("🟢 IMU loop activado por EB.")
+                        elif "stop" in payload:
+                            self.stop_imu_flag = True
+                            self.on_alert("🔴 IMU loop detenido por EB.")
+                        else:
+                            self.on_alert(f"⚠️ Comando IMU desconocido: {payload}") 
+                    
                     if self.robot.is_open and self.robot:
                         resp = self.send_to_robot(addr_dest, msg_id, message)
                         self.send_message(addr_sender, 3, msg_id, resp)
                     else:
                         self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
+                    
 
                 elif 19 < msg_type < 25:  # Comando para los sensores
                     ...
@@ -230,7 +255,78 @@ class LoRaNode:
                 return "OK"
         else:
             return "OK"
+        
+    def _get_imu_loop_raspi(self): # IMU
+        while not getattr(self, "stop_imu_flag", False):
+            try:
+                imu_data = self.send_to_robot(0, 0, "{\"T\":126}")
+                if imu_data:
+                    self.send_message(0xFF, 0, 63, imu_data)
+                time.sleep(10)
+            except Exception as e:
+                self.on_alert(f"Error en IMU loop: {e}")
+                time.sleep(2)
+        self.on_alert("IMU loop finalizado.")
+    
             
+    # ------------------------------ IMU ------------------------------
+    #  Se asume respuesta asi:
+    # {"T":1002, "r":-89.04126934, "p":-0.895245861, "ax":-0.156085625, "ay":-9.987277031, "az":0.167132765, 
+    # "gx":0.00786881, "gy":0.0033449, "gz":0.00259476, "mx":1.261048317, "my":-14.89113426, "mz":118.1274872, "temp":30.20118523}
+    
+    def imu_pos(self, imudata):
+        """
+        Calcula posición y orientación estimada a partir de ax, ay, az, gx, gy, gz.
+        """        
+        dt = 0.05  # periodo 50 ms
+        alpha = 0.98  # peso del giroscopio
+        roll, pitch = 0.0, 0.0  # ángulos iniciales
+
+        # --- Decodificar JSON ---
+        if isinstance(imudata, str):
+            try:
+                imudata = json.loads(imudata)
+            except json.JSONDecodeError:
+                self.on_alert("⚠️ IMU data inválida (no es JSON).")
+                return
+
+        # --- Inicializar variables persistentes ---
+        if not hasattr(self, "vx"): 
+            self.vx, self.vy, self.vz = 0.0, 0.0, 0.0
+        if not hasattr(self, "x"): 
+            self.x, self.y, self.z = 0.0, 0.0, 0.0
+        if not hasattr(self, "roll"): 
+            self.roll, self.pitch = 0.0, 0.0
+                
+        # === Lecturas crudas ===
+        ax = imudata.get("ax", 0)
+        ay = imudata.get("ay", 0)
+        az = imudata.get("az", 0)
+        gx = imudata.get("gx", 0)
+        gy = imudata.get("gy", 0)
+        gz = imudata.get("gz", 0)
+
+        # === Calcular orientación desde acelerómetro (inclinación absoluta) ===
+        roll_acc = math.degrees(math.atan2(az, ay))
+        pitch_acc = math.degrees(math.atan2(-ax, math.sqrt(ay**2 + az**2)))
+
+        self.roll = alpha * (self.roll + gx * dt * 180 / math.pi) + (1 - alpha) * roll_acc
+        self.pitch = alpha * (self.pitch + gy * dt * 180 / math.pi) + (1 - alpha) * pitch_acc
+
+        # === Compensar gravedad en eje principal (asumimos eje Y vertical) ===
+        ay_corrected = ay + 9.81 if abs(ay) > abs(ax) and abs(ay) > abs(az) else ay
+
+        # === Integrar aceleración para obtener velocidad y posición ===
+        self.vx += ax * dt
+        self.vy += ay_corrected * dt
+        self.vz += az * dt
+
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.z += self.vz * dt
+
+        position = {"x": self.x, "y": self.y, "z": self.z}
+        self.on_position(position)
 
                      
     # -------------------- VÍDEO --------------------
@@ -260,12 +356,18 @@ class LoRaNode:
         # self.Dataport = serial.Serial('COM7', 921600)
         print("Connected to radar on COM6 and COM7.\n")
 
+    
+    
     # -------------------- EJECUCIÓN --------------------
     def run(self):
         if self.robot_port and self.robot_baudrate:
             self.connect_robot()
         # threading.Thread(target=self.periodic_send, daemon=True).start()
         threading.Thread(target=self.receive_loop, daemon=True).start()
+        # if platform.system() != "Windows":
+            # self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
+        # else:
+        #     self.imu_thread = threading.Thread(target=self._get_imu_loop_EB, daemon=True)
         print("LoRaNode running... Ctrl+C to stop")
         # try:
         #     while True:
@@ -282,3 +384,6 @@ class LoRaNode:
         if self.robot and self.robot.is_open:
             self.robot.close()
         self.node.close()
+
+
+

@@ -1,4 +1,4 @@
-SERIAL_PORT = "/dev/ttyUSB1"
+SERIAL_PORT = "COM4"
 
 SERIAL_PORT_ROBOT = "/dev/ttyACM0"  # or /dev/ttyUSB1 depending on your connection
 BAUDRATE_ROBOT = 115200
@@ -11,3 +11,4 @@ TYPE_MSG = 1             # Message type
 ID_MSG = 69               # Message ID
 POWER = 0                # dBm
 EB = 1
+
