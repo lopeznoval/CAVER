@@ -6,7 +6,7 @@ import threading
 import time
 import requests
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
@@ -76,6 +76,58 @@ class EB_RobotGUI_bis(QWidget):
         tab_move.setLayout(move_layout)
         tabs.addTab(tab_move, "🕹️ Movimiento")
 
+        # # === Layout principal vertical ===
+        # mv_layout = QVBoxLayout()
+
+        # # === Layout de velocidad ===
+        # speed_layout = QHBoxLayout()
+
+        # self.speed_label = QLabel("Velocidad: 50 %")
+        # self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # self.speed_label.setStyleSheet("font-weight: bold; color: #00aaff; font-size: 14px;")
+
+        # self.speed_slider = QSlider(Qt.Horizontal)
+        # self.speed_slider.setRange(0, 100)
+        # self.speed_slider.setValue(50)
+        # self.speed_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        # self.speed_slider.setTickInterval(10)
+        # self.speed_slider.valueChanged.connect(lambda v: self.speed_label.setText(f"Velocidad: {v} %"))
+
+        # speed_layout.addWidget(QLabel("0 %"))
+        # speed_layout.addWidget(self.speed_slider)
+        # speed_layout.addWidget(QLabel("100 %"))
+
+        # mv_layout.addLayout(speed_layout)
+        # mv_layout.addWidget(self.speed_label)
+
+        # # === Layout de movimiento ===
+        # move_layout = QGridLayout()
+
+        # self.btn_forward = QPushButton("↑")
+        # self.btn_left = QPushButton("←")
+        # self.btn_stop = QPushButton("Stop")
+        # self.btn_right = QPushButton("→")
+        # self.btn_backward = QPushButton("↓")
+
+        # buttons = [
+        #     (self.btn_forward, 0, 1, "forward"),
+        #     (self.btn_left, 1, 0, "left"),
+        #     (self.btn_stop, 1, 1, "stop"),
+        #     (self.btn_right, 1, 2, "right"),
+        #     (self.btn_backward, 2, 1, "backward"),
+        # ]
+
+        # for btn, r, c, cmd in buttons:
+        #     btn.setFixedSize(100, 35)
+        #     btn.clicked.connect(lambda _, d=cmd: self.move_robot(d))
+        #     move_layout.addWidget(btn, r, c)
+
+        # mv_layout.addLayout(move_layout)
+
+        # # === Asignar layout principal al tab ===
+        # tab_move.setLayout(mv_layout)
+        # tabs.addTab(tab_move, "🕹️ Movimiento")
+
         # ------------------ TAB 2: OLED ------------------
         tab_oled = QWidget()
         oled_layout = QGridLayout()
@@ -108,8 +160,8 @@ class EB_RobotGUI_bis(QWidget):
 
         self.btn_imu = QPushButton("IMU Data")
         self.btn_feedback = QPushButton("Chassis Feedback")
-        self.btn_imu.clicked.connect(lambda: self.send_cmd(json.dumps({"T": 126})))
-        self.btn_feedback.clicked.connect(lambda: self.send_cmd(json.dumps({"T": 130})))
+        self.btn_imu.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 126})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
+        self.btn_feedback.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 130})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
 
         cmd_layout.addWidget(self.btn_imu, 0, 0)
         cmd_layout.addWidget(self.btn_feedback, 0, 1)
@@ -223,7 +275,7 @@ class EB_RobotGUI_bis(QWidget):
                 28: "Seguimiento de objetivo",
                 30: "Reset del módulo"
             },
-            "CRelay Flag (31)": {
+            "Relay Flag (31)": {
                 31: "Activar/Desactivar relay flag"
             }
         }
@@ -311,7 +363,7 @@ class EB_RobotGUI_bis(QWidget):
         self.selected_type = msg_type
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Tipo seleccionado: {self.selected_type}")
         self.type_button.setText(f"{msg_type} (📖 {desc})")
-        if int(self.selected_type) < 4 or int(self.selected_type) > 9 or int(self.selected_type) is not 31:
+        if (int(self.selected_type) < 4 or int(self.selected_type) > 9) and int(self.selected_type) != 31:
             self.btn_send_cmd.setEnabled(False)
         else:
             self.btn_send_cmd.setEnabled(True)
@@ -386,6 +438,8 @@ class EB_RobotGUI_bis(QWidget):
             alert = "SENSOR"
         elif 24 < msg_type < 31:
             alert = "CAMERA/RADAR"
+        else:
+            alert = "GENERAL"
 
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Sending command to {dest}: {alert}")
         self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
