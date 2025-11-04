@@ -28,6 +28,18 @@ class EB_RobotGUI_bis(QWidget):
         self.loranode.on_message = self._on_lora_message
         self.loranode.on_alert = self._on_general_log
 
+# -------------------- IMU inicio --------------------
+
+        self.origin_set = False                 # Se indica si se ha tomado ref. inicial de posición
+        self.origin = {"x":0, "y":0, "z":0}     # posición de referencia inicial
+        self.position = {"x":0, "y":0, "z":0}   # posición actual estimada
+        self.vx, self.vy, self.vz = 0,0,0       # velocidades actuales del robot en cada eje (x, y, z)
+        self.last_imu = None                    # Guarda la última lectura recibida de la IMU
+        self.imu_active = False                 # flag que indica si empezó la localización
+
+# -------------------- IMU final --------------------
+
+
         self.setWindowTitle("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
         self.setGeometry(200, 100, 1200, 700)
 
@@ -192,7 +204,7 @@ class EB_RobotGUI_bis(QWidget):
                 10: "FeedBack",
                 11: "Movimiento",
                 12: "Oled",
-                13: "",
+                13: "IMU",
                 14: "",
                 15: "",
                 19: ""
@@ -330,6 +342,19 @@ class EB_RobotGUI_bis(QWidget):
         if cmd:
             self.send_cmd(json.dumps(cmd))
 
+        # -------------------- IMU inicial --------------------
+
+        # añadir, si esta marcada la casilla (no existe aun) de trazar trallectoria
+
+        if not self.imu_active:
+            self.imu_active = True
+            self.append_general_log("Localización IMU activada")
+            self.origin_set = False  # aún no tenemos el 0,0,0
+            # Podrías iniciar un thread que actualice posición periódicamente
+            threading.Thread(target=self._imu_loop, daemon=True).start()
+
+        # -------------------- IMU final --------------------
+
     def send_oled(self):
         try:
             line = int(self.line_entry.text())
@@ -426,8 +451,81 @@ class EB_RobotGUI_bis(QWidget):
         """Manejador de mensajes entrantes desde LoRaNode"""
         self._append_input(msg)
 
+# -------------------- IMU inicio --------------------
+        try:
+            data = json.loads(msg)
+            
+            # Filtrar solo mensajes de IMU: 
+            # - tipo IMU (T==13) o
+            # - que tengan al menos los campos ax, ay, az
+            if (data.get("T") == 13) or ("ax" in data and "ay" in data and "az" in data):
+                self.last_imu = data
+                # Opcional: iniciar origen la primera vez que llega IMU si aún no está activo
+                if self.imu_active and not self.origin_set:
+                    self.origin_set = True
+                    self.origin = {"x": 0, "y": 0, "z": 0}
+                    self.append_general_log("📍 Origen de posición IMU establecido")
+                    
+        except Exception as e:
+            self.append_general_log(f"Error parseando IMU: {e}")
+
+# -------------------- IMU final --------------------
+
     def _on_general_log(self, msg: str):
         """Manejador de mensajes entrantes desde LoRaNode"""
         self.append_general_log(msg)
 
+
+# -------------------- IMU inicio --------------------
+#  Se asume respuesta asi:
+# {
+#   "T":126,
+#   "Roll":0.5,
+#   "Pitch":1.2,
+#   "Yaw":90.3,
+#   "ax":0.01,
+#   "ay":-0.02,
+#   "az":0.77,
+#   "Temp":32.5
+# }
+
+    def _imu_loop(self):
+        dt = 0.05  # cada 50ms
+        while self.imu_active:
+            if self.last_imu:
+                imu = self.last_imu
+                if not self.origin_set:
+                    self.origin = {"x":0,"y":0,"z":0}  # Podrías usar las primeras lecturas si quieres offset
+                    self.origin_set = True
+
+                # Integrar aceleración para obtener velocidad
+                self.vx += imu["ax"] * dt
+                self.vy += imu["ay"] * dt
+                self.vz += imu["az"] * dt
+
+                # Integrar velocidad para obtener posición relativa
+                self.position["x"] += self.vx * dt
+                self.position["y"] += self.vy * dt
+                self.position["z"] += self.vz * dt
+
+                # Mostrar en logs o GUI
+                # self.append_general_log(f"Posición estimada: x={self.position['x']:.2f}, y={self.position['y']:.2f}, z={self.position['z']:.2f}")
+
+            time.sleep(dt)
+
+
+# -------------------- IMU final --------------------
+
+# BOTON PARA RESETEAR POSICIÓN ---------- IMU
+
+# self.btn_reset_position = QPushButton("Reset Posición")
+# self.btn_reset_position.clicked.connect(self.reset_position)
+
+# def reset_position(self):
+#     self.origin_set = False
+#     self.position = {"x":0, "y":0, "z":0}
+#     self.vx, self.vy, self.vz = 0,0,0
+#     self.append_general_log("📍 Posición reseteada")
+
+# BOTON PARA RESETEAR POSICIÓN ---------- IMU
 
