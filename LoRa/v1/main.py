@@ -2,35 +2,58 @@ import sys
 import LoRaNode_bis as LRN
 from parameters import *
 import time
-import tkinter as tk
 
 import os
 
 if __name__ == "__main__":
-    node = LRN.LoRaNode(SERIAL_PORT, NODE_ADDRESS, FREQUENCY, POWER, rssi=True, EB=EB, robot_port=SERIAL_PORT_ROBOT, robot_baudrate=BAUDRATE_ROBOT)
-    node.run()
+    node = None 
 
-    if node.is_base:
-        from EB_RobotGUI import EB_RobotGUI_bis
-        from PyQt6.QtWidgets import QApplication #type: ignore
-        base_path = os.path.dirname(os.path.abspath(__file__))
-        print("GUI running (3)...")
-        app = QApplication(sys.argv)
+    try:
+        node = LRN.LoRaNode(
+            SERIAL_PORT,
+            NODE_ADDRESS,
+            FREQUENCY,
+            POWER,
+            rssi=True,
+            EB=EB,
+            robot_port=SERIAL_PORT_ROBOT,
+            robot_baudrate=BAUDRATE_ROBOT
+        )
+        node.run()
+    except Exception as e:
+        print(f"❌ Error initializing LoRaNode: {e}")
+
+    if node is None or getattr(node, "is_base", False):
         try:
-            with open(os.path.join(base_path, "styles.qss"), "r") as f:
-                qss = f.read()
-            app.setStyleSheet(qss)
-        except FileNotFoundError:
-            print("⚠️ Archivo styles.qss no encontrado. Continuando sin estilo.")
-        print("GUI running (2)...")
-        gui = EB_RobotGUI_bis(node)
-        gui.show()
-        print("GUI running (1)...")
-        sys.exit(app.exec())
+            from EB_RobotGUI import EB_RobotGUI_bis
+            from PyQt6.QtWidgets import QApplication  # type: ignore
+            import os, sys
+
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            print("🟢 Starting GUI...")
+
+            app = QApplication(sys.argv)
+
+            style_path = os.path.join(base_path, "styles.qss")
+            if os.path.exists(style_path):
+                with open(style_path, "r") as f:
+                    qss = f.read()
+                app.setStyleSheet(qss)
+            else:
+                print("⚠️ Archivo styles.qss no encontrado. Continuando sin estilo.")
+
+            gui = EB_RobotGUI_bis(node)
+            gui.show()
+            sys.exit(app.exec())
+
+        except Exception as e:
+            print(f"❌ Error al iniciar la GUI: {e}")
+
     else:
         try:
+            print("🟡 Nodo secundario activo. Esperando...")
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
+            print("🛑 Interrupción detectada. Deteniendo nodo...")
             node.stop()
-            

@@ -77,15 +77,15 @@ class LoRaNode:
         return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message
 
     # -------------------- HILOS --------------------
-    def periodic_send(self, node_address: int = 0xFFFF, msg_type: int = TYPE_MSG, msg_id: int = ID_MSG):
-        count = 0
-        while self.running:
-            msg = f"Auto-message #{count} from {self.addr}"
-            data = self.pack_message(node_address, msg_type, msg_id, msg)
-            self.node.send_bytes(data)
-            print(f"[{time.strftime('%H:%M:%S')}] Sent: {msg}, con data: {data}")
-            count += 1
-            time.sleep(6) # intervalos de 6 segundos entre envío y envío
+    # def periodic_send(self, node_address: int = 0xFFFF, msg_type: int = TYPE_MSG, msg_id: int = ID_MSG):
+    #     count = 0
+    #     while self.running:
+    #         msg = f"Auto-message #{count} from {self.addr}"
+    #         data = self.pack_message(node_address, msg_type, msg_id, msg)
+    #         self.node.send_bytes(data)
+    #         print(f"[{time.strftime('%H:%M:%S')}] Sent: {msg}, con data: {data}")
+    #         count += 1
+    #         time.sleep(6) # intervalos de 6 segundos entre envío y envío
 
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
