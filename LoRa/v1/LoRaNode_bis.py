@@ -280,7 +280,6 @@ class LoRaNode:
         """        
         dt = 0.05  # periodo 50 ms
         alpha = 0.98  # peso del giroscopio
-        roll, pitch = 0.0, 0.0  # ángulos iniciales
 
         # --- Decodificar JSON ---
         if isinstance(imudata, str):
@@ -310,6 +309,9 @@ class LoRaNode:
         roll_acc = math.degrees(math.atan2(az, ay))
         pitch_acc = math.degrees(math.atan2(-ax, math.sqrt(ay**2 + az**2)))
 
+        # Filtro complementario
+        if not hasattr(self, "roll"):
+            self.roll, self.pitch = 0.0, 0.0
         self.roll = alpha * (self.roll + gx * dt * 180 / math.pi) + (1 - alpha) * roll_acc
         self.pitch = alpha * (self.pitch + gy * dt * 180 / math.pi) + (1 - alpha) * pitch_acc
 
@@ -327,6 +329,11 @@ class LoRaNode:
 
         position = {"x": self.x, "y": self.y, "z": self.z}
         self.on_position(position)
+
+        # --- Detectar vuelco ---
+        ROLLOVER_THRESHOLD = 60  # grados, ajustar según necesidad
+        if abs(self.roll) > ROLLOVER_THRESHOLD or abs(self.pitch) > ROLLOVER_THRESHOLD:
+            self.on_alert(f"⚠️ ¡Posible vuelco detectado! Roll: {self.roll:.1f}°, Pitch: {self.pitch:.1f}°")
 
                      
     # -------------------- VÍDEO --------------------
