@@ -532,13 +532,13 @@ class EB_RobotGUI_bis(QWidget):
         """Envía al robot la orden de comenzar a enviar datos IMU periódicamente."""
         self.selected_type = 13
         self.append_general_log("🛰️ Enviando comando: Comenzar IMU")
-        self.send_cmd('start_imu')
+        self.send_cmd("1")
 
     def _stop_imu(self):
         """Envía al robot la orden de detener el envío de datos IMU."""
         self.selected_type = 13  # 🔹 Tipo de mensaje para parar
         self.append_general_log("🛰️ Enviando comando: Detener IMU")
-        self.send_cmd("stop_imu")
+        self.send_cmd("0")
         
 
     def _append_output(self, text):
