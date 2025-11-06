@@ -153,6 +153,7 @@ class LoRaNode:
                     if msg_type == 13: # pedir o parar datos imu
                         payload = message.decode("utf-8").strip().lower()
                         if "1" in payload:
+                            print("llego el 1 para empezar")
                             if getattr(self, "imu_thread", None) and self.imu_thread.is_alive():
                                 self.on_alert("⚠️ IMU loop ya estaba activo.")
                             else:
