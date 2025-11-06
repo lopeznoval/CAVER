@@ -265,6 +265,7 @@ class LoRaNode:
                 if imu_data:
                     self.send_message(self.imu_dest, 0, 63, imu_data)
                 time.sleep(10)
+                # time.sleep(40)
             except Exception as e:
                 self.on_alert(f"Error en IMU loop: {e}")
                 time.sleep(2)
