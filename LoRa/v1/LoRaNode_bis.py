@@ -154,12 +154,14 @@ class LoRaNode:
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
                     if msg_type == 13: # pedir o parar datos imu
-                        payload = message.decode("utf-8").strip().lower()
+                        payload = message #.decode("utf-8").strip().lower()
                         if "1" in payload:
+                            print("llego el 1 para empezar")
                             if getattr(self, "imu_thread", None) and self.imu_thread.is_alive():
                                 self.on_alert("⚠️ IMU loop ya estaba activo.")
                             else:
                                 self.stop_imu_flag = False
+                                self.imu_dest = addr_sender
                                 self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
                                 self.imu_thread.start()
                                 self.on_alert("🟢 IMU loop activado por EB.")
@@ -273,8 +275,9 @@ class LoRaNode:
             try:
                 imu_data = self.send_to_robot(0, 0, "{\"T\":126}")
                 if imu_data:
-                    self.send_message(0xFF, 0, 63, imu_data)
+                    self.send_message(self.imu_dest, 0, 63, imu_data)
                 time.sleep(10)
+                # time.sleep(40)
             except Exception as e:
                 self.on_alert(f"Error en IMU loop: {e}")
                 time.sleep(2)
