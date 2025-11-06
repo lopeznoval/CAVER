@@ -1,0 +1,52 @@
+# database_BS.py
+import os
+from datetime import datetime
+from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime
+from sqlalchemy.orm import sessionmaker, declarative_base
+
+# 1. Definir la URL de la base de datos PostgreSQL
+#    (Asegúrate de haber creado una base de datos llamada 'robot_bs_db')
+#    Formato: "postgresql://usuario:contraseña@localhost/nombre_db"
+DATABASE_URL = "postgresql://postgres:tu_contraseña@localhost/robot_bs_db"
+
+# 2. Configuración de SQLAlchemy
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# --- 3. Definición de Modelos (Tablas) ---
+#    Nota: No necesitamos la columna 'sincronizado' aquí.
+
+class LecturaSensor(Base):
+    __tablename__ = "lecturas_sensores"
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, nullable=False)
+    temperatura = Column(Float, nullable=False)
+    humedad = Column(Float, nullable=False)
+    # Opcional: podrías añadir un ID del robot si tuvieras varios
+    # robot_id = Column(String, index=True) 
+
+class Imagen(Base):
+    __tablename__ = "imagenes"
+    id = Column(Integer, primary_key=True, index=True)
+    timestamp = Column(DateTime, nullable=False)
+    # Esta será la ruta DONDE la BS guarda la imagen
+    ruta_archivo = Column(String, nullable=False) 
+    # robot_id = Column(String, index=True)
+
+# --- 4. Funciones ---
+def crear_tablas():
+    print("Asegurando que las tablas PostgreSQL existan...")
+    Base.metadata.create_all(bind=engine)
+    print("Tablas listas.")
+
+def get_db_session():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Ejecutar esto una vez para crear las tablas en PostgreSQL
+if __name__ == "__main__":
+    crear_tablas()
