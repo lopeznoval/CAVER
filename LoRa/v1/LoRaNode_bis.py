@@ -35,8 +35,11 @@ class LoRaNode:
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
         self.on_bytes = lambda data: print(f"📦 [BYTES] {data}")
         self.on_position = lambda pos: print(f"{pos}")
-
+        self.on_sensor = lambda sensor: print(f"{sensor}")
         
+        # Variables de los sensores
+        self.last_temp = None
+        self.last_hum = None
 
         # if platform.system() == "Linux":
         #     from picamera2 import PiCamera2 # type: ignore
@@ -174,8 +177,17 @@ class LoRaNode:
                     
 
                 elif 19 < msg_type < 25:  # Comando para los sensores
-                    ...
-
+                    if msg_type == 21:  # Lectura temperatura y humedad
+                        if self.on_sensor is not None:
+                        #     payload = json.dumps({
+                        #         "temp": self.last_temp,
+                        #         "hum": self.last_hum,
+                        #         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                        #     })
+                        #     self.send_message(addr_sender, 22, msg_id, payload)
+                        # else:
+                        #     self.send_message(addr_sender, 22, msg_id, "No hay datos disponibles aún.")
+                            ...
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 30:  # Tomar foto
                             img_b64 = self.stream_recording()
@@ -353,9 +365,37 @@ class LoRaNode:
         
     # -------------------- SENSORES --------------------
     def connect_sensors(self):
-        self.sensores = serial.Serial('/dev/ttyUSB0', 115200, timeout=2)  # Ajusta el puerto
-        time.sleep(2)  # Espera a que el puerto inicialice
-        print("Connected to sensors on /dev/ttyUSB0.\n")
+        
+        Puerto = '/dev/ttyUSB0'
+        BAU = 115200
+        
+        try:
+            self.sensores = serial.Serial(Puerto, BAU, timeout=2)
+            time.sleep(2)
+            print("[SENSORS] Conectado al ESP32 en", Puerto)
+        except Exception as e:
+            print(f"[SENSORS] ❌ Error abriendo puerto {Puerto}: {e}")
+            return
+        while self.running:
+            try:
+                line = self.sensores.readline().decode('utf-8', errors='ignore').strip()
+                if line and line.startswith("H") and "T" in line:
+                    # Ejemplo: "Humidity:72% Temperature:21°C"
+                    parts = line.split()
+                    hum = float(parts[0].split(':')[1].replace('%', ''))
+                    temp = float(parts[1].split(':')[1].replace('°C', ''))
+
+                    # self.last_temp = temp
+                    # self.last_hum = hum
+                    self.on_sensor({"Temperatura": temp, "Humedad": hum, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")})
+                    print(f"[SENSORS] Temp={temp:.1f}°C | Hum={hum:.1f}%")
+
+                    # Aquí podrías guardar los datos en una base de datos si quieres:
+                    # save_to_db(temp, hum, time.time())
+
+            except Exception as e:
+                print(f"[SENSORS] Error leyendo ESP32: {e}")
+                time.sleep(1)
 
     # -------------------- RADAR ------------------------
     def connect_radar(self):
