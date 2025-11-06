@@ -19,13 +19,15 @@ class LecturaSensor(Base):
     timestamp = Column(DateTime, default=datetime.now)
     temperatura = Column(Float, nullable=False)
     humedad = Column(Float, nullable=False)
-    sincronizado = Column(Boolean, default=False)
+    # Columna para LoRa. True = Sincronizado, False = Pendiente
+    sincronizado = Column(Boolean, default=False) 
 
-class Imagen(Base):
-    __tablename__ = "imagenes"
+class Video(Base):
+    __tablename__ = "videos" # <--- CAMBIO: de Imagen a Video
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=datetime.now)
     ruta_archivo = Column(String, nullable=False)
+    # Columna para Wi-Fi. True = Sincronizado, False = Pendiente
     sincronizado = Column(Boolean, default=False)
 
 # --- 4. Funciones ---

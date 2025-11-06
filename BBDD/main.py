@@ -1,37 +1,32 @@
-# main.py
 import os
-import base64
 import uuid
+import shutil
 from datetime import datetime
 from typing import List
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-import database_BS as db_bs  # Importamos nuestro módulo de DB de la BS
+import database_BS as db_bs
 
-# --- Modelos Pydantic (para validación de datos de entrada) ---
-#     Estos modelos definen lo que la API ESPERA recibir
-
+# --- Modelos Pydantic (para validación de JSON) ---
 class LecturaSensorBase(BaseModel):
     timestamp: datetime
     temperatura: float
     humedad: float
 
-class ImagenBase(BaseModel):
-    timestamp: datetime
-    # Recibiremos la imagen como un string en Base64
-    image_data_base64: str 
-    # Guardamos el nombre original para referencia
-    original_filename: str 
-
 # --- Configuración de la App ---
 app = FastAPI(title="Robot Base Station API")
 
-# Directorio para guardar las imágenes recibidas
-UPLOAD_DIR = "imagenes_recibidas"
+# Directorio para guardar los videos recibidos
+UPLOAD_DIR = "videos_recibidos"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # --- Endpoints de la API ---
+
+@app.get("/")
+def root():
+    """Endpoint para que el robot compruebe la conexión Wi-Fi."""
+    return {"message": "Servidor de la Estación Base del Robot - Activo"}
 
 @app.post("/sync/lecturas")
 def recibir_lecturas(
@@ -39,10 +34,10 @@ def recibir_lecturas(
     db: Session = Depends(db_bs.get_db_session)
 ):
     """
-    Endpoint para recibir un lote de lecturas de sensores.
+    Endpoint para recibir un lote de lecturas de sensores (desde lora_bridge.py).
     """
     try:
-        print(f"Recibiendo {len(lecturas)} lecturas de sensores...")
+        # print(f"Recibiendo {len(lecturas)} lecturas de sensores...")
         for data in lecturas:
             db_lectura = db_bs.LecturaSensor(
                 timestamp=data.timestamp,
@@ -57,49 +52,45 @@ def recibir_lecturas(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/sync/imagenes")
-def recibir_imagenes(
-    imagenes: List[ImagenBase], 
-    db: Session = Depends(db_bs.get_db_session)
+@app.post("/sync/video")
+async def recibir_video(
+    db: Session = Depends(db_bs.get_db_session),
+    # El timestamp se envía como parte del formulario (data)
+    timestamp: datetime = Form(...), 
+    # El archivo se envía como 'file'
+    file: UploadFile = File(...) 
 ):
     """
-    Endpoint para recibir un lote de imágenes (en Base64).
-    Las decodifica, las guarda en disco y almacena la ruta en la BD.
+    Endpoint para recibir UN video (subido como multipart/form-data).
     """
     try:
-        print(f"Recibiendo {len(imagenes)} imágenes...")
-        nombres_archivos = []
-        for data in imagenes:
-            # Decodificar la imagen Base64
-            try:
-                img_data = base64.b64decode(data.image_data_base64)
-            except Exception:
-                print(f"Error decodificando imagen: {data.original_filename}")
-                continue # Salta esta imagen y sigue con la siguiente
-
-            # Generar un nombre de archivo único para la BS
-            ext = os.path.splitext(data.original_filename)[1]
-            nuevo_nombre = f"{uuid.uuid4()}{ext}"
-            ruta_guardado = os.path.join(UPLOAD_DIR, nuevo_nombre)
-
-            # Guardar la imagen en el disco de la BS
-            with open(ruta_guardado, "wb") as f:
-                f.write(img_data)
-            
-            # Guardar la referencia en la BD de la BS
-            db_imagen = db_bs.Imagen(
-                timestamp=data.timestamp,
-                ruta_archivo=ruta_guardado 
-            )
-            db.add(db_imagen)
-            nombres_archivos.append(ruta_guardado)
+        # Generar un nombre de archivo único para la BS
+        ext = os.path.splitext(file.filename)[1]
+        if not ext:
+            ext = ".mp4" # Extensión por defecto
         
+        nuevo_nombre = f"{uuid.uuid4()}{ext}"
+        ruta_guardado = os.path.join(UPLOAD_DIR, nuevo_nombre)
+
+        print(f"Recibiendo video: {file.filename} -> Guardando como: {ruta_guardado}")
+
+        # Guardar el archivo en el disco de la BS de forma eficiente
+        with open(ruta_guardado, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Guardar la referencia en la BD de la BS
+        db_video = db_bs.Video(
+            timestamp=timestamp,
+            ruta_archivo=ruta_guardado 
+        )
+        db.add(db_video)
         db.commit()
-        return {"status": "ok", "recibidas": len(nombres_archivos), "archivos": nombres_archivos}
+        
+        return {"status": "ok", "archivo_guardado": ruta_guardado}
+        
     except Exception as e:
         db.rollback()
+        print(f"Error al guardar video: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/")
-def root():
-    return {"message": "Servidor de la Estación Base del Robot - Activo"}
+    finally:
+        await file.close()
