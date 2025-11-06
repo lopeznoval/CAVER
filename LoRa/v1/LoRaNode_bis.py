@@ -151,7 +151,7 @@ class LoRaNode:
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
                     if msg_type == 13: # pedir o parar datos imu
-                        payload = message.decode("utf-8").strip().lower()
+                        payload = message #.decode("utf-8").strip().lower()
                         if "1" in payload:
                             print("llego el 1 para empezar")
                             if getattr(self, "imu_thread", None) and self.imu_thread.is_alive():
