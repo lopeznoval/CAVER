@@ -5,13 +5,16 @@ import json
 import threading
 import time
 import requests
+import pyqtgraph as pg
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu,
-    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
+    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget, QCheckBox
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QAction
 from LoRaNode_bis import LoRaNode
+
+
 
 
 class EB_RobotGUI_bis(QWidget):
@@ -25,10 +28,30 @@ class EB_RobotGUI_bis(QWidget):
         self.feedback_running = False
         self.feedback_thread = None
 
-        self.loranode.on_message = self._on_lora_message
-        self.loranode.on_alert = self._on_general_log
+        
+        if loranode is not None:
+            self.loranode.on_message = self._on_lora_message
+            self.loranode.on_alert = self._on_general_log
+            self.loranode.on_position = self._on_refresh_position
 
-        self.setWindowTitle("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
+
+# -------------------- IMU inicio --------------------
+
+        self.origin_set = False                 # Se indica si se ha tomado ref. inicial de posición
+        self.origin = {"x":0, "y":0, "z":0}     # posición de referencia inicial
+        self.position = {"x":0, "y":0, "z":0}   # posición actual estimada
+        self.vx, self.vy, self.vz = 0,0,0       # velocidades actuales del robot en cada eje (x, y, z)
+        self.last_imu = None                    # Guarda la última lectura recibida de la IMU
+        self.imu_active = False                 # flag que indica si empezó la localización
+        self._path_points = {"x": [0.0], "y": [0.0]}
+
+# -------------------- IMU final --------------------
+
+
+        if loranode is None:
+            self.setWindowTitle("UGV02 Robot Control Dashboard: LoRaNode not initialized")
+        else:
+            self.setWindowTitle("UGV02 Robot Control Dashboard " + loranode.addr.__str__())
         self.setGeometry(200, 100, 1200, 700)
 
         main_layout = QHBoxLayout(self)
@@ -64,6 +87,58 @@ class EB_RobotGUI_bis(QWidget):
         tab_move.setLayout(move_layout)
         tabs.addTab(tab_move, "🕹️ Movimiento")
 
+        # # === Layout principal vertical ===
+        # mv_layout = QVBoxLayout()
+
+        # # === Layout de velocidad ===
+        # speed_layout = QHBoxLayout()
+
+        # self.speed_label = QLabel("Velocidad: 50 %")
+        # self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # self.speed_label.setStyleSheet("font-weight: bold; color: #00aaff; font-size: 14px;")
+
+        # self.speed_slider = QSlider(Qt.Horizontal)
+        # self.speed_slider.setRange(0, 100)
+        # self.speed_slider.setValue(50)
+        # self.speed_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        # self.speed_slider.setTickInterval(10)
+        # self.speed_slider.valueChanged.connect(lambda v: self.speed_label.setText(f"Velocidad: {v} %"))
+
+        # speed_layout.addWidget(QLabel("0 %"))
+        # speed_layout.addWidget(self.speed_slider)
+        # speed_layout.addWidget(QLabel("100 %"))
+
+        # mv_layout.addLayout(speed_layout)
+        # mv_layout.addWidget(self.speed_label)
+
+        # # === Layout de movimiento ===
+        # move_layout = QGridLayout()
+
+        # self.btn_forward = QPushButton("↑")
+        # self.btn_left = QPushButton("←")
+        # self.btn_stop = QPushButton("Stop")
+        # self.btn_right = QPushButton("→")
+        # self.btn_backward = QPushButton("↓")
+
+        # buttons = [
+        #     (self.btn_forward, 0, 1, "forward"),
+        #     (self.btn_left, 1, 0, "left"),
+        #     (self.btn_stop, 1, 1, "stop"),
+        #     (self.btn_right, 1, 2, "right"),
+        #     (self.btn_backward, 2, 1, "backward"),
+        # ]
+
+        # for btn, r, c, cmd in buttons:
+        #     btn.setFixedSize(100, 35)
+        #     btn.clicked.connect(lambda _, d=cmd: self.move_robot(d))
+        #     move_layout.addWidget(btn, r, c)
+
+        # mv_layout.addLayout(move_layout)
+
+        # # === Asignar layout principal al tab ===
+        # tab_move.setLayout(mv_layout)
+        # tabs.addTab(tab_move, "🕹️ Movimiento")
+
         # ------------------ TAB 2: OLED ------------------
         tab_oled = QWidget()
         oled_layout = QGridLayout()
@@ -96,8 +171,8 @@ class EB_RobotGUI_bis(QWidget):
 
         self.btn_imu = QPushButton("IMU Data")
         self.btn_feedback = QPushButton("Chassis Feedback")
-        self.btn_imu.clicked.connect(lambda: self.send_cmd(json.dumps({"T": 126})))
-        self.btn_feedback.clicked.connect(lambda: self.send_cmd(json.dumps({"T": 130})))
+        self.btn_imu.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 126})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
+        self.btn_feedback.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 130})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
 
         cmd_layout.addWidget(self.btn_imu, 0, 0)
         cmd_layout.addWidget(self.btn_feedback, 0, 1)
@@ -171,6 +246,50 @@ class EB_RobotGUI_bis(QWidget):
         # Añadir la pestaña al conjunto de tabs
         tabs.addTab(tab_sensors, "🌡️ Sensores")
 
+        # ------------------ TAB 6: Posición ------------------
+        tab_position = QWidget()
+        pos_layout = QVBoxLayout()
+        buttons_imu_layout = QHBoxLayout()
+
+        # Checkbox para enviar posición por LoRa
+        self.send_position_checkbox = QCheckBox("📡 Enviar posición al EB")
+        self.send_position_checkbox.setChecked(True)
+        pos_layout.addWidget(self.send_position_checkbox)
+
+        self.btn_start_imu = QPushButton("▶️ Comenzar a trazar posición")
+        buttons_imu_layout.addWidget(self.btn_start_imu)
+        self.btn_stop_imu = QPushButton("⏹️ Parar trazado de posición")
+        buttons_imu_layout.addWidget(self.btn_stop_imu)
+        pos_layout.addLayout(buttons_imu_layout)
+
+
+        # Botón para resetear posición
+        self.btn_reset_position = QPushButton("🔄 Reset posición")
+        self.btn_reset_position.clicked.connect(self.reset_position)
+        pos_layout.addWidget(self.btn_reset_position)
+
+
+
+        # --- Plot de trayectoria (usando pyqtgraph) ---
+        self.plot_widget = pg.PlotWidget()
+        self.plot_widget.setBackground('w')
+        self.plot_widget.setTitle("Trayectoria estimada del robot", color='b', size='12pt')
+        self.plot_widget.setLabel('left', 'Z (m)')
+        self.plot_widget.setLabel('bottom', 'X (m)')
+        self.plot_widget.showGrid(x=True, y=True)
+
+        self.path_curve = self.plot_widget.plot([], [], pen=pg.mkPen(color='r', width=2))
+
+        pos_layout.addWidget(self.plot_widget)
+
+        tab_position.setLayout(pos_layout)
+        tabs.addTab(tab_position, "📍 Posición")
+
+        # Timer para actualizar el gráfico cada 100 ms
+        self.plot_timer = QTimer()
+        self.plot_timer.timeout.connect(self.update_position_plot)
+        self.plot_timer.start(100)
+
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
 
@@ -217,7 +336,7 @@ class EB_RobotGUI_bis(QWidget):
                 10: "FeedBack",
                 11: "Movimiento",
                 12: "Oled",
-                13: "",
+                13: "IMU",
                 14: "",
                 15: "",
                 19: ""
@@ -236,7 +355,7 @@ class EB_RobotGUI_bis(QWidget):
                 28: "Seguimiento de objetivo",
                 30: "Reset del módulo"
             },
-            "CRelay Flag (31)": {
+            "Relay Flag (31)": {
                 31: "Activar/Desactivar relay flag"
             }
         }
@@ -324,7 +443,7 @@ class EB_RobotGUI_bis(QWidget):
         self.selected_type = msg_type
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Tipo seleccionado: {self.selected_type}")
         self.type_button.setText(f"{msg_type} (📖 {desc})")
-        if int(self.selected_type) < 4 or int(self.selected_type) > 9 or int(self.selected_type) is not 31:
+        if (int(self.selected_type) < 4 or int(self.selected_type) > 9) and int(self.selected_type) != 31:
             self.btn_send_cmd.setEnabled(False)
         else:
             self.btn_send_cmd.setEnabled(True)
@@ -386,6 +505,8 @@ class EB_RobotGUI_bis(QWidget):
             alert = "SENSOR"
         elif 24 < msg_type < 31:
             alert = "CAMERA/RADAR"
+        else:
+            alert = "GENERAL"
 
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Sending command to {dest}: {alert}")
         self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
@@ -435,6 +556,19 @@ class EB_RobotGUI_bis(QWidget):
                     self._append_output(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error feedback: {e}\n")
             time.sleep(1)
 
+    def _start_imu(self):
+        """Envía al robot la orden de comenzar a enviar datos IMU periódicamente."""
+        self.selected_type = 13
+        self.append_general_log("🛰️ Enviando comando: Comenzar IMU")
+        self.send_cmd("1")
+
+    def _stop_imu(self):
+        """Envía al robot la orden de detener el envío de datos IMU."""
+        self.selected_type = 13  # 🔹 Tipo de mensaje para parar
+        self.append_general_log("🛰️ Enviando comando: Detener IMU")
+        self.send_cmd("0")
+        
+
     def _append_output(self, text):
         """Añade texto al panel de mensajes salientes"""
         self.output.append(text)
@@ -453,9 +587,61 @@ class EB_RobotGUI_bis(QWidget):
     def _on_lora_message(self, msg: str):
         """Manejador de mensajes entrantes desde LoRaNode"""
         self._append_input(msg)
+                # -------------------- IMU inicio --------------------
+
+    def _on_refresh_position (self, pos):
+        try:
+            x = pos.get("x", 0)
+            y = pos.get("y", 0)
+            z = pos.get("z", 0)
+
+            # Establecer origen si aún no lo hay
+            if self.imu_active and not self.origin_set:
+                self.origin_set = True
+                self.origin = {"x": 0, "y": 0, "z": 0}
+                self.append_general_log("📍 Origen de posición IMU establecido")
+                    
+            # Actualizar posición relativa al origen
+            if self.origin_set:
+                self.position = {
+                    "x": x - self.origin["x"],
+                    "y": y - self.origin["y"],
+                    "z": z - self.origin["z"]
+                }
+
+        except Exception as e:
+            self.append_general_log(f"Error parseando IMU: {e}")
+
+
+
+        
+# -------------------- IMU final --------------------
 
     def _on_general_log(self, msg: str):
         """Manejador de mensajes entrantes desde LoRaNode"""
         self.append_general_log(msg)
+
+
+
+    def update_position_plot(self):
+        """Actualiza el gráfico de trayectoria en tiempo real."""
+        x = self.position["x"]
+        y = self.position["z"]  # proyección XZ
+        self._path_points["x"].append(x)
+        self._path_points["y"].append(y)    
+
+        self.path_curve.setData(self._path_points["x"], self._path_points["y"])
+
+    def reset_position(self):
+        """Resetea posición y limpia el gráfico."""
+        self.origin_set = False
+        self.position = {"x": 0, "y": 0, "z": 0}
+        self.vx, self.vy, self.vz = 0, 0, 0
+        self._path_points = {"x": [0], "y": [0]}
+        self.path_curve.clear()
+        self.append_general_log("📍 Posición y trayectoria reseteadas.")
+
+
+# -------------------- IMU final --------------------
 
 
