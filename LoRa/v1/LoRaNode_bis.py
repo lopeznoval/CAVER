@@ -36,10 +36,12 @@ class LoRaNode:
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
         self.on_bytes = lambda data: print(f"📦 [BYTES] {data}")
         self.on_position = lambda pos: print(f"{pos}")
-
-        self.temp = None
-        self.hum = None
+        self.on_sensor = lambda sensor: print(f"{sensor}")
         
+        # Variables de los sensores
+        self.last_temp = None
+        self.last_hum = None
+
         # if platform.system() == "Linux":
         #     from picamera2 import PiCamera2 # type: ignore
         #     self.camera = PiCamera2()
@@ -153,12 +155,14 @@ class LoRaNode:
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
                     if msg_type == 13: # pedir o parar datos imu
-                        payload = message.decode("utf-8").strip().lower()
+                        payload = message #.decode("utf-8").strip().lower()
                         if "1" in payload:
+                            print("llego el 1 para empezar")
                             if getattr(self, "imu_thread", None) and self.imu_thread.is_alive():
                                 self.on_alert("⚠️ IMU loop ya estaba activo.")
                             else:
                                 self.stop_imu_flag = False
+                                self.imu_dest = addr_sender
                                 self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
                                 self.imu_thread.start()
                                 self.on_alert("🟢 IMU loop activado por EB.")
@@ -176,8 +180,17 @@ class LoRaNode:
                     
 
                 elif 19 < msg_type < 25:  # Comando para los sensores
-                    ...
-
+                    if msg_type == 21:  # Lectura temperatura y humedad
+                        if self.on_sensor is not None:
+                        #     payload = json.dumps({
+                        #         "temp": self.last_temp,
+                        #         "hum": self.last_hum,
+                        #         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                        #     })
+                        #     self.send_message(addr_sender, 22, msg_id, payload)
+                        # else:
+                        #     self.send_message(addr_sender, 22, msg_id, "No hay datos disponibles aún.")
+                            ...
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 30:  # Tomar foto
                             img_b64 = self.stream_recording()
@@ -263,8 +276,9 @@ class LoRaNode:
             try:
                 imu_data = self.send_to_robot(0, 0, "{\"T\":126}")
                 if imu_data:
-                    self.send_message(0xFF, 0, 63, imu_data)
+                    self.send_message(self.imu_dest, 0, 63, imu_data)
                 time.sleep(10)
+                # time.sleep(40)
             except Exception as e:
                 self.on_alert(f"Error en IMU loop: {e}")
                 time.sleep(2)
@@ -355,21 +369,37 @@ class LoRaNode:
         
     # -------------------- SENSORES --------------------
     def connect_sensors(self):
-        self.sensores = serial.Serial('/dev/ttyUSB0', 115200, timeout=2)  # Ajusta el puerto
-        time.sleep(2)  # Espera a que el puerto inicialice
-        print("Connected to sensors on /dev/ttyUSB0.\n")
-    
-    def sensor_loop(self):
+        
+        Puerto = '/dev/ttyUSB0'
+        BAU = 115200
+        
+        try:
+            self.sensores = serial.Serial(Puerto, BAU, timeout=2)
+            time.sleep(2)
+            print("[SENSORS] Conectado al ESP32 en", Puerto)
+        except Exception as e:
+            print(f"[SENSORS] ❌ Error abriendo puerto {Puerto}: {e}")
+            return
         while self.running:
             try:
-                self.temp , selfhum = self.lectura_sensores()
-                self.registrar_lectura(self.temp, self.hum)
-                time.sleep(10)                          # Espera 10 segundos entre lecturas
-                #sincronizar con EB
-                time.sleep(2)
+                line = self.sensores.readline().decode('utf-8', errors='ignore').strip()
+                if line and line.startswith("H") and "T" in line:
+                    # Ejemplo: "Humidity:72% Temperature:21°C"
+                    parts = line.split()
+                    hum = float(parts[0].split(':')[1].replace('%', ''))
+                    temp = float(parts[1].split(':')[1].replace('°C', ''))
+
+                    # self.last_temp = temp
+                    # self.last_hum = hum
+                    self.on_sensor({"Temperatura": temp, "Humedad": hum, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")})
+                    print(f"[SENSORS] Temp={temp:.1f}°C | Hum={hum:.1f}%")
+
+                    # Aquí podrías guardar los datos en una base de datos si quieres:
+                    # save_to_db(temp, hum, time.time())
+
             except Exception as e:
-                self.on_alert(f"Error en sensor loop: {e}")
-                time.sleep(2)
+                print(f"[SENSORS] Error leyendo ESP32: {e}")
+                time.sleep(1)
 
     # -------------------- RADAR ------------------------
     def connect_radar(self):
@@ -389,11 +419,6 @@ class LoRaNode:
             # self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
         # else:
         #     self.imu_thread = threading.Thread(target=self._get_imu_loop_EB, daemon=True)
-
-        # if not self.is_base:
-        #     self.sensor_thread = threading.Thread(target=self.sensor_loop, daemon=True)
-        #     self.imu_thread.start()
-        
         print("LoRaNode running... Ctrl+C to stop")
         # try:
         #     while True:

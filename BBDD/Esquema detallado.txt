@@ -1,0 +1,92 @@
+Aquí tienes un esquema de la conexión y el flujo de datos en formato de texto plano, como si fuera un "bloc de notas".
+
+Este esquema muestra el viaje completo de una sola lectura de sensor, desde el robot hasta la base de datos central, y la confirmación de regreso.
+
+```
+======================================================================
+     FLUJO DE DATOS: Robot -> Estación Base (vía LoRa)
+======================================================================
+
+          ROBOT                                    ESTACIÓN BASE
+          -----                                    -------------
+
+//--- 1. REGISTRO DE DATOS (En el robot) ---
+
+(Script: registro_datos.py)
+       |
+       V
+[ BaseDatos: robot_data_orm.db (SQLite) ]
+ (Nueva fila de sensor guardada)
+
+
+======================================================================
+//--- 2. PROCESO DE SINCRONIZACIÓN (Iniciado en el robot) ---
+
+(Script: sincronizar_lora.py)
+       |
+ (1. Lee fila de SQLite)
+       |
+       V
+ (2. Prepara paquete JSON)
+ { "ts": "...", "temp": 25.1, "hum": 60.5 }
+       |
+       V
+ [ Hardware: Módulo LoRa (TX) ]
+ (3. Envía bytes vía pySerial)
+       |
+       |
+       +------------------(((((( 📡 ))))))-------------------+
+                          (Ondas de Radio LoRa)
+                               (Paquete JSON)
+       +------------------(((((( 📡 ))))))-------------------+
+                                                              |
+                                                              V
+                                           [ Hardware: Módulo LoRa (RX) ]
+                                           (4. Recibe bytes)
+                                                              |
+                                                              V
+                                           (Script: lora_bridge.py)
+                                           (5. Lee línea de pySerial)
+                                                              |
+                                                              V
+                                           (6. Envía HTTP POST local)
+                                           (a http://127.0.0.1:8000)
+                                                              |
+                                                              V
+                                           (Script: main.py - FastAPI)
+                                           (7. Recibe petición API)
+                                                              |
+                                                              V
+                                           (8. Guarda en PostgreSQL)
+                                           [ BaseDatos: robot_bs_db (PostgreSQL) ]
+                                                              |
+                                                              V
+                                           (9. Responde HTTP 200 OK)
+                                                              |
+                                                              V
+                                           (Script: lora_bridge.py)
+                                           (10. Recibe 200 OK)
+                                                              |
+                                                              V
+                                           [ Hardware: Módulo LoRa (RX) ]
+                                           (11. Envía "ACK" vía pySerial)
+                                                              |
+       +------------------(((((( 📡 ))))))-------------------+
+                          (Ondas de Radio LoRa)
+                                 (Paquete "ACK")
+       +------------------(((((( 📡 ))))))-------------------+
+       |
+       V
+ [ Hardware: Módulo LoRa (TX) ]
+ (12. Recibe "ACK")
+       |
+       V
+ (Script: sincronizar_lora.py)
+ (13. Recibe "ACK" de pySerial)
+       |
+       V
+ (14. Borra la fila de SQLite)
+ [ BaseDatos: robot_data_orm.db (SQLite) ]
+ (Datos locales liberados)
+
+```

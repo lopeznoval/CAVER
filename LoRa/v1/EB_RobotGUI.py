@@ -33,6 +33,7 @@ class EB_RobotGUI_bis(QWidget):
             self.loranode.on_message = self._on_lora_message
             self.loranode.on_alert = self._on_general_log
             self.loranode.on_position = self._on_refresh_position
+            self.loranode.on_sensor = self._on_sensor_data
 
 
 # -------------------- IMU inicio --------------------
@@ -232,8 +233,10 @@ class EB_RobotGUI_bis(QWidget):
         pos_layout.addWidget(self.send_position_checkbox)
 
         self.btn_start_imu = QPushButton("▶️ Comenzar a trazar posición")
+        self.btn_start_imu.clicked.connect(self._start_imu)
         buttons_imu_layout.addWidget(self.btn_start_imu)
         self.btn_stop_imu = QPushButton("⏹️ Parar trazado de posición")
+        self.btn_stop_imu.clicked.connect(self._stop_imu)
         buttons_imu_layout.addWidget(self.btn_stop_imu)
         pos_layout.addLayout(buttons_imu_layout)
 
@@ -276,12 +279,14 @@ class EB_RobotGUI_bis(QWidget):
         self.temp_label = QLabel("Temperatura en °C")
         self.temp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.temp_label.setFixedSize(200, 50)
+        self.temp_label.setStyleSheet("background-color: lightgray; border-radius: 8px;")
         sensors_layout.addWidget(self.temp_label)
 
         # Recuadro para mostrar la humedad
         self.hum_label = QLabel("Humedad en %")
         self.hum_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hum_label.setFixedSize(200, 50)
+        self.hum_label.setStyleSheet("background-color: lightgray; border-radius: 8px;")
         sensors_layout.addWidget(self.hum_label)
 
         # Aplicar el layout a la pestaña
@@ -289,7 +294,6 @@ class EB_RobotGUI_bis(QWidget):
 
         # Añadir la pestaña al conjunto de tabs
         tabs.addTab(tab_sensors, "🌡️ Sensores")
-
 
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
@@ -344,7 +348,7 @@ class EB_RobotGUI_bis(QWidget):
             },
             "Sensores (20–24)": {
                 20: "Lectura de temperatura",
-                21: "Lectura de presión",
+                21: "Lectura de temperatura y humedad",
                 22: "Lectura de humedad",
                 23: "Lectura de luz ambiental",
                 24: "Lectura de proximidad"
@@ -523,7 +527,18 @@ class EB_RobotGUI_bis(QWidget):
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type}")
         
     def take_data(self):
-        ...
+        # Envia una orden al nodo para obtener la temperatura y humedad
+        dest = int(self.dest_entry.text())
+        msg_type = 21
+        relay = int(self.relay_combo.currentText())
+        self.msg_id += 1
+        
+        # Comandos de solicitud
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 🌡️ Solicitando datos de temperatura y humedad...")
+        
+        #Solicita los datos
+        self.loranode.send_message(dest, msg_type, self.msg_id, "", relay)
+        self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: Solicitud de información ambiental")
 
     def start_feedback(self):
         if self.feedback_running:
@@ -559,16 +574,18 @@ class EB_RobotGUI_bis(QWidget):
 
     def _start_imu(self):
         """Envía al robot la orden de comenzar a enviar datos IMU periódicamente."""
+        print("""Envía al robot la orden de comenzar a enviar datos IMU periódicamente.""")
+        self.imu_active = True
         self.selected_type = 13
         self.append_general_log("🛰️ Enviando comando: Comenzar IMU")
         self.send_cmd("1")
 
     def _stop_imu(self):
-        """Envía al robot la orden de detener el envío de datos IMU."""
+        """Envía al robot la orden de detener el envío de datos IMU."""        
+        self.imu_active = False
         self.selected_type = 13  # 🔹 Tipo de mensaje para parar
         self.append_general_log("🛰️ Enviando comando: Detener IMU")
         self.send_cmd("0")
-        
 
     def _append_output(self, text):
         """Añade texto al panel de mensajes salientes"""
@@ -645,4 +662,53 @@ class EB_RobotGUI_bis(QWidget):
 
 # -------------------- IMU final --------------------
 
+# -------------------- Sensores ----------------------
 
+    def _on_sensor_data(self, on_sensor_data):
+        try:
+            # Si llega como string JSON, decodificamos
+            if isinstance(on_sensor_data, str):
+                data = json.loads(on_sensor_data)
+            else:
+                data = on_sensor_data
+
+            # Extraer datos (en español)
+            temperatura = float(data.get("Temperatura", 0))
+            humedad = float(data.get("Humedad", 0))
+            timestamp = data.get("timestamp", "")
+
+            # Mostrar en logs
+            self.append_general_log(
+                f"[{time.strftime('%H:%M:%S')}] 🌡️ Datos recibidos → Temp: {temperatura:.1f}°C, Hum: {humedad:.1f}% ({timestamp})"
+            )
+
+            # Actualizar etiquetas en la GUI
+            self.temp_label.setText(f"Temperatura: {temperatura:.1f} °C")
+            self.hum_label.setText(f"Humedad: {humedad:.1f} %")
+
+            # --- Color según temperatura ---
+            if temperatura < 15:
+                color_temp = "lightblue"
+            elif temperatura <= 25:
+                color_temp = "lightgreen"
+            else:
+                color_temp = "lightcoral"  # rojo claro
+
+            self.temp_label.setStyleSheet(
+                f"background-color: {color_temp}; border-radius: 8px; font-weight: bold;"
+            )
+
+            # --- Color según humedad ---
+            if humedad < 30:
+                color_hum = "khaki"  # amarillento
+            elif humedad <= 60:
+                color_hum = "lightgreen"
+            else:
+                color_hum = "lightblue"
+
+            self.hum_label.setStyleSheet(
+                f"background-color: {color_hum}; border-radius: 8px; font-weight: bold;"
+            )
+
+        except Exception as e:
+            self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error procesando datos del sensor: {e}")
