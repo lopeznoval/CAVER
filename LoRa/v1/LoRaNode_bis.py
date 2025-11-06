@@ -12,10 +12,11 @@ import base64
 import math
 
 class LoRaNode:
-    def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, EB=0, robot_port=None, robot_baudrate=None):  # EB = 1 si es estación base
+    def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, 
+                 EB=0, robot_port=None, robot_baudrate=None):  # EB = 1 si es estación base
+        
         self.running = True
-        self.node = sx126x(serial_num=ser_port, freq=freq,
-                           addr=addr, power=pw, rssi=rssi)
+        self.node = sx126x(serial_num=ser_port, freq=freq, addr=addr, power=pw, rssi=rssi)
         print(f"LoRaNode initialized on {ser_port} with address {addr}, freq {freq}MHz, power {pw}dBm")
         self.pending_requests = {}                                  # msg_id -> callback/event
         self.lock = threading.Lock()
@@ -36,8 +37,9 @@ class LoRaNode:
         self.on_bytes = lambda data: print(f"📦 [BYTES] {data}")
         self.on_position = lambda pos: print(f"{pos}")
 
+        self.temp = None
+        self.hum = None
         
-
         # if platform.system() == "Linux":
         #     from picamera2 import PiCamera2 # type: ignore
         #     self.camera = PiCamera2()
@@ -125,12 +127,12 @@ class LoRaNode:
                         self.imu_pos(message)
 
                 elif 1 < msg_type < 5:  # Respuesta
-                    # with self.lock:
-                    #     rm = self.remove_pending(addr_sender, msg_id)
-                    #     if not rm:
-                    #         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
-                    #         continue
-                    # self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
+                    with self.lock:
+                        rm = self.remove_pending(addr_sender, msg_id)
+                        if not rm:
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
+                            continue
+                    self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
                     continue
 
                 elif 4 < msg_type < 10:  # Comandos generales
@@ -356,6 +358,18 @@ class LoRaNode:
         self.sensores = serial.Serial('/dev/ttyUSB0', 115200, timeout=2)  # Ajusta el puerto
         time.sleep(2)  # Espera a que el puerto inicialice
         print("Connected to sensors on /dev/ttyUSB0.\n")
+    
+    def sensor_loop(self):
+        while self.running:
+            try:
+                self.temp , selfhum = self.lectura_sensores()
+                self.registrar_lectura(self.temp, self.hum)
+                time.sleep(10)                          # Espera 10 segundos entre lecturas
+                #sincronizar con EB
+                time.sleep(2)
+            except Exception as e:
+                self.on_alert(f"Error en sensor loop: {e}")
+                time.sleep(2)
 
     # -------------------- RADAR ------------------------
     def connect_radar(self):
@@ -375,6 +389,11 @@ class LoRaNode:
             # self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
         # else:
         #     self.imu_thread = threading.Thread(target=self._get_imu_loop_EB, daemon=True)
+
+        # if not self.is_base:
+        #     self.sensor_thread = threading.Thread(target=self.sensor_loop, daemon=True)
+        #     self.imu_thread.start()
+        
         print("LoRaNode running... Ctrl+C to stop")
         # try:
         #     while True:
