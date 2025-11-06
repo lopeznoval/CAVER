@@ -232,8 +232,10 @@ class EB_RobotGUI_bis(QWidget):
         pos_layout.addWidget(self.send_position_checkbox)
 
         self.btn_start_imu = QPushButton("▶️ Comenzar a trazar posición")
+        self.btn_start_imu.clicked.connect(self._start_imu)
         buttons_imu_layout.addWidget(self.btn_start_imu)
         self.btn_stop_imu = QPushButton("⏹️ Parar trazado de posición")
+        self.btn_stop_imu.clicked.connect(self._stop_imu)
         buttons_imu_layout.addWidget(self.btn_stop_imu)
         pos_layout.addLayout(buttons_imu_layout)
 
@@ -531,12 +533,14 @@ class EB_RobotGUI_bis(QWidget):
     def _start_imu(self):
         """Envía al robot la orden de comenzar a enviar datos IMU periódicamente."""
         print("""Envía al robot la orden de comenzar a enviar datos IMU periódicamente.""")
+        self.imu_active = True
         self.selected_type = 13
         self.append_general_log("🛰️ Enviando comando: Comenzar IMU")
         self.send_cmd("1")
 
     def _stop_imu(self):
-        """Envía al robot la orden de detener el envío de datos IMU."""
+        """Envía al robot la orden de detener el envío de datos IMU."""        
+        self.imu_active = False
         self.selected_type = 13  # 🔹 Tipo de mensaje para parar
         self.append_general_log("🛰️ Enviando comando: Detener IMU")
         self.send_cmd("0")
