@@ -220,32 +220,7 @@ class EB_RobotGUI_bis(QWidget):
 
         # Añadir el tab al QTabWidget
         tabs.addTab(tab_logs, "📝 Logs")
-        
-        # ----------------------- TAB 6: Tomar datos de los sensores -----------------------
-        tab_sensors = QWidget()
-        sensors_layout = QVBoxLayout()
-        
-        self.btn_take_data = QPushButton("Medir temperatura y humedad 🌡️💧")
-        self.btn_take_data.clicked.connect(self.take_data)
-        sensors_layout.addWidget(self.btn_take_data)
-        # Recuadro para mostrar la temperatura
-        self.temp_label = QLabel("Temperatura en °C")
-        self.temp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.temp_label.setFixedSize(200, 50)
-        sensors_layout.addWidget(self.temp_label)
-
-        # Recuadro para mostrar la humedad
-        self.hum_label = QLabel("Humedad en %")
-        self.hum_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.hum_label.setFixedSize(200, 50)
-        sensors_layout.addWidget(self.hum_label)
-
-        # Aplicar el layout a la pestaña
-        tab_sensors.setLayout(sensors_layout)
-
-        # Añadir la pestaña al conjunto de tabs
-        tabs.addTab(tab_sensors, "🌡️ Sensores")
-
+    
         # ------------------ TAB 6: Posición ------------------
         tab_position = QWidget()
         pos_layout = QVBoxLayout()
@@ -289,6 +264,32 @@ class EB_RobotGUI_bis(QWidget):
         self.plot_timer = QTimer()
         self.plot_timer.timeout.connect(self.update_position_plot)
         self.plot_timer.start(100)
+        
+        # ----------------------- TAB 7: Tomar datos de los sensores -----------------------
+        tab_sensors = QWidget()
+        sensors_layout = QVBoxLayout()
+        
+        self.btn_take_data = QPushButton("Medir temperatura y humedad 🌡️💧")
+        self.btn_take_data.clicked.connect(self.take_data)
+        sensors_layout.addWidget(self.btn_take_data)
+        # Recuadro para mostrar la temperatura
+        self.temp_label = QLabel("Temperatura en °C")
+        self.temp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.temp_label.setFixedSize(200, 50)
+        sensors_layout.addWidget(self.temp_label)
+
+        # Recuadro para mostrar la humedad
+        self.hum_label = QLabel("Humedad en %")
+        self.hum_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.hum_label.setFixedSize(200, 50)
+        sensors_layout.addWidget(self.hum_label)
+
+        # Aplicar el layout a la pestaña
+        tab_sensors.setLayout(sensors_layout)
+
+        # Añadir la pestaña al conjunto de tabs
+        tabs.addTab(tab_sensors, "🌡️ Sensores")
+
 
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
