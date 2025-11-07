@@ -19,11 +19,10 @@ class LecturaSensor(Base):
     temperatura = Column(Float, nullable=False)
     humedad = Column(Float, nullable=False)
 
-class Video(Base): # <--- CAMBIO: de Imagen a Video
+class Video(Base):
     __tablename__ = "videos"
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, nullable=False)
-    # Esta será la ruta DONDE la BS guarda el video
     ruta_archivo = Column(String, nullable=False) 
 
 # --- 4. Funciones ---
@@ -41,7 +40,4 @@ def get_db_session():
 
 # Ejecutar esto una vez para crear las tablas en PostgreSQL
 if __name__ == "__main__":
-    # Si ejecutas esto de nuevo, SQLAlchemy es lo bastante
-    # inteligente para no borrar las tablas existentes.
-    # Si 'videos' no existe, la creará.
     crear_tablas()

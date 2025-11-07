@@ -1,0 +1,126 @@
+import os
+import uuid
+import shutil
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pymongo import MongoClient
+from pymongo.errors import ServerSelectionTimeoutError
+from bson import ObjectId # Para convertir el _id de Mongo
+
+# --- Configuración de MongoDB ---
+# (Asegúrate de que MongoDB se esté ejecutando)
+try:
+    client = MongoClient("mongodb://localhost:27017/", serverSelectionTimeoutMS=5000)
+    client.server_info() # Forzar una conexión para probar
+    print("Conectado a MongoDB (localhost:27017)")
+    db = client["robot_bs_db"]
+    sensores_collection = db["lecturas_sensores"]
+    videos_collection = db["videos"]
+except ServerSelectionTimeoutError:
+    print("Error: No se puede conectar a MongoDB. ¿Está el servidor ejecutándose?")
+    exit()
+
+# --- Configuración de FastAPI ---
+app = FastAPI(title="CAVER Analitics API")
+
+UPLOAD_DIR = "videos_recibidos"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# -----------------------------------------------------------------
+# --- NUEVO: Montar el directorio de videos como estático ---
+# Esto permite que el HTML acceda a los videos por su ruta
+# Ej: http://localhost:8000/videos_recibidos/mi_video.mp4
+# -----------------------------------------------------------------
+app.mount("/videos_recibidos", StaticFiles(directory=UPLOAD_DIR), name="videos")
+
+
+# -----------------------------------------------------------------
+# --- SECCIÓN DE API PARA EL ROBOT (RECIBIR DATOS) ---
+# -----------------------------------------------------------------
+
+@app.post("/sync/video")
+async def recibir_video(
+    timestamp: datetime = Form(...), 
+    file: UploadFile = File(...) 
+):
+    """
+    Endpoint para que el ROBOT suba archivos de video por Wi-Fi.
+    """
+    try:
+        # 1. Guardar el archivo de video
+        ext = os.path.splitext(file.filename)[1] or ".mp4"
+        nuevo_nombre = f"{uuid.uuid4()}{ext}"
+        # La ruta de guardado debe coincidir con el directorio estático
+        ruta_guardado_relativa = os.path.join(UPLOAD_DIR, nuevo_nombre)
+        
+        with open(ruta_guardado_relativa, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # 2. Guardar el registro en MongoDB
+        documento_video = {
+            "timestamp": timestamp,
+            # Guardamos la ruta de acceso web, no la ruta del disco
+            "ruta_archivo": f"/{ruta_guardado_relativa.replace(os.path.sep, '/')}",
+            "nombre_original": file.filename
+        }
+        videos_collection.insert_one(documento_video)
+        
+        print(f"Video recibido y guardado: {ruta_guardado_relativa}")
+        return {"status": "ok", "archivo_guardado": ruta_guardado_relativa}
+        
+    except Exception as e:
+        print(f"Error al guardar video: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        await file.close()
+
+# -----------------------------------------------------------------
+# --- SECCIÓN DE API PARA EL DASHBOARD (ENVIAR DATOS) ---
+# -----------------------------------------------------------------
+
+def mongo_doc_to_json(doc):
+    """Convierte un documento de Mongo a un JSON válido (ObjectId -> str)"""
+    doc["_id"] = str(doc["_id"])
+    return doc
+
+@app.get("/api/lecturas")
+async def get_lecturas():
+    """
+    Endpoint para que el DASHBOARD obtenga las últimas 200 lecturas de sensores.
+    """
+    try:
+        # Buscar las últimas 200, ordenadas por tiempo (más nuevo primero)
+        cursor = sensores_collection.find().sort("timestamp", -1).limit(200)
+        # Convertir a lista y manejar el ObjectId
+        lecturas = [mongo_doc_to_json(doc) for doc in cursor]
+        # Revertir la lista para que el gráfico muestre (más antiguo -> más nuevo)
+        return list(reversed(lecturas))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/videos")
+async def get_videos():
+    """
+    Endpoint para que el DASHBOARD obtenga los últimos 20 registros de video.
+    """
+    try:
+        # Buscar los últimos 20, ordenados por tiempo (más nuevo primero)
+        cursor = videos_collection.find().sort("timestamp", -1).limit(20)
+        videos = [mongo_doc_to_json(doc) for doc in cursor]
+        return videos
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# -----------------------------------------------------------------
+# --- SECCIÓN DE SERVIDOR WEB (Servir el HTML) ---
+# -----------------------------------------------------------------
+
+@app.get("/")
+async def get_dashboard():
+    """
+    Sirve el archivo principal del dashboard.
+    """
+    return FileResponse('dashboard.html')
