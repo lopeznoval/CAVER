@@ -4,8 +4,12 @@ from sqlalchemy import create_engine, Column, Integer, Float, String, DateTime, 
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # 1. Definir la URL de la base de datos
-DATABASE_FILE = "robot_data_orm.db"
+DATA_SUBFOLDER = "datos"
+DATABASE_NAME = "robot_data_orm.db"
+os.makedirs(DATA_SUBFOLDER, exist_ok=True)
+DATABASE_FILE = os.path.join(DATA_SUBFOLDER, DATABASE_NAME)
 DATABASE_URL = f"sqlite:///{DATABASE_FILE}"
+# DATABASE_URL = f"sqlite:///{DATABASE_NAME}"
 
 # 2. Configuración de SQLAlchemy
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})

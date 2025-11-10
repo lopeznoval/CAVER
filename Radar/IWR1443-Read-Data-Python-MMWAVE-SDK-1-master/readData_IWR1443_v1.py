@@ -5,7 +5,8 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtWidgets
 
 # Change the configuration file name
-configFileName = '1443config.cfg'
+# configFileName = '1443config.cfg'
+configFileName = r"C:\Users\paula\OneDrive\Escritorio\TELECO\2 Master\CAVER\Radar\IWR1443-Read-Data-Python-MMWAVE-SDK-1-master\1443config.cfg"
 
 CLIport = {}
 Dataport = {}
@@ -33,8 +34,8 @@ def serialConfig(configFileName):
     #Dataport = serial.Serial('/dev/ttyACM1', 921600)
     
     # Windows
-    CLIport = serial.Serial('COM6', 115200)
-    Dataport = serial.Serial('COM7', 921600)
+    CLIport = serial.Serial('COM19', 115200)
+    Dataport = serial.Serial('COM18', 921600)
 
     # Read the configuration file and send it to the board
     config = [line.rstrip('\r\n') for line in open(configFileName)]
@@ -218,41 +219,93 @@ def readAndParseData14xx(Dataport, configParameters):
                 tlv_xyzQFormat = 2**np.matmul(byteBuffer[idX:idX+2],word)
                 idX += 2
                 
-                # Initialize the arrays
-                rangeIdx = np.zeros(tlv_numObj,dtype = 'int16')
-                dopplerIdx = np.zeros(tlv_numObj,dtype = 'int16')
-                peakVal = np.zeros(tlv_numObj,dtype = 'int16')
-                x = np.zeros(tlv_numObj,dtype = 'int16')
-                y = np.zeros(tlv_numObj,dtype = 'int16')
-                z = np.zeros(tlv_numObj,dtype = 'int16')
+                # # Initialize the arrays
+                # rangeIdx = np.zeros(tlv_numObj,dtype = 'int16')
+                # dopplerIdx = np.zeros(tlv_numObj,dtype = 'int16')
+                # peakVal = np.zeros(tlv_numObj,dtype = 'int16')
+                # x = np.zeros(tlv_numObj,dtype = 'int16')
+                # y = np.zeros(tlv_numObj,dtype = 'int16')
+                # z = np.zeros(tlv_numObj,dtype = 'int16')
                 
+                # for objectNum in range(tlv_numObj):
+                    
+                #     # Read the data for each object
+                #     rangeIdx[objectNum] =  np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     dopplerIdx[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     peakVal[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     x[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     y[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     z[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+
+                
+
+                # # Make the necessary corrections and calculate the rest of the data
+                # rangeVal = rangeIdx * configParameters["rangeIdxToMeters"]
+                # dopplerIdx[dopplerIdx > (configParameters["numDopplerBins"]/2 - 1)] = dopplerIdx[dopplerIdx > (configParameters["numDopplerBins"]/2 - 1)] - 65535
+                # dopplerVal = dopplerIdx * configParameters["dopplerResolutionMps"]
+                # #x[x > 32767] = x[x > 32767] - 65536
+                # #y[y > 32767] = y[y > 32767] - 65536
+                # #z[z > 32767] = z[z > 32767] - 65536
+                # x = x / tlv_xyzQFormat
+                # y = y / tlv_xyzQFormat
+                # z = z / tlv_xyzQFormat
+
+                # # Aplica complemento a dos para int16
+                # rangeIdx[rangeIdx > 32767] -= 65536
+                # dopplerIdx[dopplerIdx > 32767] -= 65536
+                # peakVal[peakVal > 32767] -= 65536
+                # x[x > 32767] -= 65536
+                # y[y > 32767] -= 65536
+                # z[z > 32767] -= 65536
+
+
+                # Inicializa arrays como int32 para evitar overflow
+                rangeIdx = np.zeros(tlv_numObj, dtype='int32')
+                dopplerIdx = np.zeros(tlv_numObj, dtype='int32')
+                peakVal = np.zeros(tlv_numObj, dtype='int32')
+                x = np.zeros(tlv_numObj, dtype='int32')
+                y = np.zeros(tlv_numObj, dtype='int32')
+                z = np.zeros(tlv_numObj, dtype='int32')
+
+                # Lee los datos
                 for objectNum in range(tlv_numObj):
-                    
-                    # Read the data for each object
-                    rangeIdx[objectNum] =  np.matmul(byteBuffer[idX:idX+2],word)
+                    rangeIdx[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    dopplerIdx[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    dopplerIdx[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    peakVal[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    peakVal[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    x[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    x[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    y[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    y[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    z[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    z[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    
-                # Make the necessary corrections and calculate the rest of the data
-                rangeVal = rangeIdx * configParameters["rangeIdxToMeters"]
-                dopplerIdx[dopplerIdx > (configParameters["numDopplerBins"]/2 - 1)] = dopplerIdx[dopplerIdx > (configParameters["numDopplerBins"]/2 - 1)] - 65535
-                dopplerVal = dopplerIdx * configParameters["dopplerResolutionMps"]
-                #x[x > 32767] = x[x > 32767] - 65536
-                #y[y > 32767] = y[y > 32767] - 65536
-                #z[z > 32767] = z[z > 32767] - 65536
+
+                # Aplica complemento a dos
+                rangeIdx[rangeIdx > 32767] -= 65536
+                dopplerIdx[dopplerIdx > 32767] -= 65536
+                peakVal[peakVal > 32767] -= 65536
+                x[x > 32767] -= 65536
+                y[y > 32767] -= 65536
+                z[z > 32767] -= 65536
+
+                # Convierte a float usando el Q-format
                 x = x / tlv_xyzQFormat
                 y = y / tlv_xyzQFormat
                 z = z / tlv_xyzQFormat
-                
+
+                # Calcula doppler y rango
+                rangeVal = rangeIdx * configParameters["rangeIdxToMeters"]
+                dopplerVal = dopplerIdx * configParameters["dopplerResolutionMps"]
+
+
                 # Store the data in the detObj dictionary
                 detObj = {"numObj": tlv_numObj, "rangeIdx": rangeIdx, "range": rangeVal, "dopplerIdx": dopplerIdx, \
                           "doppler": dopplerVal, "peakVal": peakVal, "x": x, "y": y, "z": z}
@@ -366,19 +419,19 @@ def update():
                 y_val = filtered_detObj['y'][i]
                 z_val = filtered_detObj['z'][i]
                 r_val = filtered_detObj['range'][i]
-                # print(f"  Obj {i}: (X={x_val:.2f}, Y={y_val:.2f}, Z={z_val:.2f}) m | Distancia: {r_val:.2f} m")
+                print(f"  Obj {i}: (X={x_val:.2f}, Y={y_val:.2f}, Z={z_val:.2f}) m | Distancia: {r_val:.2f} m")
 
             x = -filtered_detObj["x"]
             y = filtered_detObj["y"]
             
             # s.setData(x,y)
-            app.processEvents()
+            # app.processEvents()
         
         # Si dataOk pero no hay objetos (o se filtraron todos)
         elif dataOk: 
             detObj = {} # Limpia el detObj global
             # s.setData([],[]) # Limpia la gráfica
-            app.processEvents()
+            # app.processEvents()
             
     else:
         # Si dataOk es 0, imprime esto para saber que el script sigue corriendo
@@ -395,20 +448,20 @@ CLIport, Dataport = serialConfig(configFileName)
 # Get the configuration parameters from the configuration file
 configParameters = parseConfigFile(configFileName)
 
-# START QtAPPfor the plot
-app = QtWidgets.QApplication([])
+# # START QtAPPfor the plot
+# app = QtWidgets.QApplication([])
 
-# Set the plot 
-pg.setConfigOption('background','w')
-win = pg.GraphicsLayoutWidget()      # 1. Cambia GraphicsWindow por GraphicsLayoutWidget
-win.setWindowTitle('2D scatter plot') # 2. Establece el título de la ventana de esta forma
-win.show()                          # 3. Añade esta línea para mostrar la ventana
-p = win.addPlot()                   # 4. Esta línea se mantiene igual
-p.setXRange(-0.5,0.5)
-p.setYRange(0,1.5)
-p.setLabel('left', text = 'Y position (m)')
-p.setLabel('bottom', text= 'X position (m)')
-s = p.plot([],[],pen=None,symbol='o')
+# # Set the plot 
+# pg.setConfigOption('background','w')
+# win = pg.GraphicsLayoutWidget()      # 1. Cambia GraphicsWindow por GraphicsLayoutWidget
+# win.setWindowTitle('2D scatter plot') # 2. Establece el título de la ventana de esta forma
+# win.show()                          # 3. Añade esta línea para mostrar la ventana
+# p = win.addPlot()                   # 4. Esta línea se mantiene igual
+# p.setXRange(-0.5,0.5)
+# p.setYRange(0,1.5)
+# p.setLabel('left', text = 'Y position (m)')
+# p.setLabel('bottom', text= 'X position (m)')
+# s = p.plot([],[],pen=None,symbol='o')
     
    
 # Main loop 

@@ -5,7 +5,8 @@ import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui
 
 # Change the configuration file name
-configFileName = '1443config.cfg'
+# configFileName = '1443config.cfg'
+configFileName = r"C:\Users\paula\OneDrive\Escritorio\TELECO\2 Master\CAVER\Radar\IWR1443-Read-Data-Python-MMWAVE-SDK-1-master\1443config.cfg"
 
 CLIport = {}
 Dataport = {}
@@ -28,8 +29,8 @@ def serialConfig(configFileName):
     #Dataport = serial.Serial('/dev/ttyACM1', 921600)
     
     # Windows
-    CLIport = serial.Serial('COM3', 115200)
-    Dataport = serial.Serial('COM4', 921600)
+    CLIport = serial.Serial('COM19', 115200)
+    Dataport = serial.Serial('COM18', 921600)
 
     # Read the configuration file and send it to the board
     config = [line.rstrip('\r\n') for line in open(configFileName)]
