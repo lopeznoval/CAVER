@@ -366,19 +366,19 @@ def update():
                 y_val = filtered_detObj['y'][i]
                 z_val = filtered_detObj['z'][i]
                 r_val = filtered_detObj['range'][i]
-                # print(f"  Obj {i}: (X={x_val:.2f}, Y={y_val:.2f}, Z={z_val:.2f}) m | Distancia: {r_val:.2f} m")
+                print(f"  Obj {i}: (X={x_val:.2f}, Y={y_val:.2f}, Z={z_val:.2f}) m | Distancia: {r_val:.2f} m")
 
             x = -filtered_detObj["x"]
             y = filtered_detObj["y"]
             
             # s.setData(x,y)
-            app.processEvents()
+            # app.processEvents()
         
         # Si dataOk pero no hay objetos (o se filtraron todos)
         elif dataOk: 
             detObj = {} # Limpia el detObj global
             # s.setData([],[]) # Limpia la gráfica
-            app.processEvents()
+            # app.processEvents()
             
     else:
         # Si dataOk es 0, imprime esto para saber que el script sigue corriendo
@@ -395,20 +395,20 @@ CLIport, Dataport = serialConfig(configFileName)
 # Get the configuration parameters from the configuration file
 configParameters = parseConfigFile(configFileName)
 
-# START QtAPPfor the plot
-app = QtWidgets.QApplication([])
+# # START QtAPPfor the plot
+# app = QtWidgets.QApplication([])
 
-# Set the plot 
-pg.setConfigOption('background','w')
-win = pg.GraphicsLayoutWidget()      # 1. Cambia GraphicsWindow por GraphicsLayoutWidget
-win.setWindowTitle('2D scatter plot') # 2. Establece el título de la ventana de esta forma
-win.show()                          # 3. Añade esta línea para mostrar la ventana
-p = win.addPlot()                   # 4. Esta línea se mantiene igual
-p.setXRange(-0.5,0.5)
-p.setYRange(0,1.5)
-p.setLabel('left', text = 'Y position (m)')
-p.setLabel('bottom', text= 'X position (m)')
-s = p.plot([],[],pen=None,symbol='o')
+# # Set the plot 
+# pg.setConfigOption('background','w')
+# win = pg.GraphicsLayoutWidget()      # 1. Cambia GraphicsWindow por GraphicsLayoutWidget
+# win.setWindowTitle('2D scatter plot') # 2. Establece el título de la ventana de esta forma
+# win.show()                          # 3. Añade esta línea para mostrar la ventana
+# p = win.addPlot()                   # 4. Esta línea se mantiene igual
+# p.setXRange(-0.5,0.5)
+# p.setYRange(0,1.5)
+# p.setLabel('left', text = 'Y position (m)')
+# p.setLabel('bottom', text= 'X position (m)')
+# s = p.plot([],[],pen=None,symbol='o')
     
    
 # Main loop 
