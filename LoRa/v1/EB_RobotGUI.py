@@ -246,8 +246,6 @@ class EB_RobotGUI_bis(QWidget):
         self.btn_reset_position.clicked.connect(self.reset_position)
         pos_layout.addWidget(self.btn_reset_position)
 
-
-
         # --- Plot de trayectoria (usando pyqtgraph) ---
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground('w')
@@ -279,14 +277,14 @@ class EB_RobotGUI_bis(QWidget):
         self.temp_label = QLabel("Temperatura en °C")
         self.temp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.temp_label.setFixedSize(200, 50)
-        self.temp_label.setStyleSheet("background-color: lightgray; border-radius: 8px;")
+        self.temp_label.setStyleSheet("background-color: gray; border-radius: 8px;")
         sensors_layout.addWidget(self.temp_label)
 
         # Recuadro para mostrar la humedad
         self.hum_label = QLabel("Humedad en %")
         self.hum_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hum_label.setFixedSize(200, 50)
-        self.hum_label.setStyleSheet("background-color: lightgray; border-radius: 8px;")
+        self.hum_label.setStyleSheet("background-color: gray; border-radius: 8px;")
         sensors_layout.addWidget(self.hum_label)
 
         # Aplicar el layout a la pestaña

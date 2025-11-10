@@ -2,36 +2,36 @@ import os
 import threading
 import time
 import random
-from database_SQLite import get_db_session, LecturaSensor, Imagen, crear_tablas
+from database_SQLite import get_db_session, LecturaSensor, Video, crear_tablas
 
 def registrar_lectura(temp, hum):
     """Inserta una nueva lectura de sensor en SQLite."""
-    nueva_lectura = LecturaSensor(temperatura=temp, humedad=hum)
     session = get_db_session()
     try:
+        nueva_lectura = LecturaSensor(temperatura=temp, humedad=hum)
         session.add(nueva_lectura)
         session.commit()
-        print(f"Datos de sensor registrados (SQLite): {temp}°C, {hum}%")
+        print(f"Datos de sensor registrados (SQLite): {temp:.2f}°C, {hum:.2f}%")
     except Exception as e:
         print(f"Error al registrar lectura: {e}")
         session.rollback()
     finally:
         session.close()
 
-def registrar_imagen(ruta):
-    """Inserta el registro de una nueva imagen en SQLite."""
+def registrar_video(ruta):
+    """Inserta el registro de un nuevo video en SQLite."""
     if not os.path.exists(ruta):
-        print(f"Error: El archivo de imagen no existe en '{ruta}'")
+        print(f"Error: El archivo de video no existe en '{ruta}'")
         return
 
-    nuevo_registro_imagen = Imagen(ruta_archivo=ruta)
+    nuevo_registro_video = Video(ruta_archivo=ruta)
     session = get_db_session()
     try:
-        session.add(nuevo_registro_imagen)
+        session.add(nuevo_registro_video)
         session.commit()
-        print(f"Registro de imagen guardado (SQLite): {ruta}")
+        print(f"Registro de video guardado (SQLite): {ruta}")
     except Exception as e:
-        print(f"Error al registrar imagen: {e}")
+        print(f"Error al registrar video: {e}")
         session.rollback()
     finally:
         session.close()
@@ -62,7 +62,7 @@ def leer_sensor_simulado():
     Simula una función que tarda tiempo en leer un sensor 
     y devuelve temperatura y humedad.
     """
-    print("  (Hilo Sensor) Leyendo sensor...")
+    # print("  (Hilo Sensor) Leyendo sensor...") # Comentado para no saturar la consola
     time.sleep(1) # Simula que la lectura tarda 1 segundo
     temp = random.uniform(20.0, 30.0)
     hum = random.uniform(40.0, 60.0)
@@ -85,21 +85,23 @@ if __name__ == "__main__":
     print("(Hilo Principal) El hilo principal está libre y puede hacer otras tareas.")
     time.sleep(2) # Esperar un poco
     
-    print("(Hilo Principal) Tarea: Tomar una foto...")
-    ruta_foto_prueba = "/home/robot/fotos/mi_foto.jpg"
+    # # Simular la grabación de un video
+    # print("(Hilo Principal) Tarea: Grabar un video...")
+    # ruta_video_prueba = "/home/robot/videos/mi_video_01.mp4"
     
-    # Asegurarse de que el directorio exista (ignorar error si ya existe)
-    os.makedirs(os.path.dirname(ruta_foto_prueba), exist_ok=True)
+    # # Asegurarse de que el directorio exista (ignorar error si ya existe)
+    # os.makedirs(os.path.dirname(ruta_video_prueba), exist_ok=True)
     
-    try:
-        # Simular la creación del archivo de imagen
-        with open(ruta_foto_prueba, "w") as f:
-            f.write("simulacion de datos de imagen")
+    # try:
+    #     # Simular la creación del archivo de video
+    #     with open(ruta_video_prueba, "w") as f:
+    #         f.write("simulacion de datos de video .mp4")
         
-        # Registrar la imagen en la BD (esto ocurre en el hilo principal)
-        registrar_imagen(ruta_foto_prueba)
-    except (IOError, OSError) as e:
-        print(f"(Hilo Principal) No se pudo crear el archivo de foto de prueba (ignorado): {e}")
+    #     # CAMBIO: Registrar el video en la BD
+    #     registrar_video(ruta_video_prueba)
+    # except (IOError, OSError) as e:
+    #     # CAMBIO: Actualizamos el mensaje
+    #     print(f"(Hilo Principal) No se pudo crear el archivo de video de prueba (ignorado): {e}")
 
     
     # 4. Mantener el hilo principal vivo

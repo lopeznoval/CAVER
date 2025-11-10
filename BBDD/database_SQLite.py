@@ -19,10 +19,10 @@ class LecturaSensor(Base):
     timestamp = Column(DateTime, default=datetime.now)
     temperatura = Column(Float, nullable=False)
     humedad = Column(Float, nullable=False)
-    sincronizado = Column(Boolean, default=False)
+    sincronizado = Column(Boolean, default=False) 
 
-class Imagen(Base):
-    __tablename__ = "imagenes"
+class Video(Base):
+    __tablename__ = "videos"
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime, default=datetime.now)
     ruta_archivo = Column(String, nullable=False)
