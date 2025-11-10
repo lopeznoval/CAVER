@@ -257,5 +257,67 @@ class IWR1443:
     def to_int16(self, v):
         v = int(v) 
         return v - 65536 if v >= 32768 else v
+    
+    # ------------------------- LÓGICA DE COLISIÓN -------------------------
+    def process_collision_logic(self, detObj, max_objects=3, stop_threshold=0.5, min_distance=0.1):
+        """
+        Filtra los N objetos más cercanos ignorando los que estén por debajo de min_distance.
+        Devuelve:
+        - radar_collision_stop: 1 si algún objeto está por debajo del umbral
+        - filtered_detObj: diccionario con solo los N objetos más cercanos válidos
+        """
+        radar_collision_stop = 0
+        filtered_detObj = {}
 
+        if detObj and detObj.get("numObj", 0) > 0:
+            # Filtrar objetos válidos (>= min_distance)
+            valid_indices = np.where(detObj["range"] >= min_distance)[0]
 
+            if len(valid_indices) > 0:
+                ranges = detObj["range"][valid_indices]
+                sorted_indices = valid_indices[np.argsort(ranges)]
+                num_to_keep = min(len(sorted_indices), max_objects)
+                closest_indices = sorted_indices[:num_to_keep]
+
+                filtered_detObj = {
+                    "numObj": num_to_keep,
+                    "range": detObj["range"][closest_indices],
+                    "x": detObj["x"][closest_indices],
+                    "y": detObj["y"][closest_indices],
+                    "z": detObj["z"][closest_indices],
+                    "peakVal": detObj["peakVal"][closest_indices]
+                }
+
+                if np.any(filtered_detObj["range"] < stop_threshold):
+                    radar_collision_stop = 1
+
+        return radar_collision_stop, filtered_detObj
+
+    # ------------------------- UPDATE -------------------------
+    def update(self, max_objects=3, stop_threshold=0.5, min_distance=0.1):
+        """
+        Lee y parsea datos del radar, procesa la lógica de colisión
+        y devuelve:
+        - dataOk: si se recibieron datos válidos
+        - radar_collision_stop: flag de colisión
+        - filtered_detObj: objetos filtrados
+        """
+        dataOk = self.read_data()
+        if not dataOk:
+            return False, 0, {}
+
+        dataOk, detObj = self.parse_packets()
+        if not dataOk:
+            return False, 0, {}
+
+        radar_collision_stop, filtered_detObj = self.process_collision_logic(
+            detObj, max_objects, stop_threshold, min_distance
+        )
+
+        # Imprime información de depuración
+        if dataOk and filtered_detObj.get("numObj", 0) > 0:
+            print(f"FLAG DE COLISIÓN: {radar_collision_stop}")
+            for i in range(filtered_detObj['numObj']):
+                print(f"  Obj {i}: X={filtered_detObj['x'][i]:.2f}, Y={filtered_detObj['y'][i]:.2f}, Z={filtered_detObj['z'][i]:.2f}, Dist={filtered_detObj['range'][i]:.2f} m")
+
+        return dataOk, radar_collision_stop, filtered_detObj

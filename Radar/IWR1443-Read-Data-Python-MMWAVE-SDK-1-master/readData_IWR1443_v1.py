@@ -219,41 +219,93 @@ def readAndParseData14xx(Dataport, configParameters):
                 tlv_xyzQFormat = 2**np.matmul(byteBuffer[idX:idX+2],word)
                 idX += 2
                 
-                # Initialize the arrays
-                rangeIdx = np.zeros(tlv_numObj,dtype = 'int16')
-                dopplerIdx = np.zeros(tlv_numObj,dtype = 'int16')
-                peakVal = np.zeros(tlv_numObj,dtype = 'int16')
-                x = np.zeros(tlv_numObj,dtype = 'int16')
-                y = np.zeros(tlv_numObj,dtype = 'int16')
-                z = np.zeros(tlv_numObj,dtype = 'int16')
+                # # Initialize the arrays
+                # rangeIdx = np.zeros(tlv_numObj,dtype = 'int16')
+                # dopplerIdx = np.zeros(tlv_numObj,dtype = 'int16')
+                # peakVal = np.zeros(tlv_numObj,dtype = 'int16')
+                # x = np.zeros(tlv_numObj,dtype = 'int16')
+                # y = np.zeros(tlv_numObj,dtype = 'int16')
+                # z = np.zeros(tlv_numObj,dtype = 'int16')
                 
+                # for objectNum in range(tlv_numObj):
+                    
+                #     # Read the data for each object
+                #     rangeIdx[objectNum] =  np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     dopplerIdx[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     peakVal[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     x[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     y[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+                #     z[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                #     idX += 2
+
+                
+
+                # # Make the necessary corrections and calculate the rest of the data
+                # rangeVal = rangeIdx * configParameters["rangeIdxToMeters"]
+                # dopplerIdx[dopplerIdx > (configParameters["numDopplerBins"]/2 - 1)] = dopplerIdx[dopplerIdx > (configParameters["numDopplerBins"]/2 - 1)] - 65535
+                # dopplerVal = dopplerIdx * configParameters["dopplerResolutionMps"]
+                # #x[x > 32767] = x[x > 32767] - 65536
+                # #y[y > 32767] = y[y > 32767] - 65536
+                # #z[z > 32767] = z[z > 32767] - 65536
+                # x = x / tlv_xyzQFormat
+                # y = y / tlv_xyzQFormat
+                # z = z / tlv_xyzQFormat
+
+                # # Aplica complemento a dos para int16
+                # rangeIdx[rangeIdx > 32767] -= 65536
+                # dopplerIdx[dopplerIdx > 32767] -= 65536
+                # peakVal[peakVal > 32767] -= 65536
+                # x[x > 32767] -= 65536
+                # y[y > 32767] -= 65536
+                # z[z > 32767] -= 65536
+
+
+                # Inicializa arrays como int32 para evitar overflow
+                rangeIdx = np.zeros(tlv_numObj, dtype='int32')
+                dopplerIdx = np.zeros(tlv_numObj, dtype='int32')
+                peakVal = np.zeros(tlv_numObj, dtype='int32')
+                x = np.zeros(tlv_numObj, dtype='int32')
+                y = np.zeros(tlv_numObj, dtype='int32')
+                z = np.zeros(tlv_numObj, dtype='int32')
+
+                # Lee los datos
                 for objectNum in range(tlv_numObj):
-                    
-                    # Read the data for each object
-                    rangeIdx[objectNum] =  np.matmul(byteBuffer[idX:idX+2],word)
+                    rangeIdx[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    dopplerIdx[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    dopplerIdx[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    peakVal[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    peakVal[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    x[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    x[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    y[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    y[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    z[objectNum] = np.matmul(byteBuffer[idX:idX+2],word)
+                    z[objectNum] = np.matmul(byteBuffer[idX:idX+2], word)
                     idX += 2
-                    
-                # Make the necessary corrections and calculate the rest of the data
-                rangeVal = rangeIdx * configParameters["rangeIdxToMeters"]
-                dopplerIdx[dopplerIdx > (configParameters["numDopplerBins"]/2 - 1)] = dopplerIdx[dopplerIdx > (configParameters["numDopplerBins"]/2 - 1)] - 65535
-                dopplerVal = dopplerIdx * configParameters["dopplerResolutionMps"]
-                #x[x > 32767] = x[x > 32767] - 65536
-                #y[y > 32767] = y[y > 32767] - 65536
-                #z[z > 32767] = z[z > 32767] - 65536
+
+                # Aplica complemento a dos
+                rangeIdx[rangeIdx > 32767] -= 65536
+                dopplerIdx[dopplerIdx > 32767] -= 65536
+                peakVal[peakVal > 32767] -= 65536
+                x[x > 32767] -= 65536
+                y[y > 32767] -= 65536
+                z[z > 32767] -= 65536
+
+                # Convierte a float usando el Q-format
                 x = x / tlv_xyzQFormat
                 y = y / tlv_xyzQFormat
                 z = z / tlv_xyzQFormat
-                
+
+                # Calcula doppler y rango
+                rangeVal = rangeIdx * configParameters["rangeIdxToMeters"]
+                dopplerVal = dopplerIdx * configParameters["dopplerResolutionMps"]
+
+
                 # Store the data in the detObj dictionary
                 detObj = {"numObj": tlv_numObj, "rangeIdx": rangeIdx, "range": rangeVal, "dopplerIdx": dopplerIdx, \
                           "doppler": dopplerVal, "peakVal": peakVal, "x": x, "y": y, "z": z}

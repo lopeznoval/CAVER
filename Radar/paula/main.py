@@ -17,18 +17,28 @@ radar.parse_config_file()
 
 print("Iniciando lectura continua...")
 
-try:
-    while True:
-        # Leer datos del puerto serie
-        if radar.read_data():
-            # Parsear los paquetes si hay datos
-            success, detections = radar.parse_packets()
-            if success:
-                print(f"Objetos detectados: {detections['numObj']}")
-                print("X:", detections['x'])
-                print("Y:", detections['y'])
-                print("Z:", detections['z'])
-        time.sleep(0.01)  # pequeña pausa para no saturar la CPU
+while True:
+    try:
+        dataOk, stop_flag, objects = radar.update(max_objects=3, stop_threshold=0.5)
+        time.sleep(0.033)
+    except KeyboardInterrupt:
+        radar.CLIport.write(('sensorStop\n').encode())
+        radar.CLIport.close()
+        radar.Dataport.close()
+        break
 
-except KeyboardInterrupt:
-    print("Detención del radar por teclado")
+# try:
+#     while True:
+#         # Leer datos del puerto serie
+#         if radar.read_data():
+#             # Parsear los paquetes si hay datos
+#             success, detections = radar.parse_packets()
+#             if success:
+#                 print(f"Objetos detectados: {detections['numObj']}")
+#                 print("X:", detections['x'])
+#                 print("Y:", detections['y'])
+#                 print("Z:", detections['z'])
+#         time.sleep(0.01)  # pequeña pausa para no saturar la CPU
+
+# except KeyboardInterrupt:
+#     print("Detención del radar por teclado")

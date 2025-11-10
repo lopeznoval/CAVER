@@ -10,6 +10,7 @@ from parameters import *
 import platform
 import base64
 import math
+import socket
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, 
@@ -402,10 +403,20 @@ class LoRaNode:
                 time.sleep(1)
 
     # -------------------- RADAR ------------------------
-    def connect_radar(self):
-        # self.CLIport = serial.Serial('COM6', 115200)
-        # self.Dataport = serial.Serial('COM7', 921600)
-        print("Connected to radar on COM6 and COM7.\n")
+    def listen_udp_radar(self):
+        UDP_IP = "0.0.0.0"  # escucha en cualquier interfaz
+        UDP_PORT = 5005
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((UDP_IP, UDP_PORT))
+        while self.running:
+            try:
+                data, addr = sock.recvfrom(1024)
+                if data.decode() == "STOP_ROBOT":
+                    print("⚠️ Alerta recibida por Ethernet, deteniendo robot")
+                    command = {"T": 1, "L": 0, "R": 0}
+                    resp = self.send_to_robot(0, 0, command)
+            except Exception as e:
+                print(f"UDP listener error: {e}")
 
     
     
@@ -415,6 +426,10 @@ class LoRaNode:
             self.connect_robot()
         # threading.Thread(target=self.periodic_send, daemon=True).start()
         threading.Thread(target=self.receive_loop, daemon=True).start()
+
+        # -------------------- RADAR --------------------
+        threading.Thread(target=self.listen_udp_radar, args=(self,), daemon=True).start()
+
         # if platform.system() != "Windows":
             # self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
         # else:
