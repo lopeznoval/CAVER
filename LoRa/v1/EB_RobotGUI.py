@@ -402,7 +402,8 @@ class EB_RobotGUI_bis(QWidget):
         right_layout.addWidget(requests_group)
 
         self.timer = QTimer()
-        self.timer.timeout.connect(self.update_requests_list)
+        if loranode is not None:
+            self.timer.timeout.connect(self.update_requests_list)
         self.timer.start(1000)
 
         # ------------------ FILA 2: Logs ------------------
