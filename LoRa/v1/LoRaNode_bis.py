@@ -232,6 +232,13 @@ class LoRaNode:
             return False
 
     # -------------------- SERIAL ROBOT --------------------
+    def swap_robot_port(self, new_port: str, new_baudrate: int):
+        if self.robot and self.robot.is_open:
+            self.robot.close()
+        self.robot_port = new_port
+        self.robot_baudrate = new_baudrate
+        self.connect_robot()
+    
     def connect_robot(self):
         try:
             self.robot = serial.Serial(self.robot_port, self.robot_baudrate, dsrdtr=None, rtscts=False)
