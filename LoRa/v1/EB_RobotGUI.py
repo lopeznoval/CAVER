@@ -8,7 +8,7 @@ import requests
 import pyqtgraph as pg
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
-    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget, QCheckBox
+    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget, QCheckBox, QRadioButton
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QAction, QPainter, QColor
@@ -273,12 +273,27 @@ class EB_RobotGUI_bis(QWidget):
         self.hum_label.setFixedSize(200, 50)
         self.hum_label.setStyleSheet("background-color: gray; border-radius: 8px;")
         sensors_layout.addWidget(self.hum_label)
+        
+        # Encender/Apagar/Modo automático del led
+        self.luz_label = QLabel("Control del LED") 
+        # Boton para enceder el led
+        self.btn_encender_led = QRadioButton("Encender LED 💡")
+        self.btn_encender_led.toggled.connect(self.control_led)
+        sensors_layout.addWidget(self.btn_encender_led)
+        # Boton para apagar el led
+        self.btn_apagar_led = QRadioButton("Apagar LED 💡")
+        self.btn_apagar_led.toggled.connect(self.control_led)
+        sensors_layout.addWidget(self.btn_apagar_led)
+        # Boton para poner el modo automático el led
+        self.btn_modoauto_led = QRadioButton("LED Modo Automático 💡")
+        self.btn_modoauto_led.toggled.connect(self.control_led)
+        sensors_layout.addWidget(self.btn_modoauto_led)
 
         # Aplicar el layout a la pestaña
         tab_sensors.setLayout(sensors_layout)
 
         # Añadir la pestaña al conjunto de tabs
-        tabs.addTab(tab_sensors, "🌡️")
+        tabs.addTab(tab_sensors, "🌡️💡")
 
         # ----------------------- TAB 7: Logs generales -----------------------
         tab_logs = QWidget()
@@ -552,13 +567,15 @@ class EB_RobotGUI_bis(QWidget):
         msg_type = 21
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
-        
         # Comandos de solicitud
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 🌡️ Solicitando datos de temperatura y humedad...")
-        
         #Solicita los datos
         self.loranode.send_message(dest, msg_type, self.msg_id, "", relay)
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: Solicitud de información ambiental")
+
+    def control_led(self):
+        # Envia una orden al nodo para controlar el LED
+        ...
 
     def start_feedback(self):
         if self.feedback_running:
