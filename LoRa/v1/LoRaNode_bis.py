@@ -209,7 +209,7 @@ class LoRaNode:
                             self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                             self.mov_aut_thread.start()
                         elif "0" in message:
-                            self.on_alert("🔴 IMU loop detenido por EB.")
+                            self.on_alert("Mmovimiento autónomo loop detenido por EB.")
                             self.mov_aut_thread.stop()
                         else: 
                             self.on_alert(f"⚠️ Comando movimiento autónomo desconocido: {message}") 
