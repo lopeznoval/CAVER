@@ -7,6 +7,7 @@ LoRa/v1/__pycache__/*
 # Ignorar archivos locales de configuración
 LoRa/v1/parameters.py
 LoRa/v1/main_bis.py
+LoRa/v1/main_bis_2.py
 
 # (Opcional) Ignorar entornos virtuales
 venv/

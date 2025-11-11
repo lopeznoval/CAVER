@@ -42,6 +42,7 @@ class LoRaNode:
         if self.is_base:
             self.lock_nodes = threading.Lock()
             self.connected_nodes = {}
+            self.node_timers = {}
 
         if platform.system() == "Linux":
             from picamera2 import PiCamera2 # type: ignore
@@ -92,7 +93,8 @@ class LoRaNode:
         while self.running:
             self.send_message(0xFFFF, 5, 0, "", 0)
             print(f"[{time.strftime('%H:%M:%S')}] PING enviado")
-            time.sleep(20) # intervalos de 20 segundos entre envío y envío
+            self.connected_nodes = {}
+            time.sleep(30) # intervalos de 30 segundos entre envío y envío
 
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
@@ -105,13 +107,17 @@ class LoRaNode:
             msg = self.node.receive_bytes()
             if not msg:
                 time.sleep(0.05)
-                continue            # salgo del loop si no hay mensaje
+                continue
+            print("hay mensaje")
+            threading.Thread(target=self.processing_loop, args=(msg,), daemon=True).start()
+
+    def processing_loop(self, msg):
             try:
                 addr_sender, addr_dest, msg_type, msg_id, relay_flag, message = self.unpack_message(msg)
             except Exception as e:
                 print(f"Error unpacking message: {e}")
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error unpacking message")
-                continue
+                return
             print(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender}: {message}")
             
             if addr_dest != self.addr and addr_dest != 0xFFFF:
@@ -122,7 +128,7 @@ class LoRaNode:
                 else:
                     self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE DESCARTA-")
                     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received message not for this node (dest: {addr_dest}), discarding.")
-                continue            
+                return            
             # -------------------- HANDLER DE TIPOS --------------------
             self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
             
@@ -140,30 +146,39 @@ class LoRaNode:
                                 "sensors": bool(int(message[2])),   
                                 "camera": bool(int(message[3]))     
                             }
-                        continue
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Nodos: {self.connected_nodes}")
+                        
+                        if addr_sender in self.node_timers:
+                            self.node_timers[addr_sender].cancel()
+                        timer = threading.Timer(40, self.remove_node, args=(addr_sender,))
+                        self.node_timers[addr_sender] = timer
+                        timer.start()
+                    return
                     
-                    with self.lock:
-                        rm = self.remove_pending(addr_sender, msg_id)
-                        if not rm:
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
-                            continue
-                    self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
-                    continue
+                    # with self.lock:
+                    #     rm = self.remove_pending(addr_sender, msg_id)
+                    #     if not rm:
+                    #         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
+                    #         return
+                    # self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
+                    # return
 
                 elif 4 < msg_type < 10:  # Comandos generales
                     if msg_type == 5:  # Ping
                         resp = ""
-                        resp += " 1" if self.robot is not None else " 0"
-                        resp += " 1" if self.radar_sock is not None else " 0"
-                        resp += " 1" if self.sensores is not None else " 0"
-                        resp += " 1" if self.camera is not None else " 0"
-
+                        resp += "1" if self.robot is not None else "0"
+                        resp += "1" if self.radar_sock is not None else "0"
+                        resp += "1" if self.sensores is not None else "0"
+                        resp += "1" if self.camera is not None else "0"
+                        time.sleep(0.2*self.addr)  # evitar colisiones
                         self.send_message(addr_sender, 2, msg_id, resp)
                     elif msg_type == 6:  # Status
                         status = f"Node {self.addr} OK. Freq: {self.freq} MHz, Power: {self.power} dBm"
+                        time.sleep(0.2*self.addr)  # evitar colisiones
                         self.send_message(addr_sender, 2, msg_id, status)
                     elif msg_type == 7:  # Stop
                         resp = "Node stopping..."
+                        time.sleep(0.2*self.addr)  # evitar colisiones
                         self.send_message(addr_sender, 2, msg_id, resp)
                         self.stop()
                     elif msg_type == 8: # Check RSSI
@@ -248,6 +263,13 @@ class LoRaNode:
                     pass  
             self.on_alert(f"[{time.strftime('%H:%M:%S')}] Unavailable pending request: {msg_id} to {addr_dest}")
             return False
+        
+    def remove_node(self, addr_sender):
+        with self.lock_nodes:
+            if addr_sender in self.connected_nodes:
+                del self.connected_nodes[addr_sender]
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Nodo {addr_sender} eliminado por timeout.")
+
 
     # -------------------- SERIAL ROBOT --------------------
     def swap_robot_port(self, new_port: str, new_baudrate: int):
@@ -452,7 +474,7 @@ class LoRaNode:
         receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
 
         # -------------------- RADAR --------------------
-        radar_th = threading.Thread(target=self.listen_udp_radar, args=(self,), daemon=True).start()
+        radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
 
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()

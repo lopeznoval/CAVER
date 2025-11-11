@@ -51,10 +51,12 @@ class RobotStatusCard(QFrame):
         self.robot_status = StatusIndicator()
         self.radar_status = StatusIndicator()
         self.sensor_status = StatusIndicator()
+        self.camera_status = StatusIndicator()
 
         self.add_status(layout, "Robot conectado", self.robot_status)
         self.add_status(layout, "Radar conectado", self.radar_status)
         self.add_status(layout, "Sensores conectados", self.sensor_status)
+        self.add_status(layout, "Cámara conectada", self.camera_status)
 
         layout.addStretch()
 
@@ -65,10 +67,11 @@ class RobotStatusCard(QFrame):
         h.addWidget(indicator)
         layout.addLayout(h)
 
-    def update_status(self, connected=False, radar=False, sensors=False):
-        self.robot_status.set_active(connected)
+    def update_status(self, robot=False, radar=False, sensors=False, camera=False):
+        self.robot_status.set_active(robot)
         self.radar_status.set_active(radar)
         self.sensor_status.set_active(sensors)
+        self.camera_status.set_active(camera)
 
 
 class RobotsPanel(QWidget):
@@ -80,9 +83,9 @@ class RobotsPanel(QWidget):
         self.layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         self.robots = {}
 
-    def add_or_update_robot(self, robot_id, connected, radar, sensors):
-        if robot_id not in self.robots:
-            card = RobotStatusCard(robot_id)
+    def add_or_update_robot(self, node_id, robot, radar, sensors, camera):
+        if node_id not in self.robots:
+            card = RobotStatusCard(node_id)
             self.layout.addWidget(card)
-            self.robots[robot_id] = card
-        self.robots[robot_id].update_status(connected, radar, sensors)
+            self.robots[node_id] = card
+        self.robots[node_id].update_status(robot, radar, sensors, camera)

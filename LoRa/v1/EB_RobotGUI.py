@@ -414,11 +414,13 @@ class EB_RobotGUI_bis(QWidget):
 
         # === Nodos Conectados ===
         self.panel = RobotsPanel()
-        if loranode is not None:
-            self.timer.timeout.connect(lambda: self.refresh_connected_robots(self.panel))
-        self.timer.start(1000)
+
+        if self.loranode is not None:
+            self.timer.timeout.connect(self.refresh_connected_robots)
+            self.timer.start(1000)
 
         tabs_config.addTab(self.panel, "Nodos Conectados")
+
 
 
         right_layout.addWidget(tabs_config)
@@ -751,11 +753,14 @@ class EB_RobotGUI_bis(QWidget):
     #         self.layout.addWidget(card)
     #         self.robots[robot_id] = card
     #     self.robots[robot_id].update_status(connected, radar, sensors)
-    def refresh_connected_robots(self, panel: RobotsPanel):
+
+    def refresh_connected_robots(self):
         for node_id, info in self.loranode.connected_nodes.items():
-            panel.add_or_update_robot(
+            self.panel.add_or_update_robot(
                 node_id,
-                info["connected"],
+                info["robot"],
                 info["radar"],
-                info["sensors"]
+                info["sensors"],
+                info["camera"]
             )
+
