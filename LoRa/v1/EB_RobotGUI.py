@@ -7,7 +7,8 @@ import time
 import requests
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
-    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget, QCheckBox, QRadioButton
+    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
+    QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QAction, QPainter, QColor
@@ -275,19 +276,42 @@ class EB_RobotGUI_bis(QWidget):
         sensors_layout.addWidget(self.hum_label)
         
         # Encender/Apagar/Modo automático del led
-        self.luz_label = QLabel("Control del LED") 
+        self.luz_label = QLabel("Control del LED")
+        LED_group = QButtonGroup(self)
+        # self.luz_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # sensors_layout.addWidget(self.luz_label) 
+        # Estilo común para los botones de control del LED
+        led_button_style = """
+            QRadioButton {
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px;
+            }
+            QRadioButton::indicator {
+                width: 20px;
+                height: 20px;
+            }
+        """
         # Boton para enceder el led
         self.btn_encender_led = QRadioButton("Encender LED 💡")
-        self.btn_encender_led.toggled.connect(self.control_led)
+        self.btn_encender_led.setStyleSheet(led_button_style)
+        #self.btn_encender_led.toggled.connect(self.control_led)
+        LED_group.addButton(self.btn_encender_led)
         sensors_layout.addWidget(self.btn_encender_led)
         # Boton para apagar el led
         self.btn_apagar_led = QRadioButton("Apagar LED 💡")
-        self.btn_apagar_led.toggled.connect(self.control_led)
+        self.btn_apagar_led.setStyleSheet(led_button_style)
+        #self.btn_apagar_led.toggled.connect(self.control_led)
+        LED_group.addButton(self.btn_apagar_led)
         sensors_layout.addWidget(self.btn_apagar_led)
         # Boton para poner el modo automático el led
         self.btn_modoauto_led = QRadioButton("LED Modo Automático 💡")
-        self.btn_modoauto_led.toggled.connect(self.control_led)
+        self.btn_modoauto_led.setStyleSheet(led_button_style)
+        #self.btn_modoauto_led.toggled.connect(self.control_led)
+        LED_group.addButton(self.btn_modoauto_led)
         sensors_layout.addWidget(self.btn_modoauto_led)
+        LED_group.buttonClicked.connect(self.control_led)
 
         # Aplicar el layout a la pestaña
         tab_sensors.setLayout(sensors_layout)
@@ -321,7 +345,7 @@ class EB_RobotGUI_bis(QWidget):
         self.btn_stop_mov_aut.clicked.connect(self._stop_mov_auto)
         buttons_mov_auto_layout.addWidget(self.btn_stop_mov_aut)
         tabs.addTab(tab_radar, "📝")
-
+        
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
 
