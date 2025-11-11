@@ -32,24 +32,30 @@ class LoRaNode:
         self.robot_port = robot_port
         self.robot_baudrate = robot_baudrate
         self.response_queue = queue.Queue()
+        
+        self.sensores = None
+        self.last_temp = None
+        self.last_hum = None
+
+        self.radar_sock = None
+
+        if self.is_base:
+            self.lock_nodes = threading.Lock()
+            self.connected_nodes = {}
+
+        if platform.system() == "Linux":
+            from picamera2 import PiCamera2 # type: ignore
+            self.camera = PiCamera2()
+            self.stream = io.BytesIO()
+        else:
+            self.camera = None
+            self.stream = None
 
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
         self.on_bytes = lambda data: print(f"📦 [BYTES] {data}")
         self.on_position = lambda pos: print(f"{pos}")
         self.on_sensor = lambda sensor: print(f"{sensor}")
-        
-        # Variables de los sensores
-        self.last_temp = None
-        self.last_hum = None
-
-        # if platform.system() == "Linux":
-        #     from picamera2 import PiCamera2 # type: ignore
-        #     self.camera = PiCamera2()
-        #     self.stream = io.BytesIO()
-        # else:
-        #     self.camera = None
-        #     self.stream = None
 
     # -------------------- MENSAJES --------------------
     def pack_message(self, addr_dest:int, msg_type: int, msg_id: int, message: str, relay_flag: int =0) -> bytes:
@@ -82,20 +88,16 @@ class LoRaNode:
         return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message
 
     # -------------------- HILOS --------------------
-    # def periodic_send(self, node_address: int = 0xFFFF, msg_type: int = TYPE_MSG, msg_id: int = ID_MSG):
-    #     count = 0
-    #     while self.running:
-    #         msg = f"Auto-message #{count} from {self.addr}"
-    #         data = self.pack_message(node_address, msg_type, msg_id, msg)
-    #         self.node.send_bytes(data)
-    #         print(f"[{time.strftime('%H:%M:%S')}] Sent: {msg}, con data: {data}")
-    #         count += 1
-    #         time.sleep(6) # intervalos de 6 segundos entre envío y envío
+    def periodic_status(self):
+        while self.running:
+            self.send_message(0xFFFF, 5, 0, "", 0)
+            print(f"[{time.strftime('%H:%M:%S')}] PING enviado")
+            time.sleep(20) # intervalos de 20 segundos entre envío y envío
 
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
         self.node.send_bytes(data)
-        if self.is_base:
+        if self.is_base and addr_dest != 0xFFFF:
             self.add_pending(addr_dest, msg_id)
 
     def receive_loop(self):
@@ -130,6 +132,16 @@ class LoRaNode:
                         self.imu_pos(message)
 
                 elif 1 < msg_type < 5:  # Respuesta
+                    if msg_type == 2:  # Respuesta estándar
+                        with self.lock_nodes:
+                            self.connected_nodes[addr_sender] = {
+                                "robot": bool(int(message[0])),      
+                                "radar": bool(int(message[1])),      
+                                "sensors": bool(int(message[2])),   
+                                "camera": bool(int(message[3]))     
+                            }
+                        continue
+                    
                     with self.lock:
                         rm = self.remove_pending(addr_sender, msg_id)
                         if not rm:
@@ -140,18 +152,23 @@ class LoRaNode:
 
                 elif 4 < msg_type < 10:  # Comandos generales
                     if msg_type == 5:  # Ping
-                        resp = "PONG"
+                        resp = ""
+                        resp += " 1" if self.robot is not None else " 0"
+                        resp += " 1" if self.radar_sock is not None else " 0"
+                        resp += " 1" if self.sensores is not None else " 0"
+                        resp += " 1" if self.camera is not None else " 0"
+
                         self.send_message(addr_sender, 2, msg_id, resp)
                     elif msg_type == 6:  # Status
                         status = f"Node {self.addr} OK. Freq: {self.freq} MHz, Power: {self.power} dBm"
                         self.send_message(addr_sender, 2, msg_id, status)
                     elif msg_type == 7:  # Stop
-                        self.stop()
                         resp = "Node stopping..."
                         self.send_message(addr_sender, 2, msg_id, resp)
-                    elif msg_type == 8: # Relay mode activation
-                        self.send_message(addr_sender, 2, msg_id, str(self.is_relay))
-                    elif msg_type == 9: # Check RSSI
+                        self.stop()
+                    elif msg_type == 8: # Check RSSI
+                        ...
+                    elif msg_type == 9: 
                         ...
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
@@ -174,7 +191,7 @@ class LoRaNode:
                             self.on_alert(f"⚠️ Comando IMU desconocido: {payload}") 
                     
                     if self.robot.is_open and self.robot:
-                        resp = self.send_to_robot(addr_dest, msg_id, message)
+                        resp = self.send_to_robot(message)
                         self.send_message(addr_sender, 3, msg_id, resp)
                     else:
                         self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
@@ -233,6 +250,13 @@ class LoRaNode:
             return False
 
     # -------------------- SERIAL ROBOT --------------------
+    def swap_robot_port(self, new_port: str, new_baudrate: int):
+        if self.robot and self.robot.is_open:
+            self.robot.close()
+        self.robot_port = new_port
+        self.robot_baudrate = new_baudrate
+        self.connect_robot()
+    
     def connect_robot(self):
         try:
             self.robot = serial.Serial(self.robot_port, self.robot_baudrate, dsrdtr=None, rtscts=False)
@@ -258,7 +282,7 @@ class LoRaNode:
                     print(f"Error reading: {e}")
 
 
-    def send_to_robot(self, addres_dest, msg_id, command: str) -> str:
+    def send_to_robot(self, command: str) -> str:
         """Envía un comando al robot y devuelve la respuesta."""
         if self.running and self.robot and self.robot.is_open:
             self.robot.reset_input_buffer()
@@ -275,7 +299,7 @@ class LoRaNode:
     def _get_imu_loop_raspi(self): # IMU
         while not getattr(self, "stop_imu_flag", False):
             try:
-                imu_data = self.send_to_robot(0, 0, "{\"T\":126}")
+                imu_data = self.send_to_robot("{\"T\":126}")
                 if imu_data:
                     self.send_message(self.imu_dest, 0, 63, imu_data)
                 time.sleep(10)
@@ -406,15 +430,15 @@ class LoRaNode:
     def listen_udp_radar(self):
         UDP_IP = "0.0.0.0"  # escucha en cualquier interfaz
         UDP_PORT = 5005
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind((UDP_IP, UDP_PORT))
+        self.radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.radar_sock.bind((UDP_IP, UDP_PORT))
         while self.running:
             try:
-                data, addr = sock.recvfrom(1024)
+                data, addr = self.radar_sock.recvfrom(1024)
                 if data.decode() == "STOP_ROBOT":
                     print("⚠️ Alerta recibida por Ethernet, deteniendo robot")
                     command = {"T": 1, "L": 0, "R": 0}
-                    resp = self.send_to_robot(0, 0, command)
+                    resp = self.send_to_robot(command)
             except Exception as e:
                 print(f"UDP listener error: {e}")
 
@@ -425,10 +449,13 @@ class LoRaNode:
         if self.robot_port and self.robot_baudrate:
             self.connect_robot()
         # threading.Thread(target=self.periodic_send, daemon=True).start()
-        threading.Thread(target=self.receive_loop, daemon=True).start()
+        receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
 
         # -------------------- RADAR --------------------
-        threading.Thread(target=self.listen_udp_radar, args=(self,), daemon=True).start()
+        radar_th = threading.Thread(target=self.listen_udp_radar, args=(self,), daemon=True).start()
+
+        if self.is_base:
+            status_th = threading.Thread(target=self.periodic_status, daemon=True).start()
 
         # if platform.system() != "Windows":
             # self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)

@@ -10,9 +10,11 @@ from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget, QCheckBox
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
+from PyQt6.QtGui import QAction, QPainter, QColor
 from LoRaNode_bis import LoRaNode
+
+from aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
 
 
 
@@ -86,7 +88,7 @@ class EB_RobotGUI_bis(QWidget):
             move_layout.addWidget(btn, r, c)
 
         tab_move.setLayout(move_layout)
-        tabs.addTab(tab_move, "🕹️ Movimiento")
+        tabs.addTab(tab_move, "🕹️")
 
         # # === Layout principal vertical ===
         # mv_layout = QVBoxLayout()
@@ -164,7 +166,7 @@ class EB_RobotGUI_bis(QWidget):
         oled_layout.addWidget(self.btn_reset_oled, 3, 0, 1, 2)
 
         tab_oled.setLayout(oled_layout)
-        tabs.addTab(tab_oled, "🖥️ OLED")
+        tabs.addTab(tab_oled, "🖥️")
 
         # ------------------ TAB 3: Comandos ------------------
         tab_cmd = QWidget()
@@ -188,13 +190,13 @@ class EB_RobotGUI_bis(QWidget):
         cmd_layout.addWidget(self.btn_stop_feedback, 1, 1)
 
         tab_cmd.setLayout(cmd_layout)
-        tabs.addTab(tab_cmd, "⚙️ Comandos")
+        tabs.addTab(tab_cmd, "⚙️")
 
         # ----------------------- TAB 4: Imagen -----------------------
         tab_video = QWidget()
         video_layout = QVBoxLayout()
 
-        self.btn_take_photo = QPushButton("Tomar Foto 📸")
+        self.btn_take_photo = QPushButton("Capturar foto 📸")
         self.btn_take_photo.clicked.connect(self.take_photo)
         video_layout.addWidget(self.btn_take_photo)
 
@@ -205,24 +207,9 @@ class EB_RobotGUI_bis(QWidget):
         video_layout.addWidget(self.photo_label)
 
         tab_video.setLayout(video_layout)
-        tabs.addTab(tab_video, "📹 Video")
-
-        # ----------------------- TAB 5: Logs generales -----------------------
-        tab_logs = QWidget()
-        logs_layout = QVBoxLayout()
-
-        # QTextEdit para mostrar todos los logs del nodo
-        self.general_logs = QTextEdit()
-        self.general_logs.setReadOnly(True)
-        self.general_logs.setPlaceholderText("Aquí se mostrará todo lo que sucede en el nodo...")
-
-        logs_layout.addWidget(self.general_logs)
-        tab_logs.setLayout(logs_layout)
-
-        # Añadir el tab al QTabWidget
-        tabs.addTab(tab_logs, "📝 Logs")
+        tabs.addTab(tab_video, "📹")
     
-        # ------------------ TAB 6: Posición ------------------
+        # ------------------ TAB 5: Posición ------------------
         tab_position = QWidget()
         pos_layout = QVBoxLayout()
         buttons_imu_layout = QHBoxLayout()
@@ -259,14 +246,14 @@ class EB_RobotGUI_bis(QWidget):
         pos_layout.addWidget(self.plot_widget)
 
         tab_position.setLayout(pos_layout)
-        tabs.addTab(tab_position, "📍 Posición")
+        tabs.addTab(tab_position, "📍")
 
         # Timer para actualizar el gráfico cada 100 ms
         self.plot_timer = QTimer()
         self.plot_timer.timeout.connect(self.update_position_plot)
         self.plot_timer.start(100)
         
-        # ----------------------- TAB 7: Tomar datos de los sensores -----------------------
+        # ----------------------- TAB 6: Tomar datos de los sensores -----------------------
         tab_sensors = QWidget()
         sensors_layout = QVBoxLayout()
         
@@ -291,7 +278,22 @@ class EB_RobotGUI_bis(QWidget):
         tab_sensors.setLayout(sensors_layout)
 
         # Añadir la pestaña al conjunto de tabs
-        tabs.addTab(tab_sensors, "🌡️ Sensores")
+        tabs.addTab(tab_sensors, "🌡️")
+
+        # ----------------------- TAB 7: Logs generales -----------------------
+        tab_logs = QWidget()
+        logs_layout = QVBoxLayout()
+
+        # QTextEdit para mostrar todos los logs del nodo
+        self.general_logs = QTextEdit()
+        self.general_logs.setReadOnly(True)
+        self.general_logs.setPlaceholderText("Aquí se mostrará todo lo que sucede en el nodo...")
+
+        logs_layout.addWidget(self.general_logs)
+        tab_logs.setLayout(logs_layout)
+
+        # Añadir el tab al QTabWidget
+        tabs.addTab(tab_logs, "📝")
 
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
@@ -302,6 +304,8 @@ class EB_RobotGUI_bis(QWidget):
 
         # ------------------ FILA 1: Comandos LoRa & Lista de Reports ------------------
         # === Comandos LoRa ===
+        tabs_config = QTabWidget()
+        lora_widget = QWidget()
         lora_group = QGroupBox("📤 Configuración del comando")
         lora_layout = QGridLayout()
 
@@ -383,27 +387,42 @@ class EB_RobotGUI_bis(QWidget):
         lora_layout.addWidget(self.relay_combo, 0, 7)
         
         lora_group.setLayout(lora_layout)
-        right_layout.addWidget(lora_group, 1)
+        # right_layout.addWidget(lora_group, 1)
                 
         self.btn_send_cmd = QPushButton("Enviar Comando")
         self.btn_send_cmd.clicked.connect(self.send_cmd)
         lora_layout.addWidget(self.btn_send_cmd, 1, 0, 1, 8)  # Botón ocupa toda la fila
 
+        lora_widget.setLayout(lora_layout)
+        tabs_config.addTab(lora_widget, "Configuración LoRa")
+
         # === Lista de pending_requests ===
-        requests_group = QGroupBox("📋 Peticiones pendientes")
+        requests_group = QGroupBox("📋")
         requests_layout = QVBoxLayout()
 
         self.requests_list = QListWidget()
         requests_layout.addWidget(self.requests_list)
 
         requests_group.setLayout(requests_layout)
-        right_layout.addWidget(requests_group)
+        tabs_config.addTab(requests_group, "Peticiones Pendientes")
+        
 
         self.timer = QTimer()
         if loranode is not None:
             self.timer.timeout.connect(self.update_requests_list)
         self.timer.start(1000)
 
+        # === Nodos Conectados ===
+        self.panel = RobotsPanel()
+        if loranode is not None:
+            self.timer.timeout.connect(lambda: self.refresh_connected_robots(self.panel))
+        self.timer.start(1000)
+
+        tabs_config.addTab(self.panel, "Nodos Conectados")
+
+
+        right_layout.addWidget(tabs_config)
+        
         # ------------------ FILA 2: Logs ------------------
         logs_layout = QHBoxLayout()  # Divide en dos columnas
 
@@ -711,3 +730,32 @@ class EB_RobotGUI_bis(QWidget):
 
         except Exception as e:
             self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error procesando datos del sensor: {e}")
+
+
+# -------------------- Estados de Nodos Conectados ----------------------
+    # def add_status(self, layout, label_text, indicator):
+    #     h = QHBoxLayout()
+    #     h.addWidget(QLabel(label_text))
+    #     h.addStretch()
+    #     h.addWidget(indicator)
+    #     layout.addLayout(h)
+
+    # def update_status(self, connected=False, radar=False, sensors=False):
+    #     self.robot_status.set_active(connected)
+    #     self.radar_status.set_active(radar)
+    #     self.sensor_status.set_active(sensors)
+
+    # def add_or_update_robot(self, robot_id, connected, radar, sensors):
+    #     if robot_id not in self.robots:
+    #         card = RobotStatusCard(robot_id)
+    #         self.layout.addWidget(card)
+    #         self.robots[robot_id] = card
+    #     self.robots[robot_id].update_status(connected, radar, sensors)
+    def refresh_connected_robots(self, panel: RobotsPanel):
+        for node_id, info in self.loranode.connected_nodes.items():
+            panel.add_or_update_robot(
+                node_id,
+                info["connected"],
+                info["radar"],
+                info["sensors"]
+            )
