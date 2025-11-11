@@ -5,10 +5,10 @@ import json
 import threading
 import time
 import requests
-import pyqtgraph as pg
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
-    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget, QCheckBox
+    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
+    QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QAction, QPainter, QColor
@@ -234,6 +234,7 @@ class EB_RobotGUI_bis(QWidget):
         pos_layout.addWidget(self.btn_reset_position)
 
         # --- Plot de trayectoria (usando pyqtgraph) ---
+        import pyqtgraph as pg
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground('w')
         self.plot_widget.setTitle("Trayectoria estimada del robot", color='b', size='12pt')
@@ -273,12 +274,50 @@ class EB_RobotGUI_bis(QWidget):
         self.hum_label.setFixedSize(200, 50)
         self.hum_label.setStyleSheet("background-color: gray; border-radius: 8px;")
         sensors_layout.addWidget(self.hum_label)
+        
+        # Encender/Apagar/Modo automático del led
+        self.luz_label = QLabel("Control del LED")
+        LED_group = QButtonGroup(self)
+        # self.luz_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # sensors_layout.addWidget(self.luz_label) 
+        # Estilo común para los botones de control del LED
+        led_button_style = """
+            QRadioButton {
+                color: white;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 10px;
+            }
+            QRadioButton::indicator {
+                width: 20px;
+                height: 20px;
+            }
+        """
+        # Boton para enceder el led
+        self.btn_encender_led = QRadioButton("Encender LED 💡")
+        self.btn_encender_led.setStyleSheet(led_button_style)
+        #self.btn_encender_led.toggled.connect(self.control_led)
+        LED_group.addButton(self.btn_encender_led)
+        sensors_layout.addWidget(self.btn_encender_led)
+        # Boton para apagar el led
+        self.btn_apagar_led = QRadioButton("Apagar LED 💡")
+        self.btn_apagar_led.setStyleSheet(led_button_style)
+        #self.btn_apagar_led.toggled.connect(self.control_led)
+        LED_group.addButton(self.btn_apagar_led)
+        sensors_layout.addWidget(self.btn_apagar_led)
+        # Boton para poner el modo automático el led
+        self.btn_modoauto_led = QRadioButton("LED Modo Automático 💡")
+        self.btn_modoauto_led.setStyleSheet(led_button_style)
+        #self.btn_modoauto_led.toggled.connect(self.control_led)
+        LED_group.addButton(self.btn_modoauto_led)
+        sensors_layout.addWidget(self.btn_modoauto_led)
+        LED_group.buttonClicked.connect(self.control_led)
 
         # Aplicar el layout a la pestaña
         tab_sensors.setLayout(sensors_layout)
 
         # Añadir la pestaña al conjunto de tabs
-        tabs.addTab(tab_sensors, "🌡️")
+        tabs.addTab(tab_sensors, "🌡️💡")
 
         # ----------------------- TAB 7: Logs generales -----------------------
         tab_logs = QWidget()
@@ -295,6 +334,18 @@ class EB_RobotGUI_bis(QWidget):
         # Añadir el tab al QTabWidget
         tabs.addTab(tab_logs, "📝")
 
+        # ------------------ TAB 8: Movimiento automático ------------------
+        tab_radar = QWidget()
+        buttons_mov_auto_layout = QHBoxLayout()
+
+        self.btn_start_mov_aut = QPushButton("▶️ Comenzar movimiento automático")
+        self.btn_start_mov_aut.clicked.connect(self._start_mov_auto)
+        buttons_mov_auto_layout.addWidget(self.btn_start_mov_aut)
+        self.btn_stop_mov_aut = QPushButton("⏹️ Parar movimiento autónomo")
+        self.btn_stop_mov_aut.clicked.connect(self._stop_mov_auto)
+        buttons_mov_auto_layout.addWidget(self.btn_stop_mov_aut)
+        tabs.addTab(tab_radar, "📝")
+        
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
 
@@ -344,7 +395,7 @@ class EB_RobotGUI_bis(QWidget):
                 11: "Movimiento",
                 12: "Oled",
                 13: "IMU",
-                14: "",
+                14: "Movimiento autónomo",
                 15: "",
                 19: ""
             },
@@ -552,13 +603,15 @@ class EB_RobotGUI_bis(QWidget):
         msg_type = 21
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
-        
         # Comandos de solicitud
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 🌡️ Solicitando datos de temperatura y humedad...")
-        
         #Solicita los datos
         self.loranode.send_message(dest, msg_type, self.msg_id, "", relay)
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: Solicitud de información ambiental")
+
+    def control_led(self):
+        # Envia una orden al nodo para controlar el LED
+        ...
 
     def start_feedback(self):
         if self.feedback_running:
@@ -603,8 +656,20 @@ class EB_RobotGUI_bis(QWidget):
     def _stop_imu(self):
         """Envía al robot la orden de detener el envío de datos IMU."""        
         self.imu_active = False
-        self.selected_type = 13  # 🔹 Tipo de mensaje para parar
+        self.selected_type = 13  
         self.append_general_log("🛰️ Enviando comando: Detener IMU")
+        self.send_cmd("0")
+
+    def _start_mov_auto(self):
+        """Envía al robot la orden de comenzar el movimiento autónomo."""
+        self.selected_type = 14
+        self.append_general_log("🛰️ Enviando comando: Comenzar  movimiento autónomo")
+        self.send_cmd("1")
+
+    def _stop_mov_auto(self):
+        """Envía al robot la orden de detener el movimiento autónomo."""        
+        self.selected_type = 14  
+        self.append_general_log("🛰️ Enviando comando: Detener movimiento autónomo")
         self.send_cmd("0")
 
     def _append_output(self, text):
