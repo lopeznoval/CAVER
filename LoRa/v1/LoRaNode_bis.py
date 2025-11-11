@@ -237,17 +237,17 @@ class LoRaNode:
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 30:  # Tomar foto
                             img_b64 = self.stream_recording()
-                            data = self.pack_message(addr_sender, 31, msg_id, img_b64)
-                            self.node.send_bytes(data)
+                            self.send_message(addr_sender, 31, msg_id, img_b64)
                             print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
                     self.is_relay = bool(relay_flag)
-                    self.node.send_bytes(self.pack_message(addr_sender, 1, msg_id, "OK")) 
+                    self.send_message(addr_sender, 5, msg_id, "OK")
 
             except Exception as e:
                 self.on_alert(f"Error processing message: {e}")
+                self.send_message(addr_sender, 1, msg_id, "Error")
 
             finally:
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Finished processing message.")
