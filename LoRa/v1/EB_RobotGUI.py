@@ -334,6 +334,18 @@ class EB_RobotGUI_bis(QWidget):
         # Añadir el tab al QTabWidget
         tabs.addTab(tab_logs, "📝")
 
+        # ------------------ TAB 8: Movimiento automático ------------------
+        tab_radar = QWidget()
+        buttons_mov_auto_layout = QHBoxLayout()
+
+        self.btn_start_mov_aut = QPushButton("▶️ Comenzar movimiento automático")
+        self.btn_start_mov_aut.clicked.connect(self._start_mov_auto)
+        buttons_mov_auto_layout.addWidget(self.btn_start_mov_aut)
+        self.btn_stop_mov_aut = QPushButton("⏹️ Parar movimiento autónomo")
+        self.btn_stop_mov_aut.clicked.connect(self._stop_mov_auto)
+        buttons_mov_auto_layout.addWidget(self.btn_stop_mov_aut)
+        tabs.addTab(tab_radar, "📝")
+        
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
 
@@ -383,7 +395,7 @@ class EB_RobotGUI_bis(QWidget):
                 11: "Movimiento",
                 12: "Oled",
                 13: "IMU",
-                14: "",
+                14: "Movimiento autónomo",
                 15: "",
                 19: ""
             },
@@ -644,8 +656,20 @@ class EB_RobotGUI_bis(QWidget):
     def _stop_imu(self):
         """Envía al robot la orden de detener el envío de datos IMU."""        
         self.imu_active = False
-        self.selected_type = 13  # 🔹 Tipo de mensaje para parar
+        self.selected_type = 13  
         self.append_general_log("🛰️ Enviando comando: Detener IMU")
+        self.send_cmd("0")
+
+    def _start_mov_auto(self):
+        """Envía al robot la orden de comenzar el movimiento autónomo."""
+        self.selected_type = 14
+        self.append_general_log("🛰️ Enviando comando: Comenzar  movimiento autónomo")
+        self.send_cmd("1")
+
+    def _stop_mov_auto(self):
+        """Envía al robot la orden de detener el movimiento autónomo."""        
+        self.selected_type = 14  
+        self.append_general_log("🛰️ Enviando comando: Detener movimiento autónomo")
         self.send_cmd("0")
 
     def _append_output(self, text):
