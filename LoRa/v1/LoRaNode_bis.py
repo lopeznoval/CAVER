@@ -404,7 +404,7 @@ class LoRaNode:
 
     # -------------------- RADAR ------------------------
     def listen_udp_radar(self):
-        UDP_IP = "0.0.0.0"  # escucha en cualquier interfaz
+        UDP_IP = "192.168.1.10"  # escucha en cualquier interfaz
         UDP_PORT = 5005
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind((UDP_IP, UDP_PORT))
@@ -413,7 +413,7 @@ class LoRaNode:
                 data, addr = sock.recvfrom(1024)
                 if data.decode() == "STOP_ROBOT":
                     print("⚠️ Alerta recibida por Ethernet, deteniendo robot")
-                    command = {"T": 1, "L": 0, "R": 0}
+                    command = "{\"T\": 1, \"L\": 0, \"R\": 0}"
                     resp = self.send_to_robot(0, 0, command)
             except Exception as e:
                 print(f"UDP listener error: {e}")
@@ -428,7 +428,7 @@ class LoRaNode:
         threading.Thread(target=self.receive_loop, daemon=True).start()
 
         # -------------------- RADAR --------------------
-        threading.Thread(target=self.listen_udp_radar, args=(self,), daemon=True).start()
+        threading.Thread(target=self.listen_udp_radar, daemon=True).start()
 
         # if platform.system() != "Windows":
             # self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
