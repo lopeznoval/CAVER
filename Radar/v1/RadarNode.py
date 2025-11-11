@@ -5,7 +5,7 @@ from iwr1443 import IWR1443
 # --- Configuración Radar ---
 cli_port = '/dev/ttyACM0'
 data_port = '/dev/ttyACM1'
-config_file = '/home/pi/1443config.cfg'
+config_file = '/home/masterpi1/Desktop/CAVER/Radar/v1/1443config.cfg'
 
 radar = IWR1443(
     cli_port_name=cli_port,
@@ -17,7 +17,7 @@ radar.serial_config()
 radar.parse_config_file()
 
 # --- Configuración UDP para enviar alertas ---
-UDP_IP = "192.168.1.100"  # IP de la Pi con LoRaNode
+UDP_IP = "192.168.1.10"  # IP de la Pi con LoRaNode
 UDP_PORT = 5005
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -42,4 +42,8 @@ while True:
         radar.CLIport.write(('sensorStop\n').encode())
         radar.CLIport.close()
         radar.Dataport.close()
+        sock.close()
         break
+
+
+
