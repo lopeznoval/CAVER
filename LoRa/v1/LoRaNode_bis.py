@@ -493,6 +493,10 @@ class LoRaNode:
                     print("⚠️ Alerta recibida por Ethernet, deteniendo robot")
                     # command = "{\"T\": 1, \"L\": 0, \"R\": 0}"
                     # resp = self.send_to_robot(0, 0, command)
+                elif data.decode() == "START_ROBOT":
+                    self.colision = 0
+                    print("⚠️ Alerta recibida por Ethernet, moviendo robot")
+
             except Exception as e:
                 print(f"UDP listener error: {e}")
 

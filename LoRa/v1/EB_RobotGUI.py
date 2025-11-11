@@ -320,7 +320,9 @@ class EB_RobotGUI_bis(QWidget):
         self.btn_stop_mov_aut = QPushButton("⏹️ Parar movimiento autónomo")
         self.btn_stop_mov_aut.clicked.connect(self._stop_mov_auto)
         buttons_mov_auto_layout.addWidget(self.btn_stop_mov_aut)
-        tabs.addTab(tab_radar, "📝")
+
+        tab_radar.setLayout(buttons_mov_auto_layout)
+        tabs.addTab(tab_radar, "Radar")
 
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
