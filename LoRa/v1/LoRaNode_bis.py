@@ -156,8 +156,7 @@ class LoRaNode:
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
                     if msg_type == 13: # pedir o parar datos imu
-                        payload = message #.decode("utf-8").strip().lower()
-                        if "1" in payload:
+                        if "1" in message:
                             print("llego el 1 para empezar")
                             if getattr(self, "imu_thread", None) and self.imu_thread.is_alive():
                                 self.on_alert("⚠️ IMU loop ya estaba activo.")
@@ -167,12 +166,23 @@ class LoRaNode:
                                 self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
                                 self.imu_thread.start()
                                 self.on_alert("🟢 IMU loop activado por EB.")
-                        elif "0" in payload:
+                        elif "0" in message:
                             self.stop_imu_flag = True
                             self.on_alert("🔴 IMU loop detenido por EB.")
                         else:
-                            self.on_alert(f"⚠️ Comando IMU desconocido: {payload}") 
+                            self.on_alert(f"⚠️ Comando IMU desconocido: {message}") 
                     
+                    if msg_type == 14:
+                        if "1" in message:
+                            self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
+                            self.mov_aut_thread.start()
+                        elif "0" in message:
+                            self.on_alert("🔴 IMU loop detenido por EB.")
+                            self.mov_aut_thread.stop()
+                        else: 
+                            self.on_alert(f"⚠️ Comando movimiento autónomo desconocido: {message}") 
+
+
                     if self.robot.is_open and self.robot:
                         resp = self.send_to_robot(addr_dest, msg_id, message)
                         self.send_message(addr_sender, 3, msg_id, resp)
@@ -285,7 +295,28 @@ class LoRaNode:
                 time.sleep(2)
         self.on_alert("IMU loop finalizado.")
     
-            
+    def _move_robot_loop(self): # Movimiento autonomo
+        while True:
+            try:
+                commands = {
+                    "forward": {"T": 1, "L": 0.5, "R": 0.5},
+                        "backward": {"T": 1, "L": -0.5, "R": -0.5},
+                        "left": {"T": 1, "L": -0.3, "R": 0.3},
+                        "right": {"T": 1, "L": 0.3, "R": -0.3},
+                        "stop": {"T": 1, "L": 0, "R": 0},
+                    }
+                
+                self.send_to_robot(0, 0, json.dumps({"T": 1, "L": 0.5, "R": 0.5}))
+                if self.colision == 1:
+                    direction = "right"
+                    cmd = commands.get(direction)
+                    json.dumps(cmd)
+                    self.send_to_robot(0, 0, cmd)
+                time.sleep(3)
+            except Exception as e:
+                self.on_alert(f"Error en movimiento autonomo loop: {e}")
+                time.sleep(2)
+
     # ------------------------------ IMU ------------------------------
     #  Se asume respuesta asi:
     # {"T":1002, "r":-89.04126934, "p":-0.895245861, "ax":-0.156085625, "ay":-9.987277031, "az":0.167132765, 
@@ -412,9 +443,10 @@ class LoRaNode:
             try:
                 data, addr = sock.recvfrom(1024)
                 if data.decode() == "STOP_ROBOT":
+                    self.colision = 1
                     print("⚠️ Alerta recibida por Ethernet, deteniendo robot")
-                    command = "{\"T\": 1, \"L\": 0, \"R\": 0}"
-                    resp = self.send_to_robot(0, 0, command)
+                    # command = "{\"T\": 1, \"L\": 0, \"R\": 0}"
+                    # resp = self.send_to_robot(0, 0, command)
             except Exception as e:
                 print(f"UDP listener error: {e}")
 
@@ -452,4 +484,10 @@ class LoRaNode:
         self.node.close()
 
 
+# recibir orden de gui para activar movimiento automatico
+# cuando se reciba la orden, mandar comando de hacia adelante cada 3 segundos minimo
+# si flag de colision = 1 mandar girar a la derecha (o random)
+# 
+# importante que si esta el movimiento automatico activado no se puedan mandar comandos de movimiento
+#
 
