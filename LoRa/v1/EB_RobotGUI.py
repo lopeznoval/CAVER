@@ -5,7 +5,6 @@ import json
 import threading
 import time
 import requests
-import pyqtgraph as pg
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget, QCheckBox, QRadioButton
@@ -234,6 +233,7 @@ class EB_RobotGUI_bis(QWidget):
         pos_layout.addWidget(self.btn_reset_position)
 
         # --- Plot de trayectoria (usando pyqtgraph) ---
+        import pyqtgraph as pg
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground('w')
         self.plot_widget.setTitle("Trayectoria estimada del robot", color='b', size='12pt')

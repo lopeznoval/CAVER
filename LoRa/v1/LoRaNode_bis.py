@@ -44,13 +44,13 @@ class LoRaNode:
             self.connected_nodes = {}
             self.node_timers = {}
 
-        if platform.system() == "Linux":
-            from picamera2 import PiCamera2 # type: ignore
-            self.camera = PiCamera2()
-            self.stream = io.BytesIO()
-        else:
-            self.camera = None
-            self.stream = None
+        # if platform.system() == "Linux":
+        #     from picamera2 import PiCamera2 # type: ignore
+        #     self.camera = PiCamera2()
+        #     self.stream = io.BytesIO()
+        # else:
+        #     self.camera = None
+        #     self.stream = None
 
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
@@ -345,20 +345,22 @@ class LoRaNode:
         while True:
             try:
                 commands = {
-                    "forward": {"T": 1, "L": 0.5, "R": 0.5},
+                        "forward": {"T": 1, "L": 0.5, "R": 0.5},
                         "backward": {"T": 1, "L": -0.5, "R": -0.5},
                         "left": {"T": 1, "L": -0.3, "R": 0.3},
                         "right": {"T": 1, "L": 0.3, "R": -0.3},
                         "stop": {"T": 1, "L": 0, "R": 0},
                     }
                 
-                self.send_to_robot(0, 0, json.dumps({"T": 1, "L": 0.5, "R": 0.5}))
                 if self.colision == 1:
-                    direction = "right"
+                    direction = "stop"
                     cmd = commands.get(direction)
                     json.dumps(cmd)
-                    self.send_to_robot(0, 0, cmd)
-                time.sleep(3)
+                    self.send_to_robot(cmd)
+                    continue
+                
+                self.send_to_robot(json.dumps({"T": 1, "L": 0.2, "R": 0.2}))
+                time.sleep(1)
             except Exception as e:
                 self.on_alert(f"Error en movimiento autonomo loop: {e}")
                 time.sleep(2)
@@ -493,6 +495,9 @@ class LoRaNode:
                     print("⚠️ Alerta recibida por Ethernet, deteniendo robot")
                     # command = "{\"T\": 1, \"L\": 0, \"R\": 0}"
                     # resp = self.send_to_robot(0, 0, command)
+                elif data.decode() == "START_ROBOT":
+                    self.colision = 0
+
             except Exception as e:
                 print(f"UDP listener error: {e}")
 
