@@ -1,4 +1,4 @@
-SERIAL_PORT = "COM4"
+SERIAL_PORT = "COM3"
 
 SERIAL_PORT_ROBOT = "/dev/ttyACM0"  # or /dev/ttyUSB1 depending on your connection
 BAUDRATE_ROBOT = 115200
