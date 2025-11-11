@@ -33,9 +33,12 @@ while True:
 
         # if any(r < radar.STOP_DISTANCE_THRESHOLD for r in radar.detObj["range"]):
 
-        if radar_collision_stop == 1:
-            print("⚠️ Objeto detectado cerca, enviando alerta a Pi LoRaNode...")
-            sock.sendto(b"STOP_ROBOT", (UDP_IP, UDP_PORT))
+        # if radar_collision_stop == 1:
+        #    print("⚠️ Objeto detectado cerca, enviando alerta a Pi LoRaNode...")
+        #    sock.sendto(b"STOP_ROBOT", (UDP_IP, UDP_PORT))
+        
+        sock.sendto(radar_collision_stop, (UDP_IP, UDP_PORT))
+
 
         time.sleep(0.033)  # ~30 Hz
     except KeyboardInterrupt:
