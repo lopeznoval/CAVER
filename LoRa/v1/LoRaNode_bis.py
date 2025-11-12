@@ -14,7 +14,7 @@ import socket
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, 
-                 EB=0, robot_port=None, robot_baudrate=None, ip_sock=None, port_sock=None):  # EB = 1 si es estación base
+                 EB=0, robot_port=None, robot_baudrate=None, ip_sock=None, port_sock=None, sens_port=None, sens_baudrate=None):  # EB = 1 si es estación base
         
         self.running = True
         self.node = sx126x(serial_num=ser_port, freq=freq, addr=addr, power=pw, rssi=rssi)
@@ -34,6 +34,8 @@ class LoRaNode:
         self.response_queue = queue.Queue()
         
         self.sensores = None
+        self.sens_port = None
+        self.sens_baudrate = None
         self.last_temp = None
         self.last_hum = None
 
@@ -447,16 +449,12 @@ class LoRaNode:
         
     # -------------------- SENSORES --------------------
     def connect_sensors(self):
-        
-        Puerto = '/dev/ttyUSB0'
-        BAU = 115200
-        
         try:
-            self.sensores = serial.Serial(Puerto, BAU, timeout=2)
+            self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
             time.sleep(2)
-            print("[SENSORS] Conectado al ESP32 en", Puerto)
+            print("[SENSORS] Conectado al ESP32 en", self.sens_port)
         except Exception as e:
-            print(f"[SENSORS] ❌ Error abriendo puerto {Puerto}: {e}")
+            print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
             return
         while self.running:
             try:
@@ -505,7 +503,6 @@ class LoRaNode:
         # -------------------- RADAR --------------------
         if (self.ip_sock is not None) and (self.port_sock is not None):
             radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
-
         # -------------------- INFO PERIODICA --------------------
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()
