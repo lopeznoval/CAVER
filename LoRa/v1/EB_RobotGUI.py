@@ -277,41 +277,98 @@ class EB_RobotGUI_bis(QWidget):
         
         # Encender/Apagar/Modo automático del led
         self.luz_label = QLabel("Control del LED")
-        LED_group = QButtonGroup(self)
-        # self.luz_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.luz_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.luz_label.setStyleSheet("""
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+        """)
+        self.LED_group = QButtonGroup(self)
         # sensors_layout.addWidget(self.luz_label) 
         # Estilo común para los botones de control del LED
         led_button_style = """
+            QGroupBox {
+                border: 2px solid white;
+                border-radius: 10px;
+                margin-top: 10px;
+                color: white;
+                font-size: 16px;
+                padding: 10px;
+            }
             QRadioButton {
                 color: white;
                 font-size: 18px;
                 font-weight: bold;
-                padding: 10px;
+                padding: 5px;
             }
             QRadioButton::indicator {
                 width: 20px;
                 height: 20px;
             }
         """
+        led_group_box = QGroupBox()
+        led_group_box.setStyleSheet("""
+            QGroupBox {
+                border: 3px solid #00BFFF;
+                border-radius: 12px;
+                margin-top: 10px;
+                color: white;
+                font-size: 18px;
+                padding: 10px;
+            }
+        """)
         # Boton para enceder el led
+        # self.btn_encender_led = QRadioButton("Encender LED 💡")
+        # self.btn_encender_led.setStyleSheet(led_button_style)
+        # #self.btn_encender_led.toggled.connect(self.control_led)
+        # LED_group.addButton(self.btn_encender_led)
+        # sensors_layout.addWidget(self.btn_encender_led)
+        # # Boton para apagar el led
+        # self.btn_apagar_led = QRadioButton("Apagar LED 💡")
+        # self.btn_apagar_led.setStyleSheet(led_button_style)
+        # #self.btn_apagar_led.toggled.connect(self.control_led)
+        # LED_group.addButton(self.btn_apagar_led)
+        # sensors_layout.addWidget(self.btn_apagar_led)
+        # # Boton para poner el modo automático el led
+        # self.btn_modoauto_led = QRadioButton("LED Modo Automático 💡")
+        # self.btn_modoauto_led.setStyleSheet(led_button_style)
+        # #self.btn_modoauto_led.toggled.connect(self.control_led)
+        # LED_group.addButton(self.btn_modoauto_led)
+        # sensors_layout.addWidget(self.btn_modoauto_led)
+        # LED_group.buttonClicked.connect(self.control_led)
+        
+        # --- Recuadro 1: Encender LED ---
+        box_encender = QGroupBox()
+        box_encender.setStyleSheet(led_button_style)
+        enc_layout = QVBoxLayout()
         self.btn_encender_led = QRadioButton("Encender LED 💡")
-        self.btn_encender_led.setStyleSheet(led_button_style)
-        #self.btn_encender_led.toggled.connect(self.control_led)
-        LED_group.addButton(self.btn_encender_led)
-        sensors_layout.addWidget(self.btn_encender_led)
-        # Boton para apagar el led
+        self.LED_group.addButton(self.btn_encender_led)
+        enc_layout.addWidget(self.btn_encender_led)
+        box_encender.setLayout(enc_layout)
+        sensors_layout.addWidget(box_encender)
+
+        # --- Recuadro 2: Apagar LED ---
+        box_apagar = QGroupBox()
+        box_apagar.setStyleSheet(led_button_style)
+        apag_layout = QVBoxLayout()
         self.btn_apagar_led = QRadioButton("Apagar LED 💡")
-        self.btn_apagar_led.setStyleSheet(led_button_style)
-        #self.btn_apagar_led.toggled.connect(self.control_led)
-        LED_group.addButton(self.btn_apagar_led)
-        sensors_layout.addWidget(self.btn_apagar_led)
-        # Boton para poner el modo automático el led
+        self.LED_group.addButton(self.btn_apagar_led)
+        apag_layout.addWidget(self.btn_apagar_led)
+        box_apagar.setLayout(apag_layout)
+        sensors_layout.addWidget(box_apagar)
+
+        # --- Recuadro 3: Modo Automático ---
+        box_auto = QGroupBox()
+        box_auto.setStyleSheet(led_button_style)
+        auto_layout = QVBoxLayout()
         self.btn_modoauto_led = QRadioButton("LED Modo Automático 💡")
-        self.btn_modoauto_led.setStyleSheet(led_button_style)
-        #self.btn_modoauto_led.toggled.connect(self.control_led)
-        LED_group.addButton(self.btn_modoauto_led)
-        sensors_layout.addWidget(self.btn_modoauto_led)
-        LED_group.buttonClicked.connect(self.control_led)
+        self.LED_group.addButton(self.btn_modoauto_led)
+        auto_layout.addWidget(self.btn_modoauto_led)
+        box_auto.setLayout(auto_layout)
+        sensors_layout.addWidget(box_auto)
+
+        # Conectar el grupo
+        self.LED_group.buttonClicked.connect(self.control_led)
 
         # Aplicar el layout a la pestaña
         tab_sensors.setLayout(sensors_layout)
