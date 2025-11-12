@@ -5,14 +5,13 @@ import json
 import threading
 import time
 import requests
-import pyqtgraph as pg
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
-    QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup
+    QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
-from PyQt6.QtGui import QAction, QPainter, QColor
+from PyQt6.QtGui import QAction, QPainter, QColor, QFont
 from LoRaNode_bis import LoRaNode
 
 from aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
@@ -235,6 +234,7 @@ class EB_RobotGUI_bis(QWidget):
         pos_layout.addWidget(self.btn_reset_position)
 
         # --- Plot de trayectoria (usando pyqtgraph) ---
+        import pyqtgraph as pg
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground('w')
         self.plot_widget.setTitle("Trayectoria estimada del robot", color='b', size='12pt')
@@ -514,18 +514,18 @@ class EB_RobotGUI_bis(QWidget):
         requests_group.setLayout(requests_layout)
         tabs_config.addTab(requests_group, "Peticiones Pendientes")
         
-
-        self.timer = QTimer()
         if loranode is not None:
+            self.timer = QTimer()
             self.timer.timeout.connect(self.update_requests_list)
-        self.timer.start(1000)
+            self.timer.start(500)
 
         # === Nodos Conectados ===
         self.panel = RobotsPanel()
 
         if self.loranode is not None:
-            self.timer.timeout.connect(self.refresh_connected_robots)
-            self.timer.start(1000)
+            self.timer2 = QTimer()
+            self.timer2.timeout.connect(self.refresh_connected_robots)
+            self.timer2.start(5000)
 
         tabs_config.addTab(self.panel, "Nodos Conectados")
 
@@ -564,12 +564,29 @@ class EB_RobotGUI_bis(QWidget):
     # ===================== FUNCIONES =====================
 
     def update_requests_list(self):
-        """Actualiza la lista con los elementos de self.pending_requests"""
+        """Actualiza la lista con estilo para cada request"""
         self.requests_list.clear()
-        for dest, msg_ids in self.loranode.pending_requests.items():
-            # Convertimos la lista de msg_id a una cadena separada por comas
-            msg_str = ", ".join(str(mid) for mid in msg_ids)
-            self.requests_list.addItem(f"{dest}: {msg_str}")
+
+        for dest, msg_ids in sorted(self.loranode.pending_requests.items()):
+            msg_str = ", ".join(str(mid) for mid in sorted(msg_ids))
+            text = f"Destino {dest}: {msg_str}"
+            
+            item = QListWidgetItem(text)
+            
+            # Fuente en negrita
+            font = QFont()
+            font.setBold(True)
+            item.setFont(font)
+            
+            # Color de fondo alterno según el destino
+            if dest % 2 == 0:
+                item.setBackground(QColor("#2e2e2e"))
+                item.setForeground(QColor("#00ff00"))
+            else:
+                item.setBackground(QColor("#1e1e1e"))
+                item.setForeground(QColor("#ffaa00"))
+
+            self.requests_list.addItem(item)
 
     def set_selected_type(self, msg_type, desc):
         """Cuando el usuario selecciona un tipo de mensaje"""
@@ -747,8 +764,8 @@ class EB_RobotGUI_bis(QWidget):
     def _on_lora_message(self, msg: str):
         """Manejador de mensajes entrantes desde LoRaNode"""
         self._append_input(msg)
-                # -------------------- IMU inicio --------------------
-
+                
+    # -------------------- IMU inicio --------------------
     def _on_refresh_position (self, pos):
         try:
             x = pos.get("x", 0)
@@ -771,9 +788,6 @@ class EB_RobotGUI_bis(QWidget):
 
         except Exception as e:
             self.append_general_log(f"Error parseando IMU: {e}")
-
-
-
         
 # -------------------- IMU final --------------------
 
@@ -800,7 +814,6 @@ class EB_RobotGUI_bis(QWidget):
         self._path_points = {"x": [0], "y": [0]}
         self.path_curve.clear()
         self.append_general_log("📍 Posición y trayectoria reseteadas.")
-
 
 # -------------------- IMU final --------------------
 
@@ -877,12 +890,17 @@ class EB_RobotGUI_bis(QWidget):
     #     self.robots[robot_id].update_status(connected, radar, sensors)
 
     def refresh_connected_robots(self):
-        for node_id, info in self.loranode.connected_nodes.items():
-            self.panel.add_or_update_robot(
-                node_id,
-                info["robot"],
-                info["radar"],
-                info["sensors"],
-                info["camera"]
-            )
+        with self.loranode.lock_nodes:
+            node_data = {
+                node_id: (
+                    info["robot"],
+                    info["radar"],
+                    info["sensors"],
+                    info["camera"]
+                )
+                for node_id, info in self.loranode.connected_nodes.items()
+            }
+            
+        self.panel.sync_with_nodes(node_data)
+
 

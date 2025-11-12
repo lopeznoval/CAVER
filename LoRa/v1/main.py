@@ -17,7 +17,9 @@ if __name__ == "__main__":
             rssi=True,
             EB=EB,
             robot_port=SERIAL_PORT_ROBOT,
-            robot_baudrate=BAUDRATE_ROBOT
+            robot_baudrate=BAUDRATE_ROBOT,
+            ip_sock=UDP_IP,
+            port_sock=UDP_PORT
         )
         node.run()
     except Exception as e:
