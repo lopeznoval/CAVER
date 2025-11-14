@@ -237,11 +237,12 @@ class LoRaNode:
                         #     self.send_message(addr_sender, 22, msg_id, "No hay datos disponibles aún.")
                             ...
                     if msg_type == 21: # Encender la luz
-                        ...
+                        self.control_led("ON")
                     if msg_type == 22: # Apagar la luz
-                        ...
+                        self.control_led("OFF")
                     if msg_type == 23: # Luz en modo automático
-                        ...
+                        self.control_led("AUTO")
+                
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 30:  # Tomar foto
                             img_b64 = self.stream_recording()
@@ -498,7 +499,25 @@ class LoRaNode:
             except Exception as e:
                 print(f"UDP listener error: {e}")
 
-    
+    # -------------------- LED ------------------------
+    def control_led(self, orden: str):
+        # Envia una orden al ESP32 por serial
+        try:
+            self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
+            time.sleep(2)
+            print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+        except Exception as e:
+            print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
+            return
+        while self.running:
+            try:
+                if self.sensores and self.sensores.is_open:
+                    self.sensores.write((orden + "\n").encode())
+                    print(f"[LED] Orden enviada al ESP32: {orden}")
+                else:
+                    print("[LED] ❌ Puerto de sensores no está abierto.")
+            except Exception as e:
+                print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
     
     # -------------------- EJECUCIÓN --------------------
     def run(self):
