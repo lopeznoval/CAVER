@@ -520,6 +520,7 @@ class LoRaNode:
             try:
                 line = self.sensores.readline().decode('utf-8', errors='ignore').strip()
                 if line and line.startswith("H") and "T" in line:
+                    # Ejemplo: "Humidity:72% Temperature:21°C"
                     parts = line.split()
                     self.hum = float(parts[0].split(':')[1].replace('%', ''))
                     self.temp = float(parts[1].split(':')[1].replace('°C', ''))
@@ -553,7 +554,7 @@ class LoRaNode:
                 print(f"[SENSORS] Error leyendo ESP32: {e}")
 
     # -------------------- RADAR ------------------------
-<<<<<<< HEAD
+
     # def listen_udp_radar(self):
     #     UDP_IP = "192.168.1.10"  # escucha en cualquier interfaz
     #     UDP_PORT = 5005
@@ -578,34 +579,7 @@ class LoRaNode:
     #                 return self.colision
     #         except Exception as e:
     #             print(f"UDP listener error: {e}")
-=======
-    def listen_udp_radar(self):
-        self.radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.radar_sock.bind((self.ip_sock, self.port_sock))
-        while self.running:
-            try:
-                data, addr = self.radar_sock.recvfrom(1024)
-                if data.decode() == "STOP_ROBOT":
-                    self.colision = 1
-                    print("⚠️ Alerta recibida por Ethernet, deteniendo robot")
-                    # command = "{\"T\": 1, \"L\": 0, \"R\": 0}"
-                    # resp = self.send_to_robot(0, 0, command)
-            except Exception as e:
-                print(f"UDP listener error: {e}")
 
-    # -------------------- BBDD --------------------
-    def sinc_BBDD_loop(self):
-        """Función para sincronizar datos de sensores con la base de datos."""
-        while self.running:
-            print("--- Iniciando ciclo de sincronización dual ---")
-            with get_db_session() as session:
-                packet_str = sincronizar_sensores_lora(session) 
-                self.send_message(0xFFFF, 0, 69, packet_str)
-                
-            print("--- Ciclo de sincronización finalizado ---")
-            time.sleep(60)  # Esperar 60 segundos antes del siguiente ciclo
-
->>>>>>> 6759e59ebe79b63a67bd04871a447a055faf379e
     
     
     # -------------------- EJECUCIÓN --------------------
@@ -615,10 +589,7 @@ class LoRaNode:
         if self.robot_port and self.robot_baudrate:
             self.connect_robot()
         # -------------------- RADAR --------------------
-<<<<<<< HEAD
-        # radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
 
-=======
         if (self.ip_sock is not None) and (self.port_sock is not None):
             radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
         # -------------------- SENSORES --------------------
@@ -630,7 +601,6 @@ class LoRaNode:
             crear_tablas()
             bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
         # -------------------- INFO PERIODICA --------------------
->>>>>>> 6759e59ebe79b63a67bd04871a447a055faf379e
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()
 
