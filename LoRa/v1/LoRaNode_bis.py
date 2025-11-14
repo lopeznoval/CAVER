@@ -223,7 +223,7 @@ class LoRaNode:
                     
 
                 elif 19 < msg_type < 25:  # Comando para los sensores
-                    if msg_type == 21:  # Lectura temperatura y humedad
+                    if msg_type == 20:  # Lectura temperatura y humedad
                         if self.on_sensor is not None:
                         #     payload = json.dumps({
                         #         "temp": self.last_temp,
@@ -234,6 +234,12 @@ class LoRaNode:
                         # else:
                         #     self.send_message(addr_sender, 22, msg_id, "No hay datos disponibles aún.")
                             ...
+                    if msg_type == 21: # Encender la luz
+                        ...
+                    if msg_type == 22: # Apagar la luz
+                        ...
+                    if msg_type == 23: # Luz en modo automático
+                        ...
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 30:  # Tomar foto
                             img_b64 = self.stream_recording()
