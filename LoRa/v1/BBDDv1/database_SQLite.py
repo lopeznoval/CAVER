@@ -20,6 +20,7 @@ Base = declarative_base()
 class LecturaSensor(Base):
     __tablename__ = "lecturas_sensores"
     id = Column(Integer, primary_key=True, index=True)
+    id_robot = Column(Integer, nullable=False)
     timestamp = Column(DateTime, default=datetime.now)
     temperatura = Column(Float, nullable=False)
     humedad = Column(Float, nullable=False)
@@ -28,6 +29,7 @@ class LecturaSensor(Base):
 class Video(Base):
     __tablename__ = "videos"
     id = Column(Integer, primary_key=True, index=True)
+    id_robot = Column(Integer, nullable=False)
     timestamp = Column(DateTime, default=datetime.now)
     ruta_archivo = Column(String, nullable=False)
     sincronizado = Column(Boolean, default=False)
