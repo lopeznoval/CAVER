@@ -4,7 +4,12 @@ import json
 import queue
 import time
 import threading
+from requests import session
 import serial
+from BBDD.lora_bridge import procesar_paquete_lora
+from BBDDv1.registro_datos import registrar_lectura
+from BBDDv1.database_SQLite import *
+from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
 from sx126x_bis import sx126x
 from parameters import *
 import platform
@@ -17,6 +22,7 @@ class LoRaNode:
                  EB=0, robot_port=None, robot_baudrate=None, ip_sock=None, port_sock=None, sens_port=None, sens_baudrate=None):  # EB = 1 si es estación base
         
         self.running = True
+        self.lora_port = ser_port
         self.node = sx126x(serial_num=ser_port, freq=freq, addr=addr, power=pw, rssi=rssi)
         print(f"LoRaNode initialized on {ser_port} with address {addr}, freq {freq}MHz, power {pw}dBm")
         self.pending_requests = {}                                  # msg_id -> callback/event
@@ -72,6 +78,9 @@ class LoRaNode:
             (relay_flag << 7) | (msg_type & 0x7F),
             msg_id & 0xFF
         ])
+        print(f"Message size: {len(message.encode())} / Total size: {len(header) + len(message.encode())} bytes")
+        if len(header) + len(message.encode()) > 255:
+            raise ValueError("⚠️ Message too long to pack in just a LoRa packet.")
         return header + message.encode()
 
     def unpack_message(self, r_buff: bytes) -> tuple:
@@ -136,11 +145,17 @@ class LoRaNode:
             self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
             
             try: 
+                # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
                 if msg_type == 0:
                     if msg_id == 63: #imu
                         self.imu_pos(message)
-
-                elif 0 < msg_type < 5:  # Respuesta
+                    elif msg_id == 69: 
+                        if self.is_base:
+                            resp = procesar_paquete_lora(message)
+                            self.send_message(addr_sender, 4, msg_id, resp)
+                
+                # Respuestas posibles: 1- Error, 2- Consulta estándar, 3- Respuesta robot, 4- Respuesta sensores/camara/radar (o BBDD), 5- Ack Relay
+                elif 0 < msg_type < 5: 
                     if msg_type == 2:  # Respuesta estándar
                         with self.lock_nodes:
                             self.connected_nodes[addr_sender] = {
@@ -158,11 +173,7 @@ class LoRaNode:
                         print(self.node_timers)
                         timer.start()
 
-                    rm = self.remove_pending(addr_sender, msg_id)
-                    # if not rm:
-                    #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender}.")
-                    #     return
-                    # self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
+                    self.remove_pending(addr_sender, msg_id)
                     return
 
                 elif 4 < msg_type < 10:  # Comandos generales
@@ -224,22 +235,24 @@ class LoRaNode:
                         self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
                     
 
-                elif 19 < msg_type < 25:  # Comando para los sensores
+                elif 19 < msg_type < 25:  # Comando para los sensores y BBDD
                     if msg_type == 21:  # Lectura temperatura y humedad
-                        if self.on_sensor is not None:
-                        #     payload = json.dumps({
-                        #         "temp": self.last_temp,
-                        #         "hum": self.last_hum,
-                        #         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                        #     })
-                        #     self.send_message(addr_sender, 22, msg_id, payload)
-                        # else:
-                        #     self.send_message(addr_sender, 22, msg_id, "No hay datos disponibles aún.")
-                            ...
+                        if self.on_sensor is None:
+                            self.connect_sensors()
+                            sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True)
+                            sensor_th.start()
+                        self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
+                    if msg_type == 22:  # Realizar lectura mandada por la EB
+                        self.read_sensors_once()
+                        self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
+                    if msg_type == 22:  # Sincronizar sensores pendientes
+                        with get_db_session() as session:
+                            sincronizar_sensores_lora(self, session)
+
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 30:  # Tomar foto
                             img_b64 = self.stream_recording()
-                            self.send_message(addr_sender, 31, msg_id, img_b64)
+                            self.send_message(addr_sender, 4, msg_id, img_b64)
                             print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
                 elif msg_type == 31:
@@ -296,9 +309,10 @@ class LoRaNode:
             self.robot = serial.Serial(self.robot_port, self.robot_baudrate, dsrdtr=None, rtscts=False)
             self.robot.setRTS(False)
             self.robot.setDTR(False)
-            self.robot.write(("{\"T\":131,\"cmd\":0}" + "\r\n").encode('utf-8'))      # activar/desactivar cahsis feedback
+            self.robot.write(("{\"T\":131,\"cmd\":0}" + "\r\n").encode('utf-8'))      # se desactiva el chasis feedback
             # self.robot.write(("{\"T\":142,\"cmd\":10000}" + "\r\n").encode('utf-8'))  # timer cahsis feedback
             print(f"Connected to robot on {self.robot_port}")
+            self.robot.flushInput()
             self.robot_listener = threading.Thread(target=self.receive_from_robot)
             self.robot_listener.daemon = True
             self.robot_listener.start()
@@ -456,26 +470,44 @@ class LoRaNode:
         except Exception as e:
             print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
             return
+        
+    def read_sensors_loop(self):
+        """Lee datos de temperatura y humedad del ESP32 conectado por serie."""
         while self.running:
             try:
                 line = self.sensores.readline().decode('utf-8', errors='ignore').strip()
                 if line and line.startswith("H") and "T" in line:
-                    # Ejemplo: "Humidity:72% Temperature:21°C"
                     parts = line.split()
-                    hum = float(parts[0].split(':')[1].replace('%', ''))
-                    temp = float(parts[1].split(':')[1].replace('°C', ''))
+                    self.hum = float(parts[0].split(':')[1].replace('%', ''))
+                    self.temp = float(parts[1].split(':')[1].replace('°C', ''))
 
-                    # self.last_temp = temp
-                    # self.last_hum = hum
-                    self.on_sensor({"Temperatura": temp, "Humedad": hum, "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")})
-                    print(f"[SENSORS] Temp={temp:.1f}°C | Hum={hum:.1f}%")
+                    print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
-                    # Aquí podrías guardar los datos en una base de datos si quieres:
-                    # save_to_db(temp, hum, time.time())
+                    with get_db_session() as session:
+                        registrar_lectura(self.temp, self.hum, session)
 
             except Exception as e:
                 print(f"[SENSORS] Error leyendo ESP32: {e}")
-                time.sleep(1)
+            
+            time.sleep(120)
+
+    def read_sensors_once(self):
+        """Lee datos de temperatura y humedad del ESP32 conectado por serie una vez."""
+        if self.running:
+            try:
+                line = self.sensores.readline().decode('utf-8', errors='ignore').strip()
+                if line and line.startswith("H") and "T" in line:
+                    parts = line.split()
+                    self.hum = float(parts[0].split(':')[1].replace('%', ''))
+                    self.temp = float(parts[1].split(':')[1].replace('°C', ''))
+
+                    print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
+
+                    with get_db_session() as session:
+                        registrar_lectura(self.temp, self.hum, session)
+
+            except Exception as e:
+                print(f"[SENSORS] Error leyendo ESP32: {e}")
 
     # -------------------- RADAR ------------------------
     def listen_udp_radar(self):
@@ -492,6 +524,18 @@ class LoRaNode:
             except Exception as e:
                 print(f"UDP listener error: {e}")
 
+    # -------------------- BBDD --------------------
+    def sinc_BBDD_loop(self):
+        """Función para sincronizar datos de sensores con la base de datos."""
+        while self.running:
+            print("--- Iniciando ciclo de sincronización dual ---")
+            with get_db_session() as session:
+                packet_str = sincronizar_sensores_lora(session) 
+                self.send_message(0xFFFF, 0, 69, packet_str)
+                
+            print("--- Ciclo de sincronización finalizado ---")
+            time.sleep(60)  # Esperar 60 segundos antes del siguiente ciclo
+
     
     
     # -------------------- EJECUCIÓN --------------------
@@ -503,6 +547,14 @@ class LoRaNode:
         # -------------------- RADAR --------------------
         if (self.ip_sock is not None) and (self.port_sock is not None):
             radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
+        # -------------------- SENSORES --------------------
+        if self.sens_port and self.sens_baudrate:
+            self.connect_sensors()
+            sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True).start()
+        # -------------------- BBDD --------------------
+        if not self.is_base:
+            crear_tablas()
+            bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
         # -------------------- INFO PERIODICA --------------------
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()
