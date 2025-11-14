@@ -5,13 +5,13 @@ import json
 import threading
 import time
 import requests
-import pyqtgraph as pg
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
-    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, QSizePolicy, QListWidget, QCheckBox, QRadioButton
+    QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
+    QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
-from PyQt6.QtGui import QAction, QPainter, QColor
+from PyQt6.QtGui import QAction, QPainter, QColor, QFont
 from LoRaNode_bis import LoRaNode
 
 from aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
@@ -234,6 +234,7 @@ class EB_RobotGUI_bis(QWidget):
         pos_layout.addWidget(self.btn_reset_position)
 
         # --- Plot de trayectoria (usando pyqtgraph) ---
+        import pyqtgraph as pg
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setBackground('w')
         self.plot_widget.setTitle("Trayectoria estimada del robot", color='b', size='12pt')
@@ -275,19 +276,65 @@ class EB_RobotGUI_bis(QWidget):
         sensors_layout.addWidget(self.hum_label)
         
         # Encender/Apagar/Modo automático del led
-        self.luz_label = QLabel("Control del LED") 
-        # Boton para enceder el led
+        self.luz_groupbox = QGroupBox("Control del LED")
+        self.luz_groupbox.setFixedSize(250, 120)
+        self.luz_groupbox.setStyleSheet("""
+            QGroupBox {
+                color: white;
+                font-size: 13px;
+                font-weight: bold;
+                border: 2px solid gray;
+                border-radius: 8px;
+                margin-top: 5px;
+            }
+        """)
+        luz_layout = QVBoxLayout()
+        # Estilo común para los botones de control del LED
+        led_button_style = """
+            QRadioButton {
+                color: white;
+                font-size: 14px;
+            }
+            QRadioButton::indicator {
+                border: 2px solid #a35709; 
+                height: 16px;
+                width: 16px;
+                border-radius: 10px;
+            }
+            QRadioButton::indicator:checked {
+                background: qradialgradient(
+                    cx:.5, cy:.5, radius: .7,
+                    fx:.5, fy:.5,
+                    stop:0 '#ff8303', 
+                    stop:0.45 '#ff8303',
+                    stop:0.5 transparent,
+                    stop:1 transparent
+                );
+            }
+        """
+        #Boton para enceder el led
         self.btn_encender_led = QRadioButton("Encender LED 💡")
-        self.btn_encender_led.toggled.connect(self.control_led)
-        sensors_layout.addWidget(self.btn_encender_led)
+        self.btn_encender_led.setStyleSheet(led_button_style)
+        luz_layout.addWidget(self.btn_encender_led)
+        
         # Boton para apagar el led
         self.btn_apagar_led = QRadioButton("Apagar LED 💡")
-        self.btn_apagar_led.toggled.connect(self.control_led)
-        sensors_layout.addWidget(self.btn_apagar_led)
+        self.btn_apagar_led.setStyleSheet(led_button_style)
+        luz_layout.addWidget(self.btn_apagar_led)
+        
         # Boton para poner el modo automático el led
         self.btn_modoauto_led = QRadioButton("LED Modo Automático 💡")
-        self.btn_modoauto_led.toggled.connect(self.control_led)
-        sensors_layout.addWidget(self.btn_modoauto_led)
+        self.btn_modoauto_led.setStyleSheet(led_button_style)
+        luz_layout.addWidget(self.btn_modoauto_led)
+        
+        self.LED_group = QButtonGroup(self)
+        self.LED_group.addButton(self.btn_encender_led)
+        self.LED_group.addButton(self.btn_apagar_led)
+        self.LED_group.addButton(self.btn_modoauto_led)
+        self.LED_group.buttonClicked.connect(self.control_led)
+
+        self.luz_groupbox.setLayout(luz_layout)
+        sensors_layout.addWidget(self.luz_groupbox) 
 
         # Aplicar el layout a la pestaña
         tab_sensors.setLayout(sensors_layout)
@@ -323,6 +370,7 @@ class EB_RobotGUI_bis(QWidget):
 
         tab_radar.setLayout(buttons_mov_auto_layout)
         tabs.addTab(tab_radar, "Radar")
+
 
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
@@ -378,10 +426,10 @@ class EB_RobotGUI_bis(QWidget):
                 19: ""
             },
             "Sensores (20–24)": {
-                20: "Lectura de temperatura",
-                21: "Lectura de temperatura y humedad",
-                22: "Lectura de humedad",
-                23: "Lectura de luz ambiental",
+                20: "Lectura de temperatura y humedad",
+                21: "Encender la luz",
+                22: "Apagar la luz",
+                23: "Luz en modo automático",
                 24: "Lectura de proximidad"
             },
             "Cámara/Radar (25–30)": {
@@ -435,18 +483,18 @@ class EB_RobotGUI_bis(QWidget):
         requests_group.setLayout(requests_layout)
         tabs_config.addTab(requests_group, "Peticiones Pendientes")
         
-
-        self.timer = QTimer()
         if loranode is not None:
+            self.timer = QTimer()
             self.timer.timeout.connect(self.update_requests_list)
-        self.timer.start(1000)
+            self.timer.start(500)
 
         # === Nodos Conectados ===
         self.panel = RobotsPanel()
 
         if self.loranode is not None:
-            self.timer.timeout.connect(self.refresh_connected_robots)
-            self.timer.start(1000)
+            self.timer2 = QTimer()
+            self.timer2.timeout.connect(self.refresh_connected_robots)
+            self.timer2.start(5000)
 
         tabs_config.addTab(self.panel, "Nodos Conectados")
 
@@ -485,12 +533,29 @@ class EB_RobotGUI_bis(QWidget):
     # ===================== FUNCIONES =====================
 
     def update_requests_list(self):
-        """Actualiza la lista con los elementos de self.pending_requests"""
+        """Actualiza la lista con estilo para cada request"""
         self.requests_list.clear()
-        for dest, msg_ids in self.loranode.pending_requests.items():
-            # Convertimos la lista de msg_id a una cadena separada por comas
-            msg_str = ", ".join(str(mid) for mid in msg_ids)
-            self.requests_list.addItem(f"{dest}: {msg_str}")
+
+        for dest, msg_ids in sorted(self.loranode.pending_requests.items()):
+            msg_str = ", ".join(str(mid) for mid in sorted(msg_ids))
+            text = f"Destino {dest}: {msg_str}"
+            
+            item = QListWidgetItem(text)
+            
+            # Fuente en negrita
+            font = QFont()
+            font.setBold(True)
+            item.setFont(font)
+            
+            # Color de fondo alterno según el destino
+            if dest % 2 == 0:
+                item.setBackground(QColor("#2e2e2e"))
+                item.setForeground(QColor("#00ff00"))
+            else:
+                item.setBackground(QColor("#1e1e1e"))
+                item.setForeground(QColor("#ffaa00"))
+
+            self.requests_list.addItem(item)
 
     def set_selected_type(self, msg_type, desc):
         """Cuando el usuario selecciona un tipo de mensaje"""
@@ -578,7 +643,7 @@ class EB_RobotGUI_bis(QWidget):
     def take_data(self):
         # Envia una orden al nodo para obtener la temperatura y humedad
         dest = int(self.dest_entry.text())
-        msg_type = 21
+        msg_type = 20
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
         # Comandos de solicitud
@@ -668,8 +733,8 @@ class EB_RobotGUI_bis(QWidget):
     def _on_lora_message(self, msg: str):
         """Manejador de mensajes entrantes desde LoRaNode"""
         self._append_input(msg)
-                # -------------------- IMU inicio --------------------
-
+                
+    # -------------------- IMU inicio --------------------
     def _on_refresh_position (self, pos):
         try:
             x = pos.get("x", 0)
@@ -692,9 +757,6 @@ class EB_RobotGUI_bis(QWidget):
 
         except Exception as e:
             self.append_general_log(f"Error parseando IMU: {e}")
-
-
-
         
 # -------------------- IMU final --------------------
 
@@ -721,7 +783,6 @@ class EB_RobotGUI_bis(QWidget):
         self._path_points = {"x": [0], "y": [0]}
         self.path_curve.clear()
         self.append_general_log("📍 Posición y trayectoria reseteadas.")
-
 
 # -------------------- IMU final --------------------
 
@@ -798,12 +859,17 @@ class EB_RobotGUI_bis(QWidget):
     #     self.robots[robot_id].update_status(connected, radar, sensors)
 
     def refresh_connected_robots(self):
-        for node_id, info in self.loranode.connected_nodes.items():
-            self.panel.add_or_update_robot(
-                node_id,
-                info["robot"],
-                info["radar"],
-                info["sensors"],
-                info["camera"]
-            )
+        with self.loranode.lock_nodes:
+            node_data = {
+                node_id: (
+                    info["robot"],
+                    info["radar"],
+                    info["sensors"],
+                    info["camera"]
+                )
+                for node_id, info in self.loranode.connected_nodes.items()
+            }
+            
+        self.panel.sync_with_nodes(node_data)
+
 

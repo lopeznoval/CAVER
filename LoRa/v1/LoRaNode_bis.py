@@ -14,13 +14,13 @@ import socket
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, 
-                 EB=0, robot_port=None, robot_baudrate=None):  # EB = 1 si es estación base
+                 EB=0, robot_port=None, robot_baudrate=None, ip_sock=None, port_sock=None, sens_port=None, sens_baudrate=None):  # EB = 1 si es estación base
         
         self.running = True
         self.node = sx126x(serial_num=ser_port, freq=freq, addr=addr, power=pw, rssi=rssi)
         print(f"LoRaNode initialized on {ser_port} with address {addr}, freq {freq}MHz, power {pw}dBm")
         self.pending_requests = {}                                  # msg_id -> callback/event
-        self.lock = threading.Lock()
+        self.lock_pending = threading.Lock()
         self.robot = None
         self.is_base = EB  # External Board reference
         self.is_relay = False
@@ -34,10 +34,14 @@ class LoRaNode:
         self.response_queue = queue.Queue()
         
         self.sensores = None
+        self.sens_port = None
+        self.sens_baudrate = None
         self.last_temp = None
         self.last_hum = None
 
         self.radar_sock = None
+        self.ip_sock = ip_sock
+        self.port_sock = port_sock
 
         if self.is_base:
             self.lock_nodes = threading.Lock()
@@ -93,7 +97,6 @@ class LoRaNode:
         while self.running:
             self.send_message(0xFFFF, 5, 0, "", 0)
             print(f"[{time.strftime('%H:%M:%S')}] PING enviado")
-            self.connected_nodes = {}
             time.sleep(30) # intervalos de 30 segundos entre envío y envío
 
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
@@ -137,7 +140,7 @@ class LoRaNode:
                     if msg_id == 63: #imu
                         self.imu_pos(message)
 
-                elif 1 < msg_type < 5:  # Respuesta
+                elif 0 < msg_type < 5:  # Respuesta
                     if msg_type == 2:  # Respuesta estándar
                         with self.lock_nodes:
                             self.connected_nodes[addr_sender] = {
@@ -150,18 +153,17 @@ class LoRaNode:
                         
                         if addr_sender in self.node_timers:
                             self.node_timers[addr_sender].cancel()
-                        timer = threading.Timer(40, self.remove_node, args=(addr_sender,))
+                        timer = threading.Timer(60, self.remove_node, args=(addr_sender,))
                         self.node_timers[addr_sender] = timer
+                        print(self.node_timers)
                         timer.start()
-                    return
-                    
-                    # with self.lock:
-                    #     rm = self.remove_pending(addr_sender, msg_id)
-                    #     if not rm:
-                    #         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} to {addr_dest}")
-                    #         return
+
+                    rm = self.remove_pending(addr_sender, msg_id)
+                    # if not rm:
+                    #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender}.")
+                    #     return
                     # self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received response of msg_id {msg_id} from {addr_sender} : {msg}")
-                    # return
+                    return
 
                 elif 4 < msg_type < 10:  # Comandos generales
                     if msg_type == 5:  # Ping
@@ -224,7 +226,7 @@ class LoRaNode:
                     
 
                 elif 19 < msg_type < 25:  # Comando para los sensores
-                    if msg_type == 21:  # Lectura temperatura y humedad
+                    if msg_type == 20:  # Lectura temperatura y humedad
                         if self.on_sensor is not None:
                         #     payload = json.dumps({
                         #         "temp": self.last_temp,
@@ -235,20 +237,26 @@ class LoRaNode:
                         # else:
                         #     self.send_message(addr_sender, 22, msg_id, "No hay datos disponibles aún.")
                             ...
+                    if msg_type == 21: # Encender la luz
+                        ...
+                    if msg_type == 22: # Apagar la luz
+                        ...
+                    if msg_type == 23: # Luz en modo automático
+                        ...
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 30:  # Tomar foto
                             img_b64 = self.stream_recording()
-                            data = self.pack_message(addr_sender, 31, msg_id, img_b64)
-                            self.node.send_bytes(data)
+                            self.send_message(addr_sender, 31, msg_id, img_b64)
                             print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
                     self.is_relay = bool(relay_flag)
-                    self.node.send_bytes(self.pack_message(addr_sender, 1, msg_id, "OK")) 
+                    self.send_message(addr_sender, 5, msg_id, "OK")
 
             except Exception as e:
                 self.on_alert(f"Error processing message: {e}")
+                self.send_message(addr_sender, 1, msg_id, "Error")
 
             finally:
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Finished processing message.")
@@ -257,12 +265,12 @@ class LoRaNode:
     # ------------------- PENDING REQUESTS -----------------
 
     def add_pending(self, addr_dest: int, msg_id: int):
-        with self.lock:
+        with self.lock_pending:
             self.pending_requests.setdefault(addr_dest, []).append(msg_id)
         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Added pending request: {msg_id} to {addr_dest}")
 
     def remove_pending(self, addr_dest: int, msg_id: int) -> bool:
-        with self.lock:
+        with self.lock_pending:
             if addr_dest in self.pending_requests:
                 try:
                     self.pending_requests[addr_dest].remove(msg_id) 
@@ -490,16 +498,12 @@ class LoRaNode:
         
     # -------------------- SENSORES --------------------
     def connect_sensors(self):
-        
-        Puerto = '/dev/ttyUSB0'
-        BAU = 115200
-        
         try:
-            self.sensores = serial.Serial(Puerto, BAU, timeout=2)
+            self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
             time.sleep(2)
-            print("[SENSORS] Conectado al ESP32 en", Puerto)
+            print("[SENSORS] Conectado al ESP32 en", self.sens_port)
         except Exception as e:
-            print(f"[SENSORS] ❌ Error abriendo puerto {Puerto}: {e}")
+            print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
             return
         while self.running:
             try:
@@ -547,16 +551,14 @@ class LoRaNode:
     #                 return self.colision
     #         except Exception as e:
     #             print(f"UDP listener error: {e}")
-
     
     
     # -------------------- EJECUCIÓN --------------------
     def run(self):
+        receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
+        # -------------------- ROBOT --------------------
         if self.robot_port and self.robot_baudrate:
             self.connect_robot()
-        # threading.Thread(target=self.periodic_send, daemon=True).start()
-        receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
-
         # -------------------- RADAR --------------------
         # radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
 
