@@ -646,7 +646,7 @@ class EB_RobotGUI_bis(QWidget):
         # Comandos de solicitud
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 🌡️ Solicitando datos de temperatura y humedad...")
         #Solicita los datos
-        self.loranode.send_message(dest, msg_type, self.msg_id, "", relay)
+        self.loranode.send_message(dest, msg_type, self.msg_id, " ", relay)
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: Solicitud de información ambiental")
 
     def control_led(self):
