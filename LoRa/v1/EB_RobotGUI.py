@@ -423,10 +423,10 @@ class EB_RobotGUI_bis(QWidget):
                 19: ""
             },
             "Sensores (20–24)": {
-                20: "Lectura de temperatura",
-                21: "Lectura de temperatura y humedad",
-                22: "Lectura de humedad",
-                23: "Lectura de luz ambiental",
+                20: "Lectura de temperatura y humedad",
+                21: "Encender la luz",
+                22: "Apagar la luz",
+                23: "Luz en modo automático",
                 24: "Lectura de proximidad"
             },
             "Cámara/Radar (25–30)": {
@@ -640,7 +640,7 @@ class EB_RobotGUI_bis(QWidget):
     def take_data(self):
         # Envia una orden al nodo para obtener la temperatura y humedad
         dest = int(self.dest_entry.text())
-        msg_type = 21
+        msg_type = 20
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
         # Comandos de solicitud
