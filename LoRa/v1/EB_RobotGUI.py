@@ -367,8 +367,11 @@ class EB_RobotGUI_bis(QWidget):
         self.btn_stop_mov_aut = QPushButton("⏹️ Parar movimiento autónomo")
         self.btn_stop_mov_aut.clicked.connect(self._stop_mov_auto)
         buttons_mov_auto_layout.addWidget(self.btn_stop_mov_aut)
-        tabs.addTab(tab_radar, "📝")
-        
+
+        tab_radar.setLayout(buttons_mov_auto_layout)
+        tabs.addTab(tab_radar, "Radar")
+
+
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
 
@@ -645,8 +648,8 @@ class EB_RobotGUI_bis(QWidget):
         self.msg_id += 1
         # Comandos de solicitud
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 🌡️ Solicitando datos de temperatura y humedad...")
-        # Solicita los datos
-        self.loranode.send_message(dest, msg_type, self.msg_id, "", relay)
+        #Solicita los datos
+        self.loranode.send_message(dest, msg_type, self.msg_id, " ", relay)
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: Solicitud de información ambiental")
 
     def control_led(self, button):
