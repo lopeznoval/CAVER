@@ -426,11 +426,11 @@ class EB_RobotGUI_bis(QWidget):
                 19: ""
             },
             "Sensores (20–24)": {
-                20: "Lectura de temperatura y humedad",
-                21: "Encender la luz",
-                22: "Apagar la luz",
-                23: "Luz en modo automático",
-                24: "Lectura de proximidad"
+                20: "Encender led",
+                21: "Lectura actual de temperatura y humedad",
+                22: "Sincronizar sensores",
+                23: "Apagar led",
+                24: "Luz en modo automático"
             },
             "Cámara/Radar (25–30)": {
                 25: "Captura de imagen",
@@ -658,13 +658,13 @@ class EB_RobotGUI_bis(QWidget):
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
         if button == self.btn_encender_led:
-            msg_type = 21  # Encender LED
+            msg_type = 20  # Encender LED
             orden = "ON"
         elif button == self.btn_apagar_led:
-            msg_type = 22  # Apagar LED
+            msg_type = 23  # Apagar LED
             orden = "OFF"
         elif button == self.btn_modoauto_led:
-            msg_type = 23  # Modo automático LED
+            msg_type = 24  # Modo automático LED
             orden = "AUTO"
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Sending command to {dest}: {orden}")
         self.loranode.send_message(dest, msg_type, self.msg_id, " ", relay)
