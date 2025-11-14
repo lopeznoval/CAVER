@@ -19,7 +19,9 @@ if __name__ == "__main__":
             robot_port=SERIAL_PORT_ROBOT,
             robot_baudrate=BAUDRATE_ROBOT,
             ip_sock=UDP_IP,
-            port_sock=UDP_PORT
+            port_sock=UDP_PORT,
+            sens_port=SERIAL_PORT_SENS,
+            sens_baudrate=BAUDRATE_SENS
         )
         node.run()
     except Exception as e:
