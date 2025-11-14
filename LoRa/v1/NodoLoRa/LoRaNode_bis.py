@@ -13,7 +13,7 @@ from BBDDv1.lora_bridge_mongo import procesar_paquete_lora
 from BBDDv1.registro_datos import registrar_lectura
 from BBDDv1.database_SQLite import *
 from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
-from sx126x_bis import sx126x
+from NodoLoRa.sx126x_bis import sx126x
 from parameters import *
 
 
