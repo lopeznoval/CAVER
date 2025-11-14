@@ -719,13 +719,13 @@ class EB_RobotGUI_bis(QWidget):
 
     def _start_mov_auto(self):
         """Envía al robot la orden de comenzar el movimiento autónomo."""
-        self.selected_type = 14
+        self.set_selected_type(14, self.grups["Robot (10–19)"][14])
         self.append_general_log("🛰️ Enviando comando: Comenzar  movimiento autónomo")
         self.send_cmd("1")
 
     def _stop_mov_auto(self):
         """Envía al robot la orden de detener el movimiento autónomo."""        
-        self.selected_type = 14  
+        self.set_selected_type(14, self.grups["Robot (10–19)"][14])
         self.append_general_log("🛰️ Enviando comando: Detener movimiento autónomo")
         self.send_cmd("0")
 

@@ -54,13 +54,13 @@ class LoRaNode:
             self.connected_nodes = {}
             self.node_timers = {}
 
-        if platform.system() == "Linux":
-            from picamera2 import PiCamera2 # type: ignore
-            self.camera = PiCamera2()
-            self.stream = io.BytesIO()
-        else:
-            self.camera = None
-            self.stream = None
+        # if platform.system() == "Linux":
+        #     from picamera2 import PiCamera2 # type: ignore
+        #     self.camera = PiCamera2()
+        #     self.stream = io.BytesIO()
+        # else:
+        #     self.camera = None
+        #     self.stream = None
 
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
@@ -383,7 +383,7 @@ class LoRaNode:
     #             self.on_alert(f"Error en movimiento autonomo loop: {e}")
     #             time.sleep(2)
 
-    def _move_robot_autonomo(self):
+    def _move_robot_loop(self):
 
         UDP_IP = "192.168.1.10"
         UDP_PORT = 5005
@@ -403,22 +403,29 @@ class LoRaNode:
             try:
                 data, _ = radar_sock.recvfrom(1024)
                 val = int.from_bytes(data, "little")
+                print()
                 self.colision = val
             except socket.timeout:
                 pass  # no llegó nada → mantener último valor
 
             # Decidir movimiento
             if self.colision == 1:
+                cmd = {"T": 1, "L": 0, "R": 0}   # parar para evitar
+                print("⚠️ Colisión detectada → PARAR")
+                self.send_to_robot(json.dumps(cmd))
+                time.sleep(2)
                 cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
                 print("⚠️ Colisión detectada → GIRAR")
+                self.send_to_robot(json.dumps(cmd))
             else:
                 cmd = {"T": 1, "L": 0.5, "R": 0.5}   # avanzar recto
                 print("✔️ Libre → AVANZAR")
-
+                self.send_to_robot(json.dumps(cmd))
+                # time.sleep(0.3)
             # Enviar al robot
-            self.send_to_robot(json.dumps(cmd))
+            
 
-            time.sleep(2)
+            
 
         print("🛑 Autonomía detenida.")
         radar_sock.close()
@@ -610,8 +617,8 @@ class LoRaNode:
             self.connect_robot()
         # -------------------- RADAR --------------------
 
-        if (self.ip_sock is not None) and (self.port_sock is not None):
-            radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
+        # if (self.ip_sock is not None) and (self.port_sock is not None):
+        #     radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
         # -------------------- SENSORES --------------------
         if self.sens_port and self.sens_baudrate:
             self.connect_sensors()
