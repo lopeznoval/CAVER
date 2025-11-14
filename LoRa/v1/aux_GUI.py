@@ -4,26 +4,31 @@ from PyQt6.QtCore import Qt, QSize
 
 
 class StatusIndicator(QFrame):
-    """Pequeño círculo rojo o verde para estado ON/OFF"""
-    def __init__(self, color_off="#d9534f", color_on="#5cb85c", parent=None):
+    """Pequeño círculo rojo, verde o blanco (sin datos)"""
+    def __init__(self, color_off="#d9534f", color_on="#5cb85c", color_none="#dddddd", parent=None):
         super().__init__(parent)
         self.color_off = color_off
         self.color_on = color_on
-        self.active = False
+        self.color_none = color_none
+        self.state = None  # None → sin datos
         self.setFixedSize(QSize(14, 14))
 
-    def set_active(self, state: bool):
-        self.active = state
+    def set_state(self, state: bool | None):
+        """True=on, False=off, None=sin datos"""
+        self.state = state
         self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        color = QColor(self.color_on if self.active else self.color_off)
+        if self.state is None:
+            color = QColor(self.color_none)
+        else:
+            color = QColor(self.color_on if self.state else self.color_off)
         painter.setBrush(color)
         painter.setPen(Qt.PenStyle.NoPen)
-        radius = min(self.width(), self.height()) / 2
         painter.drawEllipse(0, 0, self.width(), self.height())
+
 
 
 class RobotStatusCard(QFrame):
@@ -67,11 +72,12 @@ class RobotStatusCard(QFrame):
         h.addWidget(indicator)
         layout.addLayout(h)
 
-    def update_status(self, robot=False, radar=False, sensors=False, camera=False):
-        self.robot_status.set_active(robot)
-        self.radar_status.set_active(radar)
-        self.sensor_status.set_active(sensors)
-        self.camera_status.set_active(camera)
+    def update_status(self, robot=None, radar=None, sensors=None, camera=None):
+        """True=verde, False=rojo, None=blanco"""
+        self.robot_status.set_state(robot)
+        self.radar_status.set_state(radar)
+        self.sensor_status.set_state(sensors)
+        self.camera_status.set_state(camera)
 
 
 class RobotsPanel(QWidget):
@@ -89,3 +95,18 @@ class RobotsPanel(QWidget):
             self.layout.addWidget(card)
             self.robots[node_id] = card
         self.robots[node_id].update_status(robot, radar, sensors, camera)
+
+    def sync_with_nodes(self, node_data: dict):
+        """
+        node_data: dict { node_id: (robot, radar, sensors, camera) }
+        Los que no estén en node_data → se ponen en blanco.
+        """
+        # Actualizar o crear robots presentes
+        for node_id, states in node_data.items():
+            self.add_or_update_robot(node_id, *states)
+
+        # Los que ya no aparecen → poner en blanco
+        for node_id, card in self.robots.items():
+            if node_id not in node_data:
+                card.update_status(None, None, None, None)
+
