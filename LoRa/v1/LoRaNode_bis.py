@@ -6,10 +6,10 @@ import time
 import threading
 from requests import session
 import serial
-from BBDD.lora_bridge import procesar_paquete_lora
-from BBDDv1.registro_datos import registrar_lectura
-from BBDDv1.database_SQLite import *
-from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
+# from BBDD.lora_bridge import procesar_paquete_lora
+# from BBDDv1.registro_datos import registrar_lectura
+# from BBDDv1.database_SQLite import *
+# from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
 from sx126x_bis import sx126x
 from parameters import *
 import platform
@@ -151,8 +151,9 @@ class LoRaNode:
                         self.imu_pos(message)
                     elif msg_id == 69: 
                         if self.is_base:
-                            resp = procesar_paquete_lora(message)
-                            self.send_message(addr_sender, 4, msg_id, resp)
+                            # resp = procesar_paquete_lora(message)
+                            # self.send_message(addr_sender, 4, msg_id, resp)
+                            ...
                 
                 # Respuestas posibles: 1- Error, 2- Consulta estándar, 3- Respuesta robot, 4- Respuesta sensores/camara/radar (o BBDD), 5- Ack Relay
                 elif 0 < msg_type < 5: 
@@ -247,8 +248,9 @@ class LoRaNode:
                         self.read_sensors_once()
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
                     if msg_type == 22:  # Sincronizar sensores pendientes
-                        with get_db_session() as session:
-                            sincronizar_sensores_lora(self, session)
+                        # with get_db_session() as session:
+                        #     sincronizar_sensores_lora(self, session)
+                        ...
 
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 30:  # Tomar foto
@@ -527,8 +529,8 @@ class LoRaNode:
 
                     print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
-                    with get_db_session() as session:
-                        registrar_lectura(self.temp, self.hum, session)
+                    # with get_db_session() as session:
+                    #     registrar_lectura(self.temp, self.hum, session)
 
             except Exception as e:
                 print(f"[SENSORS] Error leyendo ESP32: {e}")
@@ -547,8 +549,8 @@ class LoRaNode:
 
                     print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
-                    with get_db_session() as session:
-                        registrar_lectura(self.temp, self.hum, session)
+                    # with get_db_session() as session:
+                    #     registrar_lectura(self.temp, self.hum, session)
 
             except Exception as e:
                 print(f"[SENSORS] Error leyendo ESP32: {e}")
@@ -597,9 +599,9 @@ class LoRaNode:
             self.connect_sensors()
             sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True).start()
         # -------------------- BBDD --------------------
-        if not self.is_base:
-            crear_tablas()
-            bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
+        # if not self.is_base:
+        #     crear_tablas()
+        #     bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
         # -------------------- INFO PERIODICA --------------------
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()
