@@ -586,7 +586,25 @@ class LoRaNode:
     #         except Exception as e:
     #             print(f"UDP listener error: {e}")
 
-    
+    # -------------------- LED ------------------------
+    def control_led(self, orden: str):
+        # Envia una orden al ESP32 por serial
+        try:
+            self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
+            time.sleep(2)
+            print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+        except Exception as e:
+            print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
+            return
+        while self.running:
+            try:
+                if self.sensores and self.sensores.is_open:
+                    self.sensores.write((orden + "\n").encode())
+                    print(f"[LED] Orden enviada al ESP32: {orden}")
+                else:
+                    print("[LED] ❌ Puerto de sensores no está abierto.")
+            except Exception as e:
+                print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
     
     # -------------------- EJECUCIÓN --------------------
     def run(self):
