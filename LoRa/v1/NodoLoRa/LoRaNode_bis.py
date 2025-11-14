@@ -4,18 +4,18 @@ import json
 import queue
 import time
 import threading
-from requests import session
-import serial
-# from BBDD.lora_bridge import procesar_paquete_lora
-# from BBDDv1.registro_datos import registrar_lectura
-# from BBDDv1.database_SQLite import *
-# from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
-from sx126x_bis import sx126x
-from parameters import *
 import platform
 import base64
 import math
 import socket
+import serial
+from BBDDv1.lora_bridge_mongo import procesar_paquete_lora
+from BBDDv1.registro_datos import registrar_lectura
+from BBDDv1.database_SQLite import *
+from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
+from sx126x_bis import sx126x
+from parameters import *
+
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, 

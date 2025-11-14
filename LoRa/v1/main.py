@@ -1,5 +1,5 @@
 import sys
-import LoRaNode_bis as LRN
+import LoRa.v1.NodoLoRa.LoRaNode_bis as LRN
 from parameters import *
 import time
 
@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     if node is None or getattr(node, "is_base", False):
         try:
-            from EB_RobotGUI import EB_RobotGUI_bis
+            from GUI.EB_RobotGUI import EB_RobotGUI_bis
             from PyQt6.QtWidgets import QApplication  # type: ignore+
             import os, sys
 
