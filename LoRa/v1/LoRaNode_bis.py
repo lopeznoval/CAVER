@@ -249,6 +249,12 @@ class LoRaNode:
                     if msg_type == 22:  # Sincronizar sensores pendientes
                         with get_db_session() as session:
                             sincronizar_sensores_lora(self, session)
+                    # if msg_type == 21: # Encender la luz
+                    #     self.control_led("ON")
+                    # if msg_type == 22: # Apagar la luz
+                    #     self.control_led("OFF")
+                    # if msg_type == 23: # Luz en modo automático
+                    #     self.control_led("AUTO")
 
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 30:  # Tomar foto

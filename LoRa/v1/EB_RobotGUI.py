@@ -652,9 +652,23 @@ class EB_RobotGUI_bis(QWidget):
         self.loranode.send_message(dest, msg_type, self.msg_id, " ", relay)
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: Solicitud de información ambiental")
 
-    def control_led(self):
+    def control_led(self, button):
         # Envia una orden al nodo para controlar el LED
-        ...
+        dest = int(self.dest_entry.text())
+        relay = int(self.relay_combo.currentText())
+        self.msg_id += 1
+        if button == self.btn_encender_led:
+            msg_type = 21  # Encender LED
+            orden = "ON"
+        elif button == self.btn_apagar_led:
+            msg_type = 22  # Apagar LED
+            orden = "OFF"
+        elif button == self.btn_modoauto_led:
+            msg_type = 23  # Modo automático LED
+            orden = "AUTO"
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Sending command to {dest}: {orden}")
+        self.loranode.send_message(dest, msg_type, self.msg_id, " ", relay)
+        self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type} to {dest}")
 
     def start_feedback(self):
         if self.feedback_running:
