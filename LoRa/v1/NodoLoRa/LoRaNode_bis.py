@@ -4,18 +4,18 @@ import json
 import queue
 import time
 import threading
-from requests import session
-import serial
-# from BBDD.lora_bridge import procesar_paquete_lora
-# from BBDDv1.registro_datos import registrar_lectura
-# from BBDDv1.database_SQLite import *
-# from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
-from sx126x_bis import sx126x
-from parameters import *
 import platform
 import base64
 import math
 import socket
+import serial
+from BBDDv1.lora_bridge_mongo import procesar_paquete_lora
+from BBDDv1.registro_datos import registrar_lectura
+from BBDDv1.database_SQLite import *
+from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
+from NodoLoRa.sx126x_bis import sx126x
+from parameters import *
+
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, 
@@ -391,14 +391,15 @@ class LoRaNode:
 
     def _move_robot_loop(self):
 
-        UDP_IP = "192.168.1.10"
+        UDP_IP = "0.0.0.0"#"192.168.1.10"
         UDP_PORT = 5005
 
         radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         radar_sock.bind((UDP_IP, UDP_PORT))
-        radar_sock.settimeout(0.1)
+        radar_sock.settimeout(0.5)
 
         self.auto_move_running = True
+        self.colision = 0
 
         print("🔄 Autonomía iniciada...")
 
@@ -408,14 +409,26 @@ class LoRaNode:
             self.colision = 0
             try:
                 data, _ = radar_sock.recvfrom(1024)
+<<<<<<< HEAD:LoRa/v1/LoRaNode_bis.py
                 val = int.from_bytes(data, "little")
                 print()
                 self.colision = val
+=======
+                mensaje = data.decode() #val = int.from_bytes(data, "little")
+                print(f"⚠️ Mensaje radar recibido: {mensaje}")
+                
+                if mensaje=="STOP_ROBOT":   #self.colision = val
+                    self.colision = 1 
+                else: 
+                    self.colision = 0                       
+                
+>>>>>>> c822f4b3d10b41faf9bead6b5a202a0161957644:LoRa/v1/NodoLoRa/LoRaNode_bis.py
             except socket.timeout:
                 pass  # no llegó nada → mantener último valor
 
             # Decidir movimiento
             if self.colision == 1:
+<<<<<<< HEAD:LoRa/v1/LoRaNode_bis.py
                 cmd = {"T": 1, "L": 0, "R": 0}   # parar para evitar
                 print("⚠️ Colisión detectada → PARAR")
                 self.send_to_robot(json.dumps(cmd))
@@ -423,6 +436,12 @@ class LoRaNode:
                 cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
                 print("⚠️ Colisión detectada → GIRAR")
                 self.send_to_robot(json.dumps(cmd))
+=======
+                cmd = {"T": 1, "L": 0, "R": 0} 
+                print("⚠️ Colisión detectada → PARAR")
+                # cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
+                # print("⚠️ Colisión detectada → GIRAR")
+>>>>>>> c822f4b3d10b41faf9bead6b5a202a0161957644:LoRa/v1/NodoLoRa/LoRaNode_bis.py
             else:
                 cmd = {"T": 1, "L": 0.5, "R": 0.5}   # avanzar recto
                 print("✔️ Libre → AVANZAR")

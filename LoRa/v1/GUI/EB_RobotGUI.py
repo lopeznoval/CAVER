@@ -1,4 +1,3 @@
-from LoRaNode_bis import LoRaNode
 import json, threading, time, requests
 import sys
 import json
@@ -12,9 +11,9 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QAction, QPainter, QColor, QFont
-from LoRaNode_bis import LoRaNode
 
-from aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
+from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
+from NodoLoRa.LoRaNode_bis import LoRaNode
 
 
 
