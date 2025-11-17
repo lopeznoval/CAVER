@@ -391,14 +391,15 @@ class LoRaNode:
 
     def _move_robot_autonomo(self):
 
-        UDP_IP = "192.168.1.10"
+        UDP_IP = "0.0.0.0"#"192.168.1.10"
         UDP_PORT = 5005
 
         radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         radar_sock.bind((UDP_IP, UDP_PORT))
-        radar_sock.settimeout(0.1)
+        radar_sock.settimeout(0.5)
 
         self.auto_move_running = True
+        self.colision = 0
 
         print("🔄 Autonomía iniciada...")
 
@@ -408,15 +409,23 @@ class LoRaNode:
             self.colision = 0
             try:
                 data, _ = radar_sock.recvfrom(1024)
-                val = int.from_bytes(data, "little")
-                self.colision = val
+                mensaje = data.decode() #val = int.from_bytes(data, "little")
+                print(f"⚠️ Mensaje radar recibido: {mensaje}")
+                
+                if mensaje=="STOP_ROBOT":   #self.colision = val
+                    self.colision = 1 
+                else: 
+                    self.colision = 0                       
+                
             except socket.timeout:
                 pass  # no llegó nada → mantener último valor
 
             # Decidir movimiento
             if self.colision == 1:
-                cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
-                print("⚠️ Colisión detectada → GIRAR")
+                cmd = {"T": 1, "L": 0, "R": 0} 
+                print("⚠️ Colisión detectada → PARAR")
+                # cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
+                # print("⚠️ Colisión detectada → GIRAR")
             else:
                 cmd = {"T": 1, "L": 0.5, "R": 0.5}   # avanzar recto
                 print("✔️ Libre → AVANZAR")
