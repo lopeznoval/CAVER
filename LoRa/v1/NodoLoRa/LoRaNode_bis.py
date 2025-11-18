@@ -393,7 +393,7 @@ class LoRaNode:
     #             self.on_alert(f"Error en movimiento autonomo loop: {e}")
     #             time.sleep(2)
 
-    def _move_robot_autonomo(self):
+    def _move_robot_loop(self):
 
         UDP_IP = "0.0.0.0"#"192.168.1.10"
         UDP_PORT = 5005
@@ -628,8 +628,8 @@ class LoRaNode:
             self.connect_robot()
         # -------------------- RADAR --------------------
 
-        if (self.ip_sock is not None) and (self.port_sock is not None):
-            radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
+        # if (self.ip_sock is not None) and (self.port_sock is not None):
+        #     radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
         # -------------------- SENSORES --------------------
         if self.sens_port and self.sens_baudrate:
             self.connect_sensors()
