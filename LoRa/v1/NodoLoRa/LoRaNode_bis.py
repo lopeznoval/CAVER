@@ -428,7 +428,7 @@ class LoRaNode:
                 self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
                 last_cmd = cmd
 
-            # time.sleep(0.05)  # control loop
+            time.sleep(0.15)  # control loop
 
         radar_sock.close()
         print("🛑 Autonomía detenida.")
