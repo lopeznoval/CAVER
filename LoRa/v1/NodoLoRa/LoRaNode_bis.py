@@ -55,9 +55,14 @@ class LoRaNode:
             self.node_timers = {}
 
         if platform.system() == "Linux":
-            from picamera2 import PiCamera2 # type: ignore
-            self.camera = PiCamera2()
-            self.stream = io.BytesIO()
+            try:
+                from picamera2 import PiCamera2 # type: ignore
+                self.camera = PiCamera2()
+                self.stream = io.BytesIO()
+            except Exception as e:
+                print(f"Error al conectarse a la cámara: {e}")
+                self.camera = None
+                self.stream = None
         else:
             self.camera = None
             self.stream = None
@@ -106,7 +111,7 @@ class LoRaNode:
         while self.running:
             self.send_message(0xFFFF, 5, 0, "", 0)
             print(f"[{time.strftime('%H:%M:%S')}] PING enviado")
-            time.sleep(30) # intervalos de 30 segundos entre envío y envío
+            time.sleep(40) # intervalos de 40 segundos entre envío y envío
 
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
@@ -120,7 +125,6 @@ class LoRaNode:
             if not msg:
                 time.sleep(0.05)
                 continue
-            print("hay mensaje")
             threading.Thread(target=self.processing_loop, args=(msg,), daemon=True).start()
 
     def processing_loop(self, msg):
@@ -138,11 +142,11 @@ class LoRaNode:
                     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Relaying message from {addr_sender} to {addr_dest}")
                     self.send_message(addr_dest, msg_type, msg_id, message)
                 else:
-                    self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE DESCARTA-")
+                    self.on_message(f"[{time.strftime('%H:%M:%S')}] ✖️ Received from {addr_sender} to {addr_dest}: {message}.")
                     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received message not for this node (dest: {addr_dest}), discarding.")
                 return            
             # -------------------- HANDLER DE TIPOS --------------------
-            self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
+            self.on_message(f"[{time.strftime('%H:%M:%S')}] ✔️ Received from {addr_sender} to {addr_dest}: {message}.")
             
             try: 
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
@@ -396,7 +400,7 @@ class LoRaNode:
 
         radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         radar_sock.bind((UDP_IP, UDP_PORT))
-        radar_sock.settimeout(0.5)
+        # radar_sock.settimeout(0.5)
 
         self.auto_move_running = True
         self.colision = 0
@@ -411,8 +415,8 @@ class LoRaNode:
                 data, _ = radar_sock.recvfrom(1024)
                 mensaje = data.decode() #val = int.from_bytes(data, "little")
                 print(f"⚠️ Mensaje radar recibido: {mensaje}")
-                
-                if mensaje=="STOP_ROBOT":   #self.colision = val
+
+                if mensaje=="1":   #mensaje = "STOP_ROBOT":
                     self.colision = 1 
                 else: 
                     self.colision = 0                       
