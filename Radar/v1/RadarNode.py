@@ -27,6 +27,7 @@ currentIndex = 0
 while True:
     try:
         dataOk, radar_collision_stop = radar.update()
+        
         if dataOk and radar.detObj:
             frameData[currentIndex] = radar.detObj
             currentIndex += 1
