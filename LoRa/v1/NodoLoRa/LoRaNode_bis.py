@@ -377,7 +377,7 @@ class LoRaNode:
 
         radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         radar_sock.bind((UDP_IP, UDP_PORT))
-        radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
+        radar_sock.settimeout(0.1)         # más rápido para vaciar buffer
         radar_sock.setblocking(False)
 
         print("🔄 Autonomía iniciada...")
@@ -410,24 +410,23 @@ class LoRaNode:
                 cmd = {"T": 1, "L": 0, "R": 0}
                 if cmd != last_cmd:
                     print("⚠️ Colisión detectada → PARAR")
-                    self.send_to_robot(json.dumps(cmd))
+                    self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
                     last_cmd = cmd
 
                 # Girar
-                time.sleep(1)
+                time.sleep(0.5)
                 cmd = {"T": 1, "L": 0.1, "R": -0.1}
                 if cmd != last_cmd:
                     print("⚠️ Colisión detectada → GIRAR")
-                    self.send_to_robot(json.dumps(cmd))
+                    self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
                     last_cmd = cmd
 
             else:
                 # Avanzar
                 cmd = {"T": 1, "L": 0.1, "R": 0.1}
-                if cmd != last_cmd:
-                    print("✔️ Libre → AVANZAR")
-                    self.send_to_robot(json.dumps(cmd))
-                    last_cmd = cmd
+                print("✔️ Libre → AVANZAR")
+                self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+                last_cmd = cmd
 
             time.sleep(0.05)  # control loop
 
