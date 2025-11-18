@@ -410,7 +410,19 @@ class LoRaNode:
         while self.auto_move_running:
 
             # Leer radar
-            self.colision = 0
+            # self.colision = 0
+            # Decidir movimiento
+            if self.colision == 1:
+                cmd = {"T": 1, "L": 0, "R": 0} 
+                print("⚠️ Colisión detectada → PARAR")
+                # cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
+                # print("⚠️ Colisión detectada → GIRAR")
+            else:
+                cmd = {"T": 1, "L": 0.5, "R": 0.5}   # avanzar recto
+                print("✔️ Libre → AVANZAR")
+
+            # Enviar al robot
+            self.send_to_robot(json.dumps(cmd))
             try:
                 data, _ = radar_sock.recvfrom(1024)
                 mensaje = data.decode() #val = int.from_bytes(data, "little")
@@ -424,20 +436,7 @@ class LoRaNode:
             except socket.timeout:
                 pass  # no llegó nada → mantener último valor
 
-            # Decidir movimiento
-            if self.colision == 1:
-                cmd = {"T": 1, "L": 0, "R": 0} 
-                print("⚠️ Colisión detectada → PARAR")
-                # cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
-                # print("⚠️ Colisión detectada → GIRAR")
-            else:
-                cmd = {"T": 1, "L": 0.5, "R": 0.5}   # avanzar recto
-                print("✔️ Libre → AVANZAR")
-
-            # Enviar al robot
-            self.send_to_robot(json.dumps(cmd))
-
-            time.sleep(2)
+            time.sleep(1)
 
         print("🛑 Autonomía detenida.")
         radar_sock.close()
