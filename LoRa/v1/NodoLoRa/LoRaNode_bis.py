@@ -400,7 +400,8 @@ class LoRaNode:
 
         radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         radar_sock.bind((UDP_IP, UDP_PORT))
-        # radar_sock.settimeout(0.5)
+        radar_sock.settimeout(0.05)
+        # radar_sock.setblocking(False)
 
         self.auto_move_running = True
         self.colision = 0
@@ -412,17 +413,18 @@ class LoRaNode:
             # Leer radar
             # self.colision = 0
             # Decidir movimiento
-            if self.colision == 1:
-                cmd = {"T": 1, "L": 0, "R": 0} 
-                print("⚠️ Colisión detectada → PARAR")
-                # cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
-                # print("⚠️ Colisión detectada → GIRAR")
-            else:
-                cmd = {"T": 1, "L": 0.5, "R": 0.5}   # avanzar recto
-                print("✔️ Libre → AVANZAR")
+            # if self.colision == 1:
+            #     cmd = {"T": 1, "L": 0, "R": 0} 
+            #     print("⚠️ Colisión detectada → PARAR")
+            #     time.sleep(1)
+            #     cmd = {"T": 1, "L": 0.1, "R": -0.1}   # girar para evitar
+            #     print("⚠️ Colisión detectada → GIRAR")
+            # else:
+            #     cmd = {"T": 1, "L": 0.1, "R": 0.1}   # avanzar recto
+            #     print("✔️ Libre → AVANZAR")
 
-            # Enviar al robot
-            self.send_to_robot(json.dumps(cmd))
+            # # Enviar al robot
+            # self.send_to_robot(json.dumps(cmd))
             try:
                 data, _ = radar_sock.recvfrom(1024)
                 mensaje = data.decode() #val = int.from_bytes(data, "little")
@@ -430,13 +432,26 @@ class LoRaNode:
 
                 if mensaje=="1":   #mensaje = "STOP_ROBOT":
                     self.colision = 1 
+                    cmd = {"T": 1, "L": 0, "R": 0} 
+                    print("⚠️ Colisión detectada → PARAR")
+                    self.send_to_robot(json.dumps(cmd))
+                    time.sleep(1)
+                    cmd = {"T": 1, "L": 0.1, "R": -0.1}   # girar para evitar
+                    print("⚠️ Colisión detectada → GIRAR") 
+                    self.send_to_robot(json.dumps(cmd))
                 else: 
                     self.colision = 0                       
                 
             except socket.timeout:
-                pass  # no llegó nada → mantener último valor
+                if self.colision == 0:
+                    cmd = {"T": 1, "L": 0.1, "R": 0.1}   # avanzar recto
+                    print("✔️ Libre → AVANZAR")
+                    
+                    self.send_to_robot(json.dumps(cmd))
 
-            time.sleep(1)
+            
+
+            #time.sleep(1)
 
         print("🛑 Autonomía detenida.")
         radar_sock.close()
