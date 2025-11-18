@@ -385,6 +385,7 @@ class LoRaNode:
         self.auto_move_running = True
         last_cmd = None                     # para no enviar comandos repetidos
         last_state = 0                      # último estado recibido del radar
+        self.robot.reset_input_buffer()
 
         while self.auto_move_running:
 
@@ -409,21 +410,22 @@ class LoRaNode:
                 # Parar
                 cmd = {"T": 1, "L": 0, "R": 0}
                 print("⚠️ Colisión detectada → PARAR")
-                self.send_to_robot(json.dumps(cmd))
+                self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
 
                 # Girar
                 time.sleep(0.5)
                 cmd = {"T": 1, "L": 0.1, "R": -0.1}
                 if cmd != last_cmd:
                     print("⚠️ Colisión detectada → GIRAR")
-                    self.send_to_robot(json.dumps(cmd))
+                    self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+                    time.sleep(1)
                     last_cmd = cmd
 
             else:
                 # Avanzar
                 cmd = {"T": 1, "L": 0.1, "R": 0.1}
                 print("✔️ Libre → AVANZAR")
-                self.send_to_robot(json.dumps(cmd))
+                self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
                 last_cmd = cmd
 
             time.sleep(0.15)  # control loop
