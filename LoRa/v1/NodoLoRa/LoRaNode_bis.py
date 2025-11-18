@@ -408,10 +408,8 @@ class LoRaNode:
             if last_state == 1:
                 # Parar
                 cmd = {"T": 1, "L": 0, "R": 0}
-                if cmd != last_cmd:
-                    print("⚠️ Colisión detectada → PARAR")
-                    self.send_to_robot(json.dumps(cmd))
-                    last_cmd = cmd
+                print("⚠️ Colisión detectada → PARAR")
+                self.send_to_robot(json.dumps(cmd))
 
                 # Girar
                 time.sleep(0.5)
