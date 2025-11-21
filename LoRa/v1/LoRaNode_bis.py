@@ -17,6 +17,10 @@ import base64
 import math
 import socket
 
+from datetime import datetime
+import os
+
+
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, 
                  EB=0, robot_port=None, robot_baudrate=None, ip_sock=None, port_sock=None, sens_port=None, sens_baudrate=None):  # EB = 1 si es estación base
@@ -61,6 +65,24 @@ class LoRaNode:
         else:
             self.camera = None
             self.stream = None
+
+        self.recording = False
+        # carpetas
+        self.media_dir = "/home/pi/robot_media/"
+        self.photo_dir = self.media_dir + "photos/"
+        self.video_dir = self.media_dir + "videos/"
+        self.pending_file = self.media_dir + "pending.json/"
+        os.makedirs(self.photo_dir, exist_ok=True)
+        os.makedirs(self.video_dir, exist_ok=True)
+        if not os.path.exists(self.pending_file):
+            with open(self.pending_file, "w") as f:
+                json.dump([], f)
+
+        # Pending in-memory for speed
+        self._load_pending_list()
+        # variables auxiliares
+        self.pending_lock = threading.Lock()
+
 
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
@@ -253,11 +275,28 @@ class LoRaNode:
                         ...
 
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
+                    # if msg_type == 30:  # Tomar foto
+                            # img_b64 = self.take_picture()
+                            # self.send_message(addr_sender, 4, msg_id, img_b64)
+                            # print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
+                    # ---------------------- FOTO ----------------------
                     if msg_type == 30:  # Tomar foto
-                            img_b64 = self.stream_recording()
-                            self.send_message(addr_sender, 4, msg_id, img_b64)
-                            print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
+                        img_b64 = self.take_picture_and_save()
+                        self.send_message(addr_sender, 4, msg_id, img_b64)
+                        print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
+                    # ---------------------- INICIAR VIDEO ----------------------
+                    elif msg_type == 29:  # iniciar grabación
+                        filename = self.start_video_recording()
+                        self.send_message(addr_sender, 4, msg_id, f"Video recording started: {filename}")
+                        print(f"[{time.strftime('%H:%M:%S')}] Grabación iniciada: {filename}")
+
+                    # ---------------------- DETENER VIDEO ----------------------
+                    elif msg_type == 28:  # detener grabación
+                        filename = self.stop_video_recording()
+                        self.send_message(addr_sender, 4, msg_id, f"Video recording stopped: {filename}")
+                        print(f"[{time.strftime('%H:%M:%S')}] Grabación detenida: {filename}")
+                        
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
                     self.is_relay = bool(relay_flag)
@@ -383,14 +422,15 @@ class LoRaNode:
     #             self.on_alert(f"Error en movimiento autonomo loop: {e}")
     #             time.sleep(2)
 
-    def _move_robot_autonomo(self):
+    def _move_robot_loop(self):
 
         UDP_IP = "192.168.1.10"
         UDP_PORT = 5005
 
         radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         radar_sock.bind((UDP_IP, UDP_PORT))
-        radar_sock.settimeout(0.1)
+        # radar_sock.settimeout(0.1)
+        radar_sock.setblocking(False)
 
         self.auto_move_running = True
 
@@ -418,7 +458,7 @@ class LoRaNode:
             # Enviar al robot
             self.send_to_robot(json.dumps(cmd))
 
-            time.sleep(2)
+            # time.sleep(2)
 
         print("🛑 Autonomía detenida.")
         radar_sock.close()
@@ -491,21 +531,184 @@ class LoRaNode:
             self.on_alert(f"⚠️ ¡Posible vuelco detectado! Roll: {self.roll:.1f}°, Pitch: {self.pitch:.1f}°")
 
                      
-    # -------------------- VÍDEO --------------------
-    def stream_recording(self):
-        if self.camera is not None:
-            self.stream.seek(0)
-            self.stream.truncate()
-            self.camera.capture(self.stream, format='jpeg')
+    # # -------------------- VÍDEO --------------------
+    # def take_picture(self):
+    #     if self.camera is not None:
+    #         self.stream.seek(0)
+    #         self.stream.truncate()
+    #         self.camera.capture(self.stream, format='jpeg')
 
-            # Convertir a Base64
-            img_b64 = base64.b64encode(self.stream.getvalue()).decode('utf-8')
-            self.stream.truncate(0)
+    #         # Convertir a Base64
+    #         img_b64 = base64.b64encode(self.stream.getvalue()).decode('utf-8')
+    #         self.stream.truncate(0)
 
-            return img_b64
-        else:
+    #         return img_b64
+    #     else:
+    #         return None
+    
+
+    # ---------- pending list ----------
+    def _load_pending_list(self):
+        try:
+            with open(self.pending_file, "r") as f:
+                self.pending = json.load(f)
+        except Exception:
+            self.pending = []
+
+    def _save_pending_list(self):
+        with open(self.pending_file, "w") as f:
+            json.dump(self.pending, f, indent=2)
+
+    def mark_pending(self, filepath):
+        with self.pending_lock:
+            if filepath not in self.pending:
+                self.pending.append(filepath)
+                self._save_pending_list()
+                self.on_alert(f"Archivo marcado como pendiente: {filepath}")
+
+    def clear_pending(self, filepath):
+        with self.pending_lock:
+            if filepath in self.pending:
+                self.pending.remove(filepath)
+                self._save_pending_list()
+                self.on_alert(f"Archivo enviado/limpiado: {filepath}")
+
+    # -------------------- FOTO --------------------
+    def take_picture_and_save(self, quality_jpeg=80, max_lora_bytes=18000):
+        """
+        Toma una foto con Picamera2, la guarda en fotos/ y devuelve:
+        (filename_on_disk, b64_string_if_small_or_None)
+        Si la imagen es > max_lora_bytes se devuelve None como b64 y queda en pending.
+        """
+        if self.camera is None:
+            self.on_alert("Cámara no disponible para foto.")
+            return None, None
+
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(self.photos_dir, f"photo_{timestamp}.jpg")
+
+            # Captura a archivo (más robusto que capturar en stream en algunas versiones)
+            # Usamos capture_file para guardar directamente
+            try:
+                # picamera2 API: capture_file
+                self.camera.start()
+            except Exception:
+                # start puede fallar si ya está arrancada; ignorar
+                pass
+
+            # capturar directamente en archivo
+            try:
+                self.camera.capture_file(filename, format="jpeg")
+            except TypeError:
+                # en algunas versiones capture_file acepta objecto, intentamos con IO
+                buf = io.BytesIO()
+                self.camera.capture_file(buf, format="jpeg")
+                with open(filename, "wb") as f:
+                    f.write(buf.getvalue())
+
+            # Leer bytes
+            with open(filename, "rb") as f:
+                data = f.read()
+
+            # Si el tamaño es pequeño, devolver base64 listo para enviar por LoRa
+            if len(data) <= max_lora_bytes:
+                b64 = base64.b64encode(data).decode("utf-8")
+                self.on_alert(f"Foto tomada y codificada (size {len(data)} bytes).")
+                return filename, b64
+            else:
+                # Guardar como pendiente para envio por WiFi
+                self.mark_pending(filename)
+                self.on_alert(f"Foto tomada (size {len(data)} bytes) — marcada pendiente (demasiado grande para LoRa).")
+                return filename, None
+
+        except Exception as e:
+            self.on_alert(f"Error tomando foto: {e}")
+            return None, None
+    
+    
+    # ---------- VIDEO ----------
+    def start_video_recording(self, bitrate=2000000):
+        """
+        Inicia grabación H.264 a archivo .h264 (usa H264Encoder).
+        Devuelve la ruta del archivo si se inició.
+        """
+        if self.camera is None:
+            self.on_alert("Cámara no disponible para vídeo.")
             return None
-        
+
+        if self.recording:
+            self.on_alert("Ya hay una grabación en curso.")
+            return self.current_video
+
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            outpath = os.path.join(self.videos_dir, f"video_{timestamp}.h264")
+            self.current_video = outpath
+
+            # encoder
+            self.encoder = self.H264Encoder(bitrate=bitrate)
+            # start_recording activa encoder y cámara
+            self.camera.start_recording(self.encoder, self.current_video)
+            self.recording = True
+            self.on_alert(f"Grabación iniciada: {self.current_video}")
+            return self.current_video
+        except Exception as e:
+            self.on_alert(f"Error iniciando grabación: {e}")
+            return None
+
+    def stop_video_recording(self, package_to_mp4=False):
+        """
+        Para la grabación. Si package_to_mp4=True intenta empaquetar a mp4 usando ffmpeg (si está instalado).
+        Devuelve la ruta del archivo final (h264 o mp4).
+        """
+        if not self.recording:
+            self.on_alert("No hay grabación en curso.")
+            return None
+
+        try:
+            # stop_recording para encoder y cámara
+            self.camera.stop_recording()
+        except Exception:
+            # en caso de que stop_recording no exista o falle:
+            try:
+                self.camera.stop()
+            except Exception:
+                pass
+
+        self.recording = False
+        filepath = self.current_video
+        self.current_video = None
+
+        # marcar pendiente para envio por WiFi
+        self.mark_pending(filepath)
+        self.on_alert(f"Grabación parada y guardada: {filepath}")
+
+        # Opcional: empaquetar a mp4 si se desea (requiere ffmpeg)
+        if package_to_mp4:
+            mp4_path = filepath.replace(".h264", ".mp4")
+            try:
+                import subprocess
+                cmd = ["ffmpeg", "-y", "-framerate", "30", "-i", filepath, "-c", "copy", mp4_path]
+                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.on_alert(f"Empaquetado MP4 creado: {mp4_path}")
+                # marcar mp4 pendiente y borrar .h264
+                self.mark_pending(mp4_path)
+                # opcional: os.remove(filepath)
+                return mp4_path
+            except Exception as e:
+                self.on_alert(f"No se pudo empaquetar mp4: {e}")
+                return filepath
+
+        return filepath
+
+
+    # ---------- UTILIDADES ----------
+    def list_pending(self):
+        """Devuelve lista actual de pendientes (ruta completa)."""
+        self._load_pending_list()
+        return list(self.pending)
+
     # -------------------- SENSORES --------------------
     def connect_sensors(self):
         try:
@@ -610,8 +813,8 @@ class LoRaNode:
             self.connect_robot()
         # -------------------- RADAR --------------------
 
-        if (self.ip_sock is not None) and (self.port_sock is not None):
-            radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
+        # if (self.ip_sock is not None) and (self.port_sock is not None):
+        #     radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
         # -------------------- SENSORES --------------------
         if self.sens_port and self.sens_baudrate:
             self.connect_sensors()
