@@ -40,8 +40,8 @@ class LoRaNode:
         self.response_queue = queue.Queue()
         
         self.sensores = None
-        self.sens_port = None
-        self.sens_baudrate = None
+        self.sens_port = sens_port
+        self.sens_baudrate = sens_baudrate
         self.last_temp = None
         self.last_hum = None
 
@@ -331,6 +331,7 @@ class LoRaNode:
             self.robot_listener.start()
         except serial.SerialException as e:
             print(f"Failed to connect to robot: {e}")
+            return
 
     def receive_from_robot(self):
         while self.robot:
@@ -608,7 +609,7 @@ class LoRaNode:
             except Exception as e:
                 print(f"[SENSORS] Error leyendo ESP32: {e}")
             
-            time.sleep(120)
+            time.sleep(10) #cmabiar a 120 o lo que queramos
 
     def read_sensors_once(self):
         """Lee datos de temperatura y humedad del ESP32 conectado por serie una vez."""
@@ -658,23 +659,23 @@ class LoRaNode:
     # -------------------- LED ------------------------
     def control_led(self, orden: str):
         # Envia una orden al ESP32 por serial
+        # try:
+        #     self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
+        #     time.sleep(2)
+        #     print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+        # except Exception as e:
+        #     print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
+        #     return
+        # while self.running:
         try:
-            self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
-            time.sleep(2)
-            print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+            if self.sensores and self.sensores.is_open:
+                self.sensores.write((orden + "\n").encode())
+                print(f"[LED] Orden enviada al ESP32: {orden}")
+            else:
+                print("[LED] ❌ Puerto de sensores no está abierto.")
         except Exception as e:
-            print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
-            return
-        while self.running:
-            try:
-                if self.sensores and self.sensores.is_open:
-                    self.sensores.write((orden + "\n").encode())
-                    print(f"[LED] Orden enviada al ESP32: {orden}")
-                else:
-                    print("[LED] ❌ Puerto de sensores no está abierto.")
-            except Exception as e:
-                print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
-    
+            print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
+
     # -------------------- EJECUCIÓN --------------------
     def run(self):
         receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
