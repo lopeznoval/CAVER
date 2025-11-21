@@ -56,8 +56,8 @@ class LoRaNode:
 
         if platform.system() == "Linux":
             try:
-                from picamera2 import PiCamera2 # type: ignore
-                self.camera = PiCamera2()
+                from picamera2 import Picamera2, Preview # type: ignore
+                self.camera = Picamera2()
                 self.stream = io.BytesIO()
             except Exception as e:
                 print(f"Error al conectarse a la cámara: {e}")
