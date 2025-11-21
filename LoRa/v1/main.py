@@ -27,7 +27,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"❌ Error initializing LoRaNode: {e}")
 
-    if node is None or getattr(node, "is_base", False):
+    if not(node is None or EB == 0): # getattr(node, "is_base", False):
         try:
             from GUI.EB_RobotGUI import EB_RobotGUI_bis
             from PyQt6.QtWidgets import QApplication  # type: ignore+
