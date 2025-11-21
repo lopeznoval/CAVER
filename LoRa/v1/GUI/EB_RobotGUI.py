@@ -642,7 +642,7 @@ class EB_RobotGUI_bis(QWidget):
     def take_data(self):
         # Envia una orden al nodo para obtener la temperatura y humedad
         dest = int(self.dest_entry.text())
-        msg_type = 20
+        msg_type = 21
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
         # Comandos de solicitud
