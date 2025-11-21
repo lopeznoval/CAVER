@@ -1,5 +1,5 @@
 import sys
-import LoRaNode_bis as LRN
+from NodoLoRa.LoRaNode_bis import LoRaNode as LRN
 from parameters import *
 import time
 
@@ -9,7 +9,7 @@ if __name__ == "__main__":
     node = None 
 
     try:
-        node = LRN.LoRaNode(
+        node = LRN(
             SERIAL_PORT,
             NODE_ADDRESS,
             FREQUENCY,
@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     if node is None or getattr(node, "is_base", False):
         try:
-            from EB_RobotGUI import EB_RobotGUI_bis
+            from GUI.EB_RobotGUI import EB_RobotGUI_bis
             from PyQt6.QtWidgets import QApplication  # type: ignore+
             import os, sys
 
@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
             app = QApplication(sys.argv)
 
-            style_path = os.path.join(base_path, "styles.qss")
+            style_path = os.path.join(base_path, "./GUI/styles.qss")
             if os.path.exists(style_path):
                 with open(style_path, "r") as f:
                     qss = f.read()

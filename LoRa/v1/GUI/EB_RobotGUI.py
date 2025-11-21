@@ -1,4 +1,3 @@
-from LoRaNode_bis import LoRaNode
 import json, threading, time, requests
 import sys
 import json
@@ -13,11 +12,17 @@ from PyQt6.QtWidgets import (
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
     QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem
 )
+<<<<<<< HEAD:LoRa/v1/EB_RobotGUI.py
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray
 from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage
 from LoRaNode_bis import LoRaNode
+=======
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
+from PyQt6.QtGui import QAction, QPainter, QColor, QFont
+>>>>>>> d9d290b0bef3040ecc5a5917f3e6cfa4bdd25bbd:LoRa/v1/GUI/EB_RobotGUI.py
 
-from aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
+from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
+from NodoLoRa.LoRaNode_bis import LoRaNode
 
 
 class EB_RobotGUI_bis(QWidget):
@@ -472,11 +477,11 @@ class EB_RobotGUI_bis(QWidget):
                 19: ""
             },
             "Sensores (20–24)": {
-                20: "Lectura de temperatura y humedad",
-                21: "Encender la luz",
-                22: "Apagar la luz",
-                23: "Luz en modo automático",
-                24: "Lectura de proximidad"
+                20: "Encender led",
+                21: "Lectura actual de temperatura y humedad",
+                22: "Sincronizar sensores",
+                23: "Apagar led",
+                24: "Luz en modo automático"
             },
             "Cámara/Radar (25–30)": {
                 25: "Captura de imagen",
@@ -704,13 +709,13 @@ class EB_RobotGUI_bis(QWidget):
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
         if button == self.btn_encender_led:
-            msg_type = 21  # Encender LED
+            msg_type = 20  # Encender LED
             orden = "ON"
         elif button == self.btn_apagar_led:
-            msg_type = 22  # Apagar LED
+            msg_type = 23  # Apagar LED
             orden = "OFF"
         elif button == self.btn_modoauto_led:
-            msg_type = 23  # Modo automático LED
+            msg_type = 24  # Modo automático LED
             orden = "AUTO"
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Sending command to {dest}: {orden}")
         self.loranode.send_message(dest, msg_type, self.msg_id, " ", relay)
@@ -765,13 +770,21 @@ class EB_RobotGUI_bis(QWidget):
 
     def _start_mov_auto(self):
         """Envía al robot la orden de comenzar el movimiento autónomo."""
+<<<<<<< HEAD:LoRa/v1/EB_RobotGUI.py
         self.set_selected_type(14, self.grups["Robot (10–19)"][11])
+=======
+        self.set_selected_type(14, self.grups["Robot (10–19)"][14])
+>>>>>>> d9d290b0bef3040ecc5a5917f3e6cfa4bdd25bbd:LoRa/v1/GUI/EB_RobotGUI.py
         self.append_general_log("🛰️ Enviando comando: Comenzar  movimiento autónomo")
         self.send_cmd("1")
 
     def _stop_mov_auto(self):
         """Envía al robot la orden de detener el movimiento autónomo."""        
+<<<<<<< HEAD:LoRa/v1/EB_RobotGUI.py
         self.set_selected_type(14, self.grups["Robot (10–19)"][11])
+=======
+        self.set_selected_type(14, self.grups["Robot (10–19)"][14])
+>>>>>>> d9d290b0bef3040ecc5a5917f3e6cfa4bdd25bbd:LoRa/v1/GUI/EB_RobotGUI.py
         self.append_general_log("🛰️ Enviando comando: Detener movimiento autónomo")
         self.send_cmd("0")
 

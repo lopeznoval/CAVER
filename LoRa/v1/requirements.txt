@@ -1,0 +1,9 @@
+fastapi==0.121.2
+picamera2==0.3.31
+pymongo==4.15.4
+PyQt6==6.10.0
+pyqt6_sip==13.10.2
+pyqtgraph==0.13.7
+pyserial==3.5
+Requests==2.32.5
+SQLAlchemy==2.0.36

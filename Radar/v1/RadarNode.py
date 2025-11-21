@@ -1,6 +1,7 @@
 import time
 import socket
 from iwr1443 import IWR1443
+import numpy as np
 
 # --- Configuración Radar ---
 cli_port = '/dev/ttyACM0'
@@ -23,12 +24,8 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 frameData = {}
 currentIndex = 0
-
-# --- Estado y contadores ---
-state = "RUNNING"  # o "STOPPED", dependiendo de cómo arranque tu robot
-count_ones = 0
-count_zeros = 0
-MIN_COUNT = 6      
+# collisions_array = np.array([], dtype=int)
+# last_state = 0
 
 while True:
     try:
@@ -47,48 +44,52 @@ while True:
 
         # if any(r < radar.STOP_DISTANCE_THRESHOLD for r in radar.detObj["range"]):
 
-        # if radar_collision_stop == 1:
-        #     print("⚠️ Objeto detectado cerca, enviando alerta a Pi LoRaNode...")
-        #     # sock.sendto(b"STOP_ROBOT", (UDP_IP, UDP_PORT))
-        #     try:
-        #         sock.sendto(b"1", (UDP_IP, UDP_PORT))
-        #     except BlockingIOError:
-        #         print("⚠️ Buffer lleno, mensaje no enviado.")
+        if radar_collision_stop == 1:
+            print("⚠️ Objeto detectado cerca, enviando alerta a Pi LoRaNode...")
+            sock.sendto(b"1", (UDP_IP, UDP_PORT))
+        elif radar_collision_stop == 0: 
+            sock.sendto(b"0", (UDP_IP, UDP_PORT))
 
-        # elif radar_collision_stop == 0: 
-        #     # sock.sendto(b"START_ROBOT", (UDP_IP, UDP_PORT))
-        #     try:
-        #         sock.sendto(b"0", (UDP_IP, UDP_PORT))
-        #     except BlockingIOError:
-        #         print("⚠️ Buffer lleno, mensaje no enviado.")
-                
-        # # sock.sendto(radar_collision_stop, (UDP_IP, UDP_PORT))
-
-
-        # time.sleep(0.033)  # ~30 Hz
+        # collisions_array = np.insert(collisions_array, 0, radar_collision_stop)
+        # if collisions_array.size > 10:
+        #     collisions_array = collisions_array[:-1]  # elimina el último
         
-        # ---- Enviar STOP cuando haya 6 unos seguidos ----
-        if count_ones >= MIN_COUNT and state != "STOPPED":
-            print("⚠️ Objeto detectado cerca (6 unos), enviando STOP...")
-            try:
-                sock.sendto(b"1", (UDP_IP, UDP_PORT))
-            except BlockingIOError:
-                print("⚠️ Buffer UDP lleno, STOP no enviado.")
-            state = "STOPPED"
-
-        # ---- Enviar START cuando haya 6 ceros seguidos ----
-        if count_zeros >= MIN_COUNT and state != "RUNNING":
-            print("🟢 Zona despejada (6 ceros), enviando START...")
-            try:
-                sock.sendto(b"0", (UDP_IP, UDP_PORT))
-            except BlockingIOError:
-                print("⚠️ Buffer UDP lleno, START no enviado.")
-            state = "RUNNING"
-
-        time.sleep(0.033)
+        # if np.sum(collisions_array) >= 6 and last_state != 1:
+        #     last_state = 1
+        #     print("⚠️ Objeto detectado cerca, enviando alerta a Pi LoRaNode...")
+        #     sock.sendto(b"STOP_ROBOT", (UDP_IP, UDP_PORT))
+        # elif np.sum(collisions_array) < 4 and last_state != 0: 
+        #     last_state = 0
+        #     sock.sendto(b"START_ROBOT", (UDP_IP, UDP_PORT))
+                
+        # sock.sendto(radar_collision_stop, (UDP_IP, UDP_PORT))
 
 
+        time.sleep(0.033)  # ~30 Hz
 
+    # Propuesta para detectar cambios de estado y enviar alerta solo al cambiar
+    # last_state = None
+
+    # while True:
+    #     try:
+    #         dataOk, radar_collision_stop = radar.update()
+            
+    #         if dataOk and radar.detObj:
+    #             frameData[currentIndex] = radar.detObj
+    #             currentIndex += 1
+
+    #         # Si cambia el estado, enviamos alerta
+    #         if radar_collision_stop != last_state:
+    #             last_state = radar_collision_stop
+                
+    #             if radar_collision_stop == 1:
+    #                 print("⚠️ Objeto cerca → STOP_ROBOT")
+    #                 sock.sendto(b"STOP_ROBOT", (UDP_IP, UDP_PORT))
+    #             else:
+    #                 print("✔️ Camino libre → START_ROBOT")
+    #                 sock.sendto(b"START_ROBOT", (UDP_IP, UDP_PORT))
+
+    #         time.sleep(0.033)  # ~30 Hz loop
     except KeyboardInterrupt:
         radar.CLIport.write(('sensorStop\n').encode())
         radar.CLIport.close()

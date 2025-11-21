@@ -4,21 +4,17 @@ import json
 import queue
 import time
 import threading
-from requests import session
-import serial
-# from BBDD.lora_bridge import procesar_paquete_lora
-# from BBDDv1.registro_datos import registrar_lectura
-# from BBDDv1.database_SQLite import *
-# from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
-from sx126x_bis import sx126x
-from parameters import *
 import platform
 import base64
 import math
 import socket
-
-from datetime import datetime
-import os
+import serial
+from BBDDv1.lora_bridge_mongo import procesar_paquete_lora
+from BBDDv1.registro_datos import registrar_lectura
+from BBDDv1.database_SQLite import *
+from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
+from NodoLoRa.sx126x_bis import sx126x
+from parameters import *
 
 
 class LoRaNode:
@@ -44,8 +40,8 @@ class LoRaNode:
         self.response_queue = queue.Queue()
         
         self.sensores = None
-        self.sens_port = None
-        self.sens_baudrate = None
+        self.sens_port = sens_port
+        self.sens_baudrate = sens_baudrate
         self.last_temp = None
         self.last_hum = None
 
@@ -59,9 +55,14 @@ class LoRaNode:
             self.node_timers = {}
 
         if platform.system() == "Linux":
-            from picamera2 import PiCamera2 # type: ignore
-            self.camera = PiCamera2()
-            self.stream = io.BytesIO()
+            try:
+                from picamera2 import PiCamera2 # type: ignore
+                self.camera = PiCamera2()
+                self.stream = io.BytesIO()
+            except Exception as e:
+                print(f"Error al conectarse a la cámara: {e}")
+                self.camera = None
+                self.stream = None
         else:
             self.camera = None
             self.stream = None
@@ -128,7 +129,7 @@ class LoRaNode:
         while self.running:
             self.send_message(0xFFFF, 5, 0, "", 0)
             print(f"[{time.strftime('%H:%M:%S')}] PING enviado")
-            time.sleep(30) # intervalos de 30 segundos entre envío y envío
+            time.sleep(40) # intervalos de 40 segundos entre envío y envío
 
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
@@ -142,7 +143,6 @@ class LoRaNode:
             if not msg:
                 time.sleep(0.05)
                 continue
-            print("hay mensaje")
             threading.Thread(target=self.processing_loop, args=(msg,), daemon=True).start()
 
     def processing_loop(self, msg):
@@ -160,11 +160,11 @@ class LoRaNode:
                     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Relaying message from {addr_sender} to {addr_dest}")
                     self.send_message(addr_dest, msg_type, msg_id, message)
                 else:
-                    self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE DESCARTA-")
+                    self.on_message(f"[{time.strftime('%H:%M:%S')}] ✖️ Received from {addr_sender} to {addr_dest}: {message}.")
                     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received message not for this node (dest: {addr_dest}), discarding.")
                 return            
             # -------------------- HANDLER DE TIPOS --------------------
-            self.on_message(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender} to {addr_dest}: {message} -SE ACEPTA-")
+            self.on_message(f"[{time.strftime('%H:%M:%S')}] ✔️ Received from {addr_sender} to {addr_dest}: {message}.")
             
             try: 
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
@@ -273,6 +273,12 @@ class LoRaNode:
                         # with get_db_session() as session:
                         #     sincronizar_sensores_lora(self, session)
                         ...
+                    if msg_type == 20:  # Encender led
+                        self.control_led("ON")
+                    if msg_type == 23:  # Apagar led
+                        self.control_led("OFF")
+                    if msg_type == 24:  # Modo automático led
+                        self.control_led("AUTO")
 
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     # if msg_type == 30:  # Tomar foto
@@ -360,6 +366,7 @@ class LoRaNode:
             self.robot_listener.start()
         except serial.SerialException as e:
             print(f"Failed to connect to robot: {e}")
+            return
 
     def receive_from_robot(self):
         while self.robot:
@@ -399,69 +406,131 @@ class LoRaNode:
                 time.sleep(2)
         self.on_alert("IMU loop finalizado.")
     
-    # def _move_robot_loop(self): # Movimiento autonomo
-    #     while self.auto_move_running:
-    #         try:
-    #             commands = {
-    #                 "forward": {"T": 1, "L": 0.5, "R": 0.5},
-    #                 "backward": {"T": 1, "L": -0.5, "R": -0.5},
-    #                 "left": {"T": 1, "L": -0.3, "R": 0.3},
-    #                 "right": {"T": 1, "L": 0.3, "R": -0.3},
-    #                 "stop": {"T": 1, "L": 0, "R": 0},
-    #             }
-                
-    #             if self.colision == 1:
-    #                 cmd = commands["right"]
-    #             else:
-    #                 cmd = commands["forward"]
-                
-    #             self.send_to_robot(json.dumps(cmd))
-    #             time.sleep(3)
-
-    #         except Exception as e:
-    #             self.on_alert(f"Error en movimiento autonomo loop: {e}")
-    #             time.sleep(2)
-
     def _move_robot_loop(self):
 
-        UDP_IP = "192.168.1.10"
+        UDP_IP = "0.0.0.0"
         UDP_PORT = 5005
 
         radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         radar_sock.bind((UDP_IP, UDP_PORT))
-        # radar_sock.settimeout(0.1)
+        radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
         radar_sock.setblocking(False)
 
-        self.auto_move_running = True
-
         print("🔄 Autonomía iniciada...")
+        
+        self.auto_move_running = True
+        last_cmd = None                     # para no enviar comandos repetidos
+        last_state = 0                      # último estado recibido del radar
+        self.robot.reset_input_buffer()
 
         while self.auto_move_running:
 
-            # Leer radar
-            self.colision = 0
-            try:
-                data, _ = radar_sock.recvfrom(1024)
-                val = int.from_bytes(data, "little")
-                self.colision = val
-            except socket.timeout:
-                pass  # no llegó nada → mantener último valor
+            # --- 1. Vaciar el buffer UDP ---
+            mensaje = None
+            while True:
+                try:
+                    data, _ = radar_sock.recvfrom(1024)
+                    mensaje = data.decode()
+                except BlockingIOError:
+                    break
+                except socket.timeout:
+                    break
 
-            # Decidir movimiento
-            if self.colision == 1:
-                cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
-                print("⚠️ Colisión detectada → GIRAR")
+            # --- 2. Procesar último mensaje disponible ---
+            if mensaje is not None:
+                print(f"⚠️ Mensaje radar recibido: {mensaje}")
+                last_state = int(mensaje)   # 0 o 1
+
+            # --- 3. Lógica de control ---
+            if last_state == 1:
+                # Parar
+                cmd = {"T": 1, "L": 0, "R": 0}
+                print("⚠️ Colisión detectada → PARAR")
+                self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+
+                # Girar
+                time.sleep(0.5)
+                cmd = {"T": 1, "L": 0.1, "R": -0.1}
+                if cmd != last_cmd:
+                    print("⚠️ Colisión detectada → GIRAR")
+                    self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+                    time.sleep(1)
+                    last_cmd = cmd
+
             else:
-                cmd = {"T": 1, "L": 0.5, "R": 0.5}   # avanzar recto
+                # Avanzar
+                cmd = {"T": 1, "L": 0.1, "R": 0.1}
                 print("✔️ Libre → AVANZAR")
+                self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+                last_cmd = cmd
 
-            # Enviar al robot
-            self.send_to_robot(json.dumps(cmd))
+            time.sleep(0.15)  # control loop
 
-            # time.sleep(2)
-
-        print("🛑 Autonomía detenida.")
         radar_sock.close()
+        print("🛑 Autonomía detenida.")
+
+    # def _move_robot_loop(self):
+
+    #     UDP_IP = "0.0.0.0"#"192.168.1.10"
+    #     UDP_PORT = 5005
+
+    #     radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     radar_sock.bind((UDP_IP, UDP_PORT))
+    #     radar_sock.settimeout(0.05)
+    #     # radar_sock.setblocking(False)
+
+    #     self.auto_move_running = True
+    #     self.colision = 0
+
+    #     print("🔄 Autonomía iniciada...")
+
+    #     while self.auto_move_running:
+
+    #         # Leer radar
+    #         # self.colision = 0
+    #         # Decidir movimiento
+    #         # if self.colision == 1:
+    #         #     cmd = {"T": 1, "L": 0, "R": 0} 
+    #         #     print("⚠️ Colisión detectada → PARAR")
+    #         #     time.sleep(1)
+    #         #     cmd = {"T": 1, "L": 0.1, "R": -0.1}   # girar para evitar
+    #         #     print("⚠️ Colisión detectada → GIRAR")
+    #         # else:
+    #         #     cmd = {"T": 1, "L": 0.1, "R": 0.1}   # avanzar recto
+    #         #     print("✔️ Libre → AVANZAR")
+
+    #         # # Enviar al robot
+    #         # self.send_to_robot(json.dumps(cmd))
+    #         try:
+    #             data, _ = radar_sock.recvfrom(1024)
+    #             mensaje = data.decode() #val = int.from_bytes(data, "little")
+    #             print(f"⚠️ Mensaje radar recibido: {mensaje}")
+
+    #             if mensaje=="1":   #mensaje = "STOP_ROBOT":
+    #                 self.colision = 1 
+    #                 cmd = {"T": 1, "L": 0, "R": 0} 
+    #                 print("⚠️ Colisión detectada → PARAR")
+    #                 self.send_to_robot(json.dumps(cmd))
+    #                 time.sleep(1)
+    #                 cmd = {"T": 1, "L": 0.1, "R": -0.1}   # girar para evitar
+    #                 print("⚠️ Colisión detectada → GIRAR") 
+    #                 self.send_to_robot(json.dumps(cmd))
+    #             else: 
+    #                 self.colision = 0                       
+                
+    #         except socket.timeout:
+    #             if self.colision == 0:
+    #                 cmd = {"T": 1, "L": 0.1, "R": 0.1}   # avanzar recto
+    #                 print("✔️ Libre → AVANZAR")
+                    
+    #                 self.send_to_robot(json.dumps(cmd))
+
+            
+
+    #         #time.sleep(1)
+
+    #     print("🛑 Autonomía detenida.")
+    #     radar_sock.close()
 
 
     # ------------------------------ IMU ------------------------------
@@ -738,7 +807,7 @@ class LoRaNode:
             except Exception as e:
                 print(f"[SENSORS] Error leyendo ESP32: {e}")
             
-            time.sleep(120)
+            time.sleep(10) #cmabiar a 120 o lo que queramos
 
     def read_sensors_once(self):
         """Lee datos de temperatura y humedad del ESP32 conectado por serie una vez."""
@@ -788,23 +857,23 @@ class LoRaNode:
     # -------------------- LED ------------------------
     def control_led(self, orden: str):
         # Envia una orden al ESP32 por serial
+        # try:
+        #     self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
+        #     time.sleep(2)
+        #     print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+        # except Exception as e:
+        #     print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
+        #     return
+        # while self.running:
         try:
-            self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
-            time.sleep(2)
-            print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+            if self.sensores and self.sensores.is_open:
+                self.sensores.write((orden + "\n").encode())
+                print(f"[LED] Orden enviada al ESP32: {orden}")
+            else:
+                print("[LED] ❌ Puerto de sensores no está abierto.")
         except Exception as e:
-            print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
-            return
-        while self.running:
-            try:
-                if self.sensores and self.sensores.is_open:
-                    self.sensores.write((orden + "\n").encode())
-                    print(f"[LED] Orden enviada al ESP32: {orden}")
-                else:
-                    print("[LED] ❌ Puerto de sensores no está abierto.")
-            except Exception as e:
-                print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
-    
+            print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
+
     # -------------------- EJECUCIÓN --------------------
     def run(self):
         receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
