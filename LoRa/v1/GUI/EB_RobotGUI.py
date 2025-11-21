@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray
-from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage
+from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage, QPixmap
 
 from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
 from NodoLoRa.LoRaNode_bis import LoRaNode

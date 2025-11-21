@@ -61,10 +61,11 @@ class LoRaNode:
                 self.stream = io.BytesIO()
                 self.recording = False
                 # carpetas
-                self.media_dir = "/home/pi/robot_media/"
-                self.photo_dir = self.media_dir + "photos/"
-                self.video_dir = self.media_dir + "videos/"
-                self.pending_file = self.media_dir + "pending.json/"
+                home_dir = os.path.expanduser("~")
+                self.photo_dir = os.path.join(home_dir, "photos")
+                self.video_dir = os.path.join(home_dir, "videos") 
+                self.pending_file = os.path.join(home_dir, "pending.json") 
+                
                 os.makedirs(self.photo_dir, exist_ok=True)
                 os.makedirs(self.video_dir, exist_ok=True)
                 if not os.path.exists(self.pending_file):
@@ -655,7 +656,7 @@ class LoRaNode:
 
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(self.photos_dir, f"photo_{timestamp}.jpg")
+            filename = os.path.join(self.photo_dir, f"photo_{timestamp}.jpg")
 
             # Captura a archivo (más robusto que capturar en stream en algunas versiones)
             # Usamos capture_file para guardar directamente
