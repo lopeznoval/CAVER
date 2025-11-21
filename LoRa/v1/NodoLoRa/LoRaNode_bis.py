@@ -59,6 +59,22 @@ class LoRaNode:
                 from picamera2 import Picamera2, Preview # type: ignore
                 self.camera = Picamera2()
                 self.stream = io.BytesIO()
+                self.recording = False
+                # carpetas
+                self.media_dir = "/home/pi/robot_media/"
+                self.photo_dir = self.media_dir + "photos/"
+                self.video_dir = self.media_dir + "videos/"
+                self.pending_file = self.media_dir + "pending.json/"
+                os.makedirs(self.photo_dir, exist_ok=True)
+                os.makedirs(self.video_dir, exist_ok=True)
+                if not os.path.exists(self.pending_file):
+                    with open(self.pending_file, "w") as f:
+                        json.dump([], f)
+
+                # Pending in-memory for speed
+                self._load_pending_list()
+                # variables auxiliares
+                self.pending_lock = threading.Lock()
             except Exception as e:
                 print(f"Error al conectarse a la cámara: {e}")
                 self.camera = None
@@ -67,22 +83,7 @@ class LoRaNode:
             self.camera = None
             self.stream = None
 
-        self.recording = False
-        # carpetas
-        self.media_dir = "/home/pi/robot_media/"
-        self.photo_dir = self.media_dir + "photos/"
-        self.video_dir = self.media_dir + "videos/"
-        self.pending_file = self.media_dir + "pending.json/"
-        os.makedirs(self.photo_dir, exist_ok=True)
-        os.makedirs(self.video_dir, exist_ok=True)
-        if not os.path.exists(self.pending_file):
-            with open(self.pending_file, "w") as f:
-                json.dump([], f)
 
-        # Pending in-memory for speed
-        self._load_pending_list()
-        # variables auxiliares
-        self.pending_lock = threading.Lock()
 
 
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
