@@ -12,14 +12,8 @@ from PyQt6.QtWidgets import (
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
     QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem
 )
-<<<<<<< HEAD:LoRa/v1/EB_RobotGUI.py
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray
-from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage
-from LoRaNode_bis import LoRaNode
-=======
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QAction, QPainter, QColor, QFont
->>>>>>> d9d290b0bef3040ecc5a5917f3e6cfa4bdd25bbd:LoRa/v1/GUI/EB_RobotGUI.py
 
 from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
 from NodoLoRa.LoRaNode_bis import LoRaNode
@@ -770,21 +764,13 @@ class EB_RobotGUI_bis(QWidget):
 
     def _start_mov_auto(self):
         """Envía al robot la orden de comenzar el movimiento autónomo."""
-<<<<<<< HEAD:LoRa/v1/EB_RobotGUI.py
-        self.set_selected_type(14, self.grups["Robot (10–19)"][11])
-=======
         self.set_selected_type(14, self.grups["Robot (10–19)"][14])
->>>>>>> d9d290b0bef3040ecc5a5917f3e6cfa4bdd25bbd:LoRa/v1/GUI/EB_RobotGUI.py
         self.append_general_log("🛰️ Enviando comando: Comenzar  movimiento autónomo")
         self.send_cmd("1")
 
     def _stop_mov_auto(self):
         """Envía al robot la orden de detener el movimiento autónomo."""        
-<<<<<<< HEAD:LoRa/v1/EB_RobotGUI.py
-        self.set_selected_type(14, self.grups["Robot (10–19)"][11])
-=======
         self.set_selected_type(14, self.grups["Robot (10–19)"][14])
->>>>>>> d9d290b0bef3040ecc5a5917f3e6cfa4bdd25bbd:LoRa/v1/GUI/EB_RobotGUI.py
         self.append_general_log("🛰️ Enviando comando: Detener movimiento autónomo")
         self.send_cmd("0")
 
