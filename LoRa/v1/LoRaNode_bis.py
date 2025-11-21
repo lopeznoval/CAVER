@@ -286,7 +286,7 @@ class LoRaNode:
                         print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
                     # ---------------------- VIDEO ----------------------
-                    elif msg_type == 30:  # iniciar grabación
+                    elif msg_type == 26:  # iniciar grabación
                         # ---------------------- INICIAR VIDEO ----------------------
                         if "1" in message:
                             filename = self.start_video_recording()

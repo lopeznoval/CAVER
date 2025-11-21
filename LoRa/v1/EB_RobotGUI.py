@@ -246,7 +246,7 @@ class EB_RobotGUI_bis(QWidget):
         vlay.addWidget(self.pending_list_widget)
 
         tab_video.setLayout(vlay)
-        tabs.addTab(tab_video, "📹 Cámara")
+        tabs.addTab(tab_video, "📹")
 
         # --- Timer para refrescar lista automáticamente ---
         self.pending_timer = QTimer()
@@ -967,7 +967,7 @@ class EB_RobotGUI_bis(QWidget):
     def take_photo(self):
         dest = int(self.dest_entry.text())
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Comando enviado para tomar foto")
-        self.set_selected_type(25, self.grups["Cámara/Radar (25–30)"][26])
+        self.set_selected_type(25, self.grups["Cámara/Radar (25–30)"][25])
         self.send_cmd("1") 
 
     def show_pending(self):

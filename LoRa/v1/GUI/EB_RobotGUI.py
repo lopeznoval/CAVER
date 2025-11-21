@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
     QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
-from PyQt6.QtGui import QAction, QPainter, QColor, QFont
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray
+from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage
 
 from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
 from NodoLoRa.LoRaNode_bis import LoRaNode
@@ -245,7 +245,7 @@ class EB_RobotGUI_bis(QWidget):
         vlay.addWidget(self.pending_list_widget)
 
         tab_video.setLayout(vlay)
-        tabs.addTab(tab_video, "📹 Cámara")
+        tabs.addTab(tab_video, "📹")
 
         # --- Timer para refrescar lista automáticamente ---
         self.pending_timer = QTimer()
@@ -479,7 +479,7 @@ class EB_RobotGUI_bis(QWidget):
             },
             "Cámara/Radar (25–30)": {
                 25: "Captura de imagen",
-                26: "Iniciar streaming",
+                26: "Iniciar/Detener streaming",
                 27: "Detección de movimiento",
                 28: "Seguimiento de objetivo",
                 30: "Reset del módulo"
@@ -675,16 +675,7 @@ class EB_RobotGUI_bis(QWidget):
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Sending command to {dest}: {alert}")
         self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type} to {dest}")
-    
-    def take_photo(self):
-        dest = int(self.dest_entry.text())
-        msg_type = 30
-        relay = int(self.relay_combo.currentText())
-        self.msg_id += 1
-        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 📸 Comando enviado para tomar foto")
-        self.loranode.send_message(dest, msg_type, self.msg_id, "", relay)
-        self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type}")
-        
+
     def take_data(self):
         # Envia una orden al nodo para obtener la temperatura y humedad
         dest = int(self.dest_entry.text())
@@ -959,18 +950,24 @@ class EB_RobotGUI_bis(QWidget):
             
         self.panel.sync_with_nodes(node_data)
 
-
+  
     def start_video(self):
         dest = int(self.dest_entry.text())
-        self.msg_id += 1
-        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ▶️ Solicitud iniciar vídeo")
-        self.loranode.send_message(dest, 26, self.msg_id, "", 0)
-    
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitud iniciar vídeo")
+        self.set_selected_type(26, self.grups["Cámara/Radar (25–30)"][26])
+        self.send_cmd("1") 
+
     def stop_video(self):
         dest = int(self.dest_entry.text())
-        self.msg_id += 1
-        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ⏹️ Solicitud detener vídeo")
-        self.loranode.send_message(dest, 27, self.msg_id, "", 0)
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitud detener vídeo")
+        self.set_selected_type(26, self.grups["Cámara/Radar (25–30)"][26])
+        self.send_cmd("0") 
+
+    def take_photo(self):
+        dest = int(self.dest_entry.text())
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Comando enviado para tomar foto")
+        self.set_selected_type(25, self.grups["Cámara/Radar (25–30)"][25])
+        self.send_cmd("1") 
 
     def show_pending(self):
         self.refresh_pending()

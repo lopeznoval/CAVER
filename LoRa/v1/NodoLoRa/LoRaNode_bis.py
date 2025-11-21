@@ -282,28 +282,27 @@ class LoRaNode:
                         self.control_led("AUTO")
 
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
-                    # if msg_type == 30:  # Tomar foto
-                            # img_b64 = self.take_picture()
-                            # self.send_message(addr_sender, 4, msg_id, img_b64)
-                            # print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
-                    # ---------------------- FOTO ----------------------
-                    if msg_type == 30:  # Tomar foto
+                     # ---------------------- FOTO ----------------------
+                    if msg_type == 25:  # Tomar foto
                         img_b64 = self.take_picture_and_save()
                         self.send_message(addr_sender, 4, msg_id, img_b64)
                         print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
-                    # ---------------------- INICIAR VIDEO ----------------------
-                    elif msg_type == 29:  # iniciar grabación
-                        filename = self.start_video_recording()
-                        self.send_message(addr_sender, 4, msg_id, f"Video recording started: {filename}")
-                        print(f"[{time.strftime('%H:%M:%S')}] Grabación iniciada: {filename}")
+                    # ---------------------- VIDEO ----------------------
+                    elif msg_type == 26:  # iniciar grabación
+                        # ---------------------- INICIAR VIDEO ----------------------
+                        if "1" in message:
+                            filename = self.start_video_recording()
+                            self.send_message(addr_sender, 4, msg_id, f"Video recording started: {filename}")
+                            print(f"[{time.strftime('%H:%M:%S')}] Grabación iniciada: {filename}")
+                        elif "0" in message:
+                            # ---------------------- DETENER VIDEO ----------------------
+                            filename = self.stop_video_recording()
+                            self.send_message(addr_sender, 4, msg_id, f"Video recording stopped: {filename}")
+                            print(f"[{time.strftime('%H:%M:%S')}] Grabación detenida: {filename}")
+                        else: 
+                            self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
 
-                    # ---------------------- DETENER VIDEO ----------------------
-                    elif msg_type == 28:  # detener grabación
-                        filename = self.stop_video_recording()
-                        self.send_message(addr_sender, 4, msg_id, f"Video recording stopped: {filename}")
-                        print(f"[{time.strftime('%H:%M:%S')}] Grabación detenida: {filename}")
-                        
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
                     self.is_relay = bool(relay_flag)
