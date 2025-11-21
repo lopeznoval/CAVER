@@ -4,18 +4,25 @@ import json
 import threading
 import time
 import requests
+import os
+import traceback
+import base64
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
     QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem
 )
+<<<<<<< HEAD:LoRa/v1/EB_RobotGUI.py
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray
+from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage
+from LoRaNode_bis import LoRaNode
+=======
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QAction, QPainter, QColor, QFont
+>>>>>>> d9d290b0bef3040ecc5a5917f3e6cfa4bdd25bbd:LoRa/v1/GUI/EB_RobotGUI.py
 
 from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
 from NodoLoRa.LoRaNode_bis import LoRaNode
-
-
 
 
 class EB_RobotGUI_bis(QWidget):
@@ -31,6 +38,7 @@ class EB_RobotGUI_bis(QWidget):
 
         
         if loranode is not None:
+            self.loranode.on_bytes = self._on_image_bytes
             self.loranode.on_message = self._on_lora_message
             self.loranode.on_alert = self._on_general_log
             self.loranode.on_position = self._on_refresh_position
@@ -192,21 +200,65 @@ class EB_RobotGUI_bis(QWidget):
         tabs.addTab(tab_cmd, "⚙️")
 
         # ----------------------- TAB 4: Imagen -----------------------
+        # tab_video = QWidget()
+        # video_layout = QVBoxLayout()
+
+        # self.btn_take_photo = QPushButton("Capturar foto 📸")
+        # self.btn_take_photo.clicked.connect(self.take_photo)
+        # video_layout.addWidget(self.btn_take_photo)
+
+        # # Placeholder para la imagen recibida
+        # self.photo_label = QLabel("Aquí se mostrará la foto")
+        # self.photo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # self.photo_label.setFixedSize(400, 300)
+        # video_layout.addWidget(self.photo_label)
+
+        # tab_video.setLayout(video_layout)
+        # tabs.addTab(tab_video, "📹")
+        # ----------------------- TAB 4: Cámara -----------------------
         tab_video = QWidget()
-        video_layout = QVBoxLayout()
+        vlay = QVBoxLayout()
 
-        self.btn_take_photo = QPushButton("Capturar foto 📸")
-        self.btn_take_photo.clicked.connect(self.take_photo)
-        video_layout.addWidget(self.btn_take_photo)
+        # --- Botones de control ---
+        hbtn = QHBoxLayout()
 
-        # Placeholder para la imagen recibida
-        self.photo_label = QLabel("Aquí se mostrará la foto")
+        btn_photo = QPushButton("📸 Tomar Foto")
+        btn_photo.clicked.connect(self.take_photo)
+        hbtn.addWidget(btn_photo)
+
+        self.btn_start_video = QPushButton("▶️ Iniciar Video")
+        self.btn_stop_video = QPushButton("⏹️ Detener Video")
+        self.btn_start_video.clicked.connect(self.start_video)
+        self.btn_stop_video.clicked.connect(self.stop_video)
+
+        hbtn.addWidget(self.btn_start_video)
+        hbtn.addWidget(self.btn_stop_video)
+
+        vlay.addLayout(hbtn)
+
+        # --- Imagen mostrada ---
+        self.photo_label = QLabel("Aquí se mostrará la imagen")
         self.photo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.photo_label.setFixedSize(400, 300)
-        video_layout.addWidget(self.photo_label)
+        self.photo_label.setFixedSize(640, 480)
+        vlay.addWidget(self.photo_label)
 
-        tab_video.setLayout(video_layout)
-        tabs.addTab(tab_video, "📹")
+        # --- Archivos pendientes ---
+        self.btn_view_pending = QPushButton("Ver archivos pendientes")
+        self.btn_view_pending.clicked.connect(self.show_pending)
+        vlay.addWidget(self.btn_view_pending)
+
+        self.pending_list_widget = QListWidget()
+        vlay.addWidget(self.pending_list_widget)
+
+        tab_video.setLayout(vlay)
+        tabs.addTab(tab_video, "📹 Cámara")
+
+        # --- Timer para refrescar lista automáticamente ---
+        self.pending_timer = QTimer()
+        self.pending_timer.timeout.connect(self.refresh_pending)
+        self.pending_timer.start(3000)
+
+
     
         # ------------------ TAB 5: Posición ------------------
         tab_position = QWidget()
@@ -718,13 +770,21 @@ class EB_RobotGUI_bis(QWidget):
 
     def _start_mov_auto(self):
         """Envía al robot la orden de comenzar el movimiento autónomo."""
+<<<<<<< HEAD:LoRa/v1/EB_RobotGUI.py
+        self.set_selected_type(14, self.grups["Robot (10–19)"][11])
+=======
         self.set_selected_type(14, self.grups["Robot (10–19)"][14])
+>>>>>>> d9d290b0bef3040ecc5a5917f3e6cfa4bdd25bbd:LoRa/v1/GUI/EB_RobotGUI.py
         self.append_general_log("🛰️ Enviando comando: Comenzar  movimiento autónomo")
         self.send_cmd("1")
 
     def _stop_mov_auto(self):
         """Envía al robot la orden de detener el movimiento autónomo."""        
+<<<<<<< HEAD:LoRa/v1/EB_RobotGUI.py
+        self.set_selected_type(14, self.grups["Robot (10–19)"][11])
+=======
         self.set_selected_type(14, self.grups["Robot (10–19)"][14])
+>>>>>>> d9d290b0bef3040ecc5a5917f3e6cfa4bdd25bbd:LoRa/v1/GUI/EB_RobotGUI.py
         self.append_general_log("🛰️ Enviando comando: Detener movimiento autónomo")
         self.send_cmd("0")
 
@@ -747,6 +807,34 @@ class EB_RobotGUI_bis(QWidget):
         """Manejador de mensajes entrantes desde LoRaNode"""
         self._append_input(msg)
                 
+    def _on_image_bytes(self, b64string):
+        try:
+            if not b64string:
+                self.append_general_log("Imagen vacía recibida.")
+                return
+
+            if isinstance(b64string, bytes):
+                b64string = b64string.decode("utf-8", errors="ignore")
+
+            data = base64.b64decode(b64string)
+            img = QImage.fromData(QByteArray(data))
+
+            if img.isNull():
+                pix = QPixmap()
+                pix.loadFromData(data, "JPEG")
+            else:
+                pix = QPixmap.fromImage(img)
+
+            pix = pix.scaled(self.photo_label.width(),
+                            self.photo_label.height(),
+                            Qt.AspectRatioMode.KeepAspectRatio)
+
+            self.photo_label.setPixmap(pix)
+
+            self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 📸 Imagen recibida")
+        except Exception as e:
+            self.append_general_log(f"Error mostrando imagen: {e}")
+
     # -------------------- IMU inicio --------------------
     def _on_refresh_position (self, pos):
         try:
@@ -884,5 +972,32 @@ class EB_RobotGUI_bis(QWidget):
             }
             
         self.panel.sync_with_nodes(node_data)
+
+
+    def start_video(self):
+        dest = int(self.dest_entry.text())
+        self.msg_id += 1
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ▶️ Solicitud iniciar vídeo")
+        self.loranode.send_message(dest, 26, self.msg_id, "", 0)
+    
+    def stop_video(self):
+        dest = int(self.dest_entry.text())
+        self.msg_id += 1
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ⏹️ Solicitud detener vídeo")
+        self.loranode.send_message(dest, 27, self.msg_id, "", 0)
+
+    def show_pending(self):
+        self.refresh_pending()
+        self.pending_list_widget.show()
+    
+    def refresh_pending(self):
+        self.pending_list_widget.clear()
+        if self.loranode is None:
+            return
+        try:
+            for p in self.loranode.list_pending():
+                self.pending_list_widget.addItem(QListWidgetItem(p))
+        except:
+            pass
 
 

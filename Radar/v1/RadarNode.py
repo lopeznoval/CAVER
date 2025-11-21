@@ -34,6 +34,14 @@ while True:
             frameData[currentIndex] = radar.detObj
             currentIndex += 1
 
+        # ---- LÓGICA DE FILTRADO DE 1s / 0s ----
+        if radar_collision_stop == 1:
+            count_ones += 1
+            count_zeros = 0
+        else:
+            count_zeros += 1
+            count_ones = 0
+
         # if any(r < radar.STOP_DISTANCE_THRESHOLD for r in radar.detObj["range"]):
 
         if radar_collision_stop == 1:
