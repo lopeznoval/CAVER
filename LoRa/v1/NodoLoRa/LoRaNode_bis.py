@@ -90,8 +90,12 @@ class LoRaNode:
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
         self.on_bytes = lambda data: print(f"📦 [BYTES] {data}")
-        self.on_position = lambda pos: print(f"{pos}")
-        self.on_sensor = lambda sensor: print(f"{sensor}")
+        self.on_position = lambda pos: print(f"[POSITION UPDATE] {pos}")
+        self.on_sensor = lambda sensor: print(f"[SENSOR UPDATE]{sensor}")
+        self.on_battery = lambda battery_level: print(f"🔋 [BATTERY UPDATE]: {battery_level}")
+        self.on_feedback = lambda feedback: print(f"[FEEDBACK UPDATE]: {feedback}")
+        self.on_imu = lambda imu: print(f"[IMU UPDATE]: {imu}")
+
 
     # -------------------- MENSAJES --------------------
     def pack_message(self, addr_dest:int, msg_type: int, msg_id: int, message: str, relay_flag: int =0) -> bytes:
@@ -173,6 +177,13 @@ class LoRaNode:
                 if msg_type == 0:
                     if msg_id == 63: #imu
                         self.imu_pos(message)
+                    elif msg_type == 64: # beteria
+                        battery_level = message
+                        self.on_battery(battery_level)
+                    elif msg_type == 65: # feedback
+                        self.on_feedback(message)
+                    elif msg_type == 66: # imu
+                        self.on_imu(message)
                     elif msg_id == 69: 
                         if self.is_base:
                             # resp = procesar_paquete_lora(message)
@@ -225,6 +236,21 @@ class LoRaNode:
                         ...
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
+                    # -------------------- feedback --------------------
+                    if msg_type == 10:
+                        if "0" in message:
+                            self.feeedback_running = False
+                        elif "1" in message:
+                            self.feeedback_running = True
+                            self.feedback_dest = addr_sender
+                            self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
+                            self.feedback_thread.start()
+                        elif "2" in message:
+                            resp = self.send_to_robot("{\"T\":130}")  
+                            self.send_message(addr_sender, 0, 65, resp)
+                        else:
+                            self.on_alert(f"⚠️ Comando de feedback desconocido: {message}") 
+
                     if msg_type == 13: # pedir o parar datos imu
                         if "1" in message:
                             print("llego el 1 para empezar")
@@ -239,6 +265,9 @@ class LoRaNode:
                         elif "0" in message:
                             self.stop_imu_flag = True
                             self.on_alert("🔴 IMU loop detenido por EB.")
+                        elif "2" in message:
+                            resp = self.send_to_robot("{\"T\":126}")  
+                            self.send_message(addr_sender, 0, 66, resp)
                         else:
                             self.on_alert(f"⚠️ Comando IMU desconocido: {message}") 
                     
@@ -248,11 +277,26 @@ class LoRaNode:
                             self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                             self.mov_aut_thread.start()
                         elif "0" in message:
-                            self.on_alert("Mmovimiento autónomo loop detenido por EB.")
+                            self.on_alert("Movimiento autónomo loop detenido por EB.")
                             self.auto_move_running = False
                         else: 
                             self.on_alert(f"⚠️ Comando movimiento autónomo desconocido: {message}") 
 
+                    if msg_type == 15:
+                        if "0" in message:
+                            self.battery_monitor_running = False
+                        elif "1" in message:
+                            self.battery_monitor_running = True
+                            self.battery_dest = addr_sender
+                            self.battery_monitor_thread = threading.Thread(target=self._battery_monitor_loop, daemon=True)
+                            self.battery_monitor_thread.start()
+                        elif "2" in message:
+                            resp = self.send_to_robot("{\"T\":130}")  
+                            # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
+                            battery = resp
+                            self.send_message(addr_sender, 0, 64, battery)
+                        else:
+                            self.on_alert(f"⚠️ Comando de monitorización de batería desconocido: {message}") 
 
                     if self.robot.is_open and self.robot:
                         resp = self.send_to_robot(message)
@@ -469,6 +513,36 @@ class LoRaNode:
 
         radar_sock.close()
         print("🛑 Autonomía detenida.")
+
+    def _battery_monitor_loop(self):
+        """
+        Envía periódicamente la lectura de batería al nodo solicitante mientras self.battery_monitor_running sea True.
+        """
+        while getattr(self, "battery_monitor_running", False) and self.running:
+            if self.robot and self.robot.is_open:
+                try:
+                    resp = self.send_to_robot("{\"T\":130}")  
+                    # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
+                    battery = resp
+                    self.send_message(self.battery_dest, 0, 64, battery)
+                except Exception as e:
+                    self.on_alert(f"Error leyendo batería: {e}")
+            time.sleep(60)
+    
+    def _feedback_loop(self):
+        """
+        Envía periódicamente la lectura de feedback al nodo solicitante.
+        """
+        while getattr(self, "feeedback_running", False) and self.running:
+            if self.robot and self.robot.is_open:
+                try:
+                    resp = self.send_to_robot("{\"T\":130}")  
+                    self.send_message(self.feedback_dest, 0, 65, resp)
+                except Exception as e:
+                    self.on_alert(f"Error leyendo feedback: {e}")
+            time.sleep(5)
+
+
 
     # def _move_robot_loop(self):
 

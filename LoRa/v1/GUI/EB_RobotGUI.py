@@ -37,7 +37,10 @@ class EB_RobotGUI_bis(QWidget):
             self.loranode.on_alert = self._on_general_log
             self.loranode.on_position = self._on_refresh_position
             self.loranode.on_sensor = self._on_sensor_data
-
+            self.on_battery = self._on_battery_data
+            self.on_feedback = self._on_feedback_data
+            self.on_imu = self._on_imu_data
+           
 
 # -------------------- IMU inicio --------------------
 
@@ -174,21 +177,48 @@ class EB_RobotGUI_bis(QWidget):
         cmd_layout = QGridLayout()
 
         self.btn_imu = QPushButton("IMU Data")
+        self.btn_imu.clicked.connect(self.get_imu_now)
+               
+        self.imu_output = QTextEdit()
+        self.imu_output.setReadOnly(True)
+        self.imu_output.setFixedHeight(120)
+
+        cmd_layout.addWidget(self.btn_imu, 0, 0, 1, 3)
+        cmd_layout.addWidget(self.imu_output, 1, 0, 1, 3) 
+
         self.btn_feedback = QPushButton("Chassis Feedback")
-        self.btn_imu.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 126})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
-        self.btn_feedback.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 130})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
-
-        cmd_layout.addWidget(self.btn_imu, 0, 0)
-        cmd_layout.addWidget(self.btn_feedback, 0, 1)
-
-        self.btn_start_feedback = QPushButton("Start Feedback")
-        self.btn_stop_feedback = QPushButton("Stop Feedback")
+        self.btn_start_feedback = QPushButton("Start Periodic Feedback")
+        self.btn_stop_feedback = QPushButton("Stop Periodic Feedback")
+        self.btn_feedback.clicked.connect(self.get_feedback_now)
         self.btn_start_feedback.clicked.connect(self.start_feedback)
         self.btn_stop_feedback.clicked.connect(self.stop_feedback)
         self.btn_stop_feedback.setObjectName("danger")
+        
+        self.feedback_output = QTextEdit()
+        self.feedback_output.setReadOnly(True)
+        self.feedback_output.setFixedHeight(120)
 
-        cmd_layout.addWidget(self.btn_start_feedback, 1, 0)
-        cmd_layout.addWidget(self.btn_stop_feedback, 1, 1)
+        cmd_layout.addWidget(self.btn_feedback, 2, 0)
+        cmd_layout.addWidget(self.btn_start_feedback, 2, 1)
+        cmd_layout.addWidget(self.btn_stop_feedback, 2, 2)
+        cmd_layout.addWidget(self.feedback_output, 3, 0, 1, 3) 
+
+        # --- bateria ---
+        self.btn_start_battery = QPushButton("Start Battery Monitor")
+        self.btn_stop_battery = QPushButton("Stop Battery Monitor")
+        self.btn_get_battery = QPushButton("Get Battery Now")
+        self.btn_stop_battery.setObjectName("danger")
+        self.btn_start_battery.clicked.connect(self.start_battery_monitor)
+        self.btn_stop_battery.clicked.connect(self.stop_battery_monitor)
+        self.btn_get_battery.clicked.connect(self.get_battery_now)
+        self.battery_output = QTextEdit()
+        self.battery_output.setReadOnly(True)
+        self.battery_output.setFixedHeight(120)
+        
+        cmd_layout.addWidget(self.btn_get_battery, 4, 0)
+        cmd_layout.addWidget(self.btn_start_battery, 4, 1)
+        cmd_layout.addWidget(self.btn_stop_battery, 4, 2)
+        cmd_layout.addWidget(self.battery_output, 5, 0, 1, 3)
 
         tab_cmd.setLayout(cmd_layout)
         tabs.addTab(tab_cmd, "⚙️")
@@ -467,7 +497,7 @@ class EB_RobotGUI_bis(QWidget):
                 12: "Oled",
                 13: "IMU",
                 14: "Movimiento autónomo",
-                15: "",
+                15: "Bateria",
                 19: ""
             },
             "Sensores (20–24)": {
@@ -706,37 +736,70 @@ class EB_RobotGUI_bis(QWidget):
         self.loranode.send_message(dest, msg_type, self.msg_id, " ", relay)
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type} to {dest}")
 
+    def start_battery_monitor(self):
+        """Enviar mensaje LoRa al robot para iniciar monitorización continua"""       
+        self.selected_type = 15
+        self.append_general_log("🛰️ Enviando comando: Comenzar Battery Monitor")
+        self.send_cmd("1")
+        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🔋 Monitorización de batería iniciada.\n")
+
+
+    def stop_battery_monitor(self):
+        """Enviar mensaje LoRa al robot para detener monitorización continua"""
+        self.selected_type = 15
+        self.append_general_log("🛰️ Enviando comando: Detener  Battery Monitor")
+        self.send_cmd("0")
+        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🛑 Monitorización de batería detenida.\n")
+
+    def get_battery_now(self):
+        """Enviar mensaje LoRa al robot para obtener batería bajo demanda"""
+        self.selected_type = 15
+        self.send_cmd("2")
+
     def start_feedback(self):
-        if self.feedback_running:
-            QMessageBox.information(self, "Info", "Auto feedback ya está activo.")
-            return
-        self.feedback_running = True
-        self.send_cmd(json.dumps({"T": 131, "cmd": 1}))
-        self.set_selected_type(10, self.grups["Robot (10–19)"][10])
-        self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
-        self.feedback_thread.start()
-        self._append_output(f"[{time.strftime('%H:%M:%S')}] ✅ Auto feedback iniciado.\n")
+        """Enviar mensaje LoRa al robot para iniciar feedback continuo"""       
+        self.selected_type = 10
+        self.append_general_log("🛰️ Enviando comando: Comenzar Feedback continuo")
+        self.send_cmd("1")
+        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] Feedback continuo iniciado.\n")
 
     def stop_feedback(self):
-        if not self.feedback_running:
-            QMessageBox.information(self, "Info", "Auto feedback no está activo.")
-            return
-        self.feedback_running = False
-        self.send_cmd(json.dumps({"T": 131, "cmd": 0}))
-        self.set_selected_type(10, self.grups["Robot (10–19)"][10])
-        self._append_output(f"[{time.strftime('%H:%M:%S')}] 🛑 Auto feedback detenido.\n")
+        """Enviar mensaje LoRa al robot para detener feedback continuo"""
+        self.selected_type = 10
+        self.append_general_log("🛰️ Enviando comando: Detener Feedback continuo")
+        self.send_cmd("0")
+        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🛑 Feedback continuo detenido.\n")
+
+    def get_feedback_now(self):
+        """Enviar mensaje LoRa al robot para obtener feedbak bajo demanda"""
+        self.selected_type = 10
+        self.send_cmd("2")
+
+    def get_imu_now(self):
+        """Enviar mensaje LoRa al robot para obtener imu bajo demanda"""
+        self.selected_type = 13
+        self.send_cmd("2")
 
     def _feedback_loop(self):
-        ip = "192.168.4.1"
+        # ip = "192.168.4.1"
         while self.feedback_running:
-            if ip:
+        #     if ip:
                 try:
-                    url = f"http://{ip}/js?json={json.dumps({'T':130})}"
-                    r = requests.get(url, timeout=3)
-                    self._append_output(f"[{time.strftime('%H:%M:%S')}] [Feedback] {r.text.strip()}\n")
+                    cmd = json.dumps({"T": 130})
+                    self.robot.reset_input_buffer()           # vaciar buffer previo
+                    self.robot.write((cmd + "\r\n").encode()) # enviar comando
+                    time.sleep(0.05)       
+
+                    response = self.robot.readline().decode('utf-8', errors='ignore').strip()
+                    if response:
+                        self._append_output(f"[{time.strftime('%H:%M:%S')}] [Feedback Serial] {response}\n")
+
+        #             url = f"http://{ip}/js?json={json.dumps({'T':130})}"
+        #             r = requests.get(url, timeout=3)
+        #             self._append_output(f"[{time.strftime('%H:%M:%S')}] [Feedback] {r.text.strip()}\n")
                 except Exception as e:
                     self._append_output(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error feedback: {e}\n")
-            time.sleep(1)
+                time.sleep(1)
 
     def _start_imu(self):
         """Envía al robot la orden de comenzar a enviar datos IMU periódicamente."""
@@ -915,7 +978,28 @@ class EB_RobotGUI_bis(QWidget):
         except Exception as e:
             self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error procesando datos del sensor: {e}")
 
+# ---------- bateria ----------
+    def _on_battery_data(self, level):
+        """Muestra la cadena de feedback tal cual en el panel de batería"""
+        ts = time.strftime('%H:%M:%S')
+        self.battery_output.append(f"[{ts}] Nivel de batería: {level}")
+        self.battery_output.ensureCursorVisible()
 
+# ---------- feedback ----------
+    def _on_feedback_data(self, feedback_str):
+        """Muestra la cadena de feedback tal cual en el panel de feedback"""
+        ts = time.strftime('%H:%M:%S')
+        self.feedback_output.append(f"[{ts}] Feedback: {feedback_str}")
+        self.feedback_output.ensureCursorVisible()
+
+# ---------- imu ----------
+    def _on_imu_data(self, imu_str):
+        """Muestra la cadena de imu tal cual en el panel de imu"""
+        ts = time.strftime('%H:%M:%S')
+        self.imu_output.append(f"[{ts}] Feedback: {imu_str}")
+        self.imu_output.ensureCursorVisible()
+
+        
 # -------------------- Estados de Nodos Conectados ----------------------
     # def add_status(self, layout, label_text, indicator):
     #     h = QHBoxLayout()
