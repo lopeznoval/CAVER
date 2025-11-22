@@ -1,14 +1,24 @@
 import io
 import time
-from picamera2 import PiCamera2 #type: ignore
+import platform
+
 
 class LoRaCamSender:
-    def __init__(self, camera: PiCamera2 = None):
-        self.camera = camera
-        self.stream = io.BytesIO()
+    if platform.system() == "Linux":
+        from picamera2 import PiCamera2 #type: ignore
 
-        if self.camera is None:
-            print("⚠️ No hay cámara disponible. Modo simulación activado.")
+        def __init__(self, camera: PiCamera2 = None):
+            self.camera = camera
+            self.stream = io.BytesIO()
+
+            if self.camera is None:
+                print("⚠️ No hay cámara disponible. Modo simulación activado.")
+    else:
+        def __init__(self, camera = None):
+            self.camera = camera
+            self.stream = io.BytesIO()
+            if self.camera is None:
+                print("⚠️ No hay cámara disponible. Modo simulación activado.")
 
     def capture_recording_optimized(self):
         """

@@ -15,7 +15,7 @@ from BBDDv1.database_SQLite import *
 from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
 from NodoLoRa.sx126x_bis import sx126x
 from parameters import *
-
+from Multimediav1.LoraCamSender import LoRaCamSender
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, 
@@ -58,6 +58,8 @@ class LoRaNode:
             try:
                 from picamera2 import Picamera2, Preview # type: ignore
                 self.camera = Picamera2()
+                self.lora_cam_sender = LoRaCamSender(camera=self.camera)
+
                 self.stream = io.BytesIO()
                 self.recording = False
                 # carpetas
@@ -95,6 +97,7 @@ class LoRaNode:
         self.on_battery = lambda battery_level: print(f"🔋 [BATTERY UPDATE]: {battery_level}")
         self.on_feedback = lambda feedback: print(f"[FEEDBACK UPDATE]: {feedback}")
         self.on_imu = lambda imu: print(f"[IMU UPDATE]: {imu}")
+        self.on_photo = lambda photo: print(f"[RECEIVED PHOTO]")
 
 
     # -------------------- MENSAJES --------------------
@@ -175,7 +178,13 @@ class LoRaNode:
             try: 
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
                 if msg_type == 0:
-                    if msg_id == 63: #imu
+                    if msg_id == 30:
+                        try:
+                            photo = base64.b64decode(message)
+                            self.on_photo(photo)  # llama al callback
+                        except Exception as e:
+                            self.on_alert(f"Error decodificando foto: {e}")
+                    elif msg_id == 63: #imu
                         self.imu_pos(message)
                     elif msg_type == 64: # beteria
                         battery_level = message
@@ -329,24 +338,31 @@ class LoRaNode:
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                      # ---------------------- FOTO ----------------------
                     if msg_type == 25:  # Tomar foto
-                        img_b64 = self.take_picture_and_save()
-                        self.send_message(addr_sender, 4, msg_id, img_b64)
+                        # img_b64 = self.take_picture_and_save()
+                        # ------ PROBAR ------
+                        self.photo_dest = addr_sender
+                        self.take_picture_and_save_compressed() 
+                        # self.send_message(addr_sender, 4, msg_id, img_b64)
                         print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
                     # ---------------------- VIDEO ----------------------
                     elif msg_type == 26:  # iniciar grabación
-                        # ---------------------- INICIAR VIDEO ----------------------
-                        if "1" in message:
-                            filename = self.start_video_recording()
-                            self.send_message(addr_sender, 4, msg_id, f"Video recording started: {filename}")
-                            print(f"[{time.strftime('%H:%M:%S')}] Grabación iniciada: {filename}")
-                        elif "0" in message:
-                            # ---------------------- DETENER VIDEO ----------------------
-                            filename = self.stop_video_recording()
-                            self.send_message(addr_sender, 4, msg_id, f"Video recording stopped: {filename}")
-                            print(f"[{time.strftime('%H:%M:%S')}] Grabación detenida: {filename}")
-                        else: 
-                            self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
+                        video_bytes = self.start_video_recording()
+                        if video_bytes:
+                            self.on_alert(f"Vídeo comprimido listo ({len(video_bytes)} bytes).")
+                       
+                        # # ---------------------- INICIAR VIDEO ----------------------
+                        # if "1" in message:
+                        #     filename = self.start_video_recording()
+                        #     self.send_message(addr_sender, 4, msg_id, f"Video recording started: {filename}")
+                        #     print(f"[{time.strftime('%H:%M:%S')}] Grabación iniciada: {filename}")
+                        # elif "0" in message:
+                        #     # ---------------------- DETENER VIDEO ----------------------
+                        #     filename = self.stop_video_recording()
+                        #     self.send_message(addr_sender, 4, msg_id, f"Video recording stopped: {filename}")
+                        #     print(f"[{time.strftime('%H:%M:%S')}] Grabación detenida: {filename}")
+                        # else: 
+                        #     self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
 
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
@@ -703,7 +719,7 @@ class LoRaNode:
         with open(self.pending_file, "w") as f:
             json.dump(self.pending, f, indent=2)
 
-    def mark_pending(self, filepath):
+    def _mark_pending(self, filepath):
         with self.pending_lock:
             if filepath not in self.pending:
                 self.pending.append(filepath)
@@ -770,81 +786,40 @@ class LoRaNode:
             self.on_alert(f"Error tomando foto: {e}")
             return None, None
     
+    # ------ PROBAR ------
+    def take_picture_and_save_compressed(self, max_lora_bytes=18000, quality=15):
+        """
+        Captura imagen usando capture_recording_optimized de LoRaCamSender.
+        """
+        img_bytes = self.lora_cam_sender.capture_recording_optimized()
+        if img_bytes is not None:
+            if len(img_bytes) <= 18000:  # tamaño máximo LoRa
+                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                self.send_message(self.photo_dest, 0, 30, img_b64)
+            else:
+                self.on_alert("⚠️ Imagen demasiado grande para LoRa, marcada como pendiente.")
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = os.path.join(self.photo_dir, f"photo_{timestamp}.jpg")
+                with open(filename, "wb") as f:
+                    f.write(img_bytes)
+                self._mark_pending(filename)
+                print(f"Foto guardada y marcada como pendiente: {filename}")
+        else:
+            self.on_alert("⚠️ Error tomando foto.")
     
-    # ---------- VIDEO ----------
-    def start_video_recording(self, bitrate=2000000):
+    # ---------- VIDEO ----------      
+    def start_video_recording(self):
         """
-        Inicia grabación H.264 a archivo .h264 (usa H264Encoder).
-        Devuelve la ruta del archivo si se inició.
+        Captura vídeo usando video_recording_optimized de LoRaCamSender.
         """
-        if self.camera is None:
-            self.on_alert("Cámara no disponible para vídeo.")
-            return None
-
-        if self.recording:
-            self.on_alert("Ya hay una grabación en curso.")
-            return self.current_video
-
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            outpath = os.path.join(self.videos_dir, f"video_{timestamp}.h264")
-            self.current_video = outpath
-
-            # encoder
-            self.encoder = self.H264Encoder(bitrate=bitrate)
-            # start_recording activa encoder y cámara
-            self.camera.start_recording(self.encoder, self.current_video)
-            self.recording = True
-            self.on_alert(f"Grabación iniciada: {self.current_video}")
-            return self.current_video
-        except Exception as e:
-            self.on_alert(f"Error iniciando grabación: {e}")
-            return None
-
-    def stop_video_recording(self, package_to_mp4=False):
-        """
-        Para la grabación. Si package_to_mp4=True intenta empaquetar a mp4 usando ffmpeg (si está instalado).
-        Devuelve la ruta del archivo final (h264 o mp4).
-        """
-        if not self.recording:
-            self.on_alert("No hay grabación en curso.")
-            return None
-
-        try:
-            # stop_recording para encoder y cámara
-            self.camera.stop_recording()
-        except Exception:
-            # en caso de que stop_recording no exista o falle:
-            try:
-                self.camera.stop()
-            except Exception:
-                pass
-
-        self.recording = False
-        filepath = self.current_video
-        self.current_video = None
-
-        # marcar pendiente para envio por WiFi
-        self.mark_pending(filepath)
-        self.on_alert(f"Grabación parada y guardada: {filepath}")
-
-        # Opcional: empaquetar a mp4 si se desea (requiere ffmpeg)
-        if package_to_mp4:
-            mp4_path = filepath.replace(".h264", ".mp4")
-            try:
-                import subprocess
-                cmd = ["ffmpeg", "-y", "-framerate", "30", "-i", filepath, "-c", "copy", mp4_path]
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                self.on_alert(f"Empaquetado MP4 creado: {mp4_path}")
-                # marcar mp4 pendiente y borrar .h264
-                self.mark_pending(mp4_path)
-                # opcional: os.remove(filepath)
-                return mp4_path
-            except Exception as e:
-                self.on_alert(f"No se pudo empaquetar mp4: {e}")
-                return filepath
-
-        return filepath
+        self.video_bytes = self.lora_cam_sender.video_recording_optimized()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = os.path.join(self.video_dir, f"video_{timestamp}.h264")
+        with open(filename, "wb") as f:
+            f.write(self.video_bytes)
+        self._mark_pending(filename)
+        print(f"Vídeo guardado y marcado como pendiente: {filename}")
+        self.video_bytes = None
 
 
     # ---------- UTILIDADES ----------

@@ -18,6 +18,9 @@ from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage, QPixmap
 from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
 from NodoLoRa.LoRaNode_bis import LoRaNode
 
+from io import BytesIO
+from PIL import Image
+
 
 class EB_RobotGUI_bis(QWidget):
 
@@ -37,10 +40,10 @@ class EB_RobotGUI_bis(QWidget):
             self.loranode.on_alert = self._on_general_log
             self.loranode.on_position = self._on_refresh_position
             self.loranode.on_sensor = self._on_sensor_data
-            self.on_battery = self._on_battery_data
-            self.on_feedback = self._on_feedback_data
-            self.on_imu = self._on_imu_data
-           
+            self.loranode.on_battery = self._on_battery_data
+            self.loranode.on_feedback = self._on_feedback_data
+            self.loranode.on_imu = self._on_imu_data
+            self.loranode.on_photo = self._on_photo_received
 
 # -------------------- IMU inicio --------------------
 
@@ -250,20 +253,19 @@ class EB_RobotGUI_bis(QWidget):
         btn_photo.clicked.connect(self.take_photo)
         hbtn.addWidget(btn_photo)
 
-        self.btn_start_video = QPushButton("▶️ Iniciar Video")
-        self.btn_stop_video = QPushButton("⏹️ Detener Video")
+        self.btn_start_video = QPushButton("▶️ Tomar Video")
         self.btn_start_video.clicked.connect(self.start_video)
-        self.btn_stop_video.clicked.connect(self.stop_video)
-
         hbtn.addWidget(self.btn_start_video)
-        hbtn.addWidget(self.btn_stop_video)
 
         vlay.addLayout(hbtn)
 
         # --- Imagen mostrada ---
         self.photo_label = QLabel("Aquí se mostrará la imagen")
         self.photo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.photo_label.setFixedSize(640, 480)
+        self.photo_label.setFixedSize(340, 240)
+        self.photo_label.setStyleSheet("background-color: #000; border: 1px solid gray;")
+        self.photo_label.setText("📷 Esperando foto...")
+
         vlay.addWidget(self.photo_label)
 
         # --- Archivos pendientes ---
@@ -999,6 +1001,27 @@ class EB_RobotGUI_bis(QWidget):
         self.imu_output.append(f"[{ts}] Feedback: {imu_str}")
         self.imu_output.ensureCursorVisible()
 
+# --------- foto ----------
+    def _on_photo_received(self, img_bytes):
+        try:
+            # Abrir con PIL
+            img = Image.open(BytesIO(img_bytes))
+            img = img.convert("RGB")  # asegurar RGB
+            # Convertir a QImage
+            w, h = img.size
+            data = img.tobytes("raw", "RGB")
+            qimg = QImage(data, w, h, QImage.Format.Format_RGB888)
+            # Colocar en QLabel
+            pixmap = QPixmap.fromImage(qimg).scaled(
+                self.photo_label.width(), self.photo_label.height(),
+                Qt.AspectRatioMode.KeepAspectRatio
+            )
+            self.photo_label.setPixmap(pixmap)
+        except Exception as e:
+            print(f"Error mostrando foto: {e}")
+
+
+
         
 # -------------------- Estados de Nodos Conectados ----------------------
     # def add_status(self, layout, label_text, indicator):
@@ -1041,11 +1064,11 @@ class EB_RobotGUI_bis(QWidget):
         self.set_selected_type(26, self.grups["Cámara/Radar (25–30)"][26])
         self.send_cmd("1") 
 
-    def stop_video(self):
-        dest = int(self.dest_entry.text())
-        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitud detener vídeo")
-        self.set_selected_type(26, self.grups["Cámara/Radar (25–30)"][26])
-        self.send_cmd("0") 
+    # def stop_video(self):
+    #     dest = int(self.dest_entry.text())
+    #     self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitud detener vídeo")
+    #     self.set_selected_type(26, self.grups["Cámara/Radar (25–30)"][26])
+    #     self.send_cmd("0") 
 
     def take_photo(self):
         dest = int(self.dest_entry.text())
