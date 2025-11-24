@@ -5,9 +5,9 @@ import platform
 
 class LoRaCamSender:
     if platform.system() == "Linux":
-        from picamera2 import PiCamera2 #type: ignore
+        from picamera2 import Picamera2, Preview #type: ignore
 
-        def __init__(self, camera: PiCamera2 = None):
+        def __init__(self, camera: Picamera2 = None):
             self.camera = camera
             self.stream = io.BytesIO()
 
