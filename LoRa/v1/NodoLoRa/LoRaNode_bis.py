@@ -237,12 +237,12 @@ class LoRaNode:
                         self.on_collision()
                     elif msg_id == 63: #imu
                         self.imu_pos(message)
-                    elif msg_type == 64: # beteria
+                    elif msg_id == 64: # beteria
                         battery_level = message
                         self.on_battery(battery_level)
-                    elif msg_type == 65: # feedback
+                    elif msg_id == 65: # feedback
                         self.on_feedback(message)
-                    elif msg_type == 66: # imu
+                    elif msg_id == 66: # imu
                         self.on_imu(message)
                     elif msg_id == 69: 
                         if self.is_base:
