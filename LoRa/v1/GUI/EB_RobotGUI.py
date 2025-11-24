@@ -45,6 +45,7 @@ class EB_RobotGUI_bis(QWidget):
             self.loranode.on_feedback = self._on_feedback_data
             self.loranode.on_imu = self._on_imu_data
             self.loranode.on_photo = self._on_photo_received
+            self.loranode.on_collision = self._on_collision_detected
 
 # -------------------- IMU inicio --------------------
 
@@ -403,18 +404,51 @@ class EB_RobotGUI_bis(QWidget):
         # Añadir el tab al QTabWidget
         tabs.addTab(tab_logs, "📝")
 
-        # ------------------ TAB 8: Movimiento automático ------------------
+         
+        # ------------------ TAB 8: Radar / Movimiento autónomo y log de colisiones ------------------
         tab_radar = QWidget()
-        buttons_mov_auto_layout = QHBoxLayout()
+        tab_radar_layout = QVBoxLayout()
+        tab_radar.setLayout(tab_radar_layout)
 
-        self.btn_start_mov_aut = QPushButton("▶️ Comenzar movimiento automático")
+        # --- Sección Movimiento Autónomo (mitad superior) ---
+        mov_group = QGroupBox("Movimiento Autónomo")
+        mov_layout = QHBoxLayout()
+        self.btn_start_mov_aut = QPushButton("▶️ Comenzar")
+        self.btn_stop_mov_aut = QPushButton("⏹️ Detener")
+        mov_layout.addWidget(self.btn_start_mov_aut)
+        mov_layout.addWidget(self.btn_stop_mov_aut)
+        mov_group.setLayout(mov_layout)
+        mov_group.setFixedHeight(100)
+        tab_radar_layout.addWidget(mov_group)
+
         self.btn_start_mov_aut.clicked.connect(self._start_mov_auto)
-        buttons_mov_auto_layout.addWidget(self.btn_start_mov_aut)
-        self.btn_stop_mov_aut = QPushButton("⏹️ Parar movimiento autónomo")
         self.btn_stop_mov_aut.clicked.connect(self._stop_mov_auto)
-        buttons_mov_auto_layout.addWidget(self.btn_stop_mov_aut)
 
-        tab_radar.setLayout(buttons_mov_auto_layout)
+        # --- Sección Log de Colisiones (mitad inferior) ---
+        collision_group = QGroupBox("Log de Colisiones")
+        collision_layout = QVBoxLayout()
+
+        self.collision_log = QTextEdit()
+        self.collision_log.setReadOnly(True)
+        self.collision_log.setPlaceholderText("Aquí se mostrarán las colisiones detectadas...")
+        collision_layout.addWidget(self.collision_log)
+
+        collision_group.setLayout(collision_layout)
+        collision_group.setFixedHeight(200)  # tamaño compacto
+        tab_radar_layout.addWidget(collision_group)
+
+        # Botones de control (opcional, si quieres activar/desactivar detección)
+        btn_collision_layout = QHBoxLayout()
+        self.btn_start_collision = QPushButton("▶️ Activar Detección")
+        self.btn_stop_collision = QPushButton("⏹️ Detener Detección")
+        btn_collision_layout.addWidget(self.btn_start_collision)
+        btn_collision_layout.addWidget(self.btn_stop_collision)
+        collision_layout.addLayout(btn_collision_layout)
+
+        self.btn_start_collision.clicked.connect(self.start_collision_detection)
+        self.btn_stop_collision.clicked.connect(self.stop_collision_detection)
+
+        # Añadir la TAB 8 al conjunto de tabs
         tabs.addTab(tab_radar, "Radar")
 
 
@@ -469,7 +503,7 @@ class EB_RobotGUI_bis(QWidget):
                 13: "IMU",
                 14: "Movimiento autónomo",
                 15: "Bateria",
-                19: ""
+                16: "Detección de colisiones"
             },
             "Sensores (20–24)": {
                 20: "Encender led",
@@ -791,6 +825,18 @@ class EB_RobotGUI_bis(QWidget):
         self.set_selected_type(14, self.grups["Robot (10–19)"][14])
         self.append_general_log("🛰️ Enviando comando: Comenzar  movimiento autónomo")
         self.send_cmd("1")
+        
+    def start_collision_detection(self):
+        """Inicia la detección de colisiones"""
+        self.append_general_log("🛰️ Activando detección de colisiones")
+        self.set_selected_type(16, self.grups["Robot (10–19)"][16])
+        self.send_cmd("1")
+
+    def stop_collision_detection(self):
+        """Detiene la detección de colisiones"""
+        self.append_general_log("🛰️ Deteniendo detección de colisiones")
+        self.set_selected_type(16, self.grups["Robot (10–19)"][16])
+        self.send_cmd("0")
 
     def _stop_mov_auto(self):
         """Envía al robot la orden de detener el movimiento autónomo."""        
@@ -1010,6 +1056,12 @@ class EB_RobotGUI_bis(QWidget):
         except Exception as e:
             print(f"Error mostrando foto: {e}")
 
+    def _on_collision_detected(self):
+        """Actualiza la pantalla de colisiones con timestamp"""
+        ts = time.strftime('%H:%M:%S')
+        self.collision_log.append(f"[{ts}] ⚠️ Colisión detectada")
+        self.collision_log.ensureCursorVisible()
+        self.append_general_log(f"[{ts}] ⚠️ Colisión detectada")
 
 
         

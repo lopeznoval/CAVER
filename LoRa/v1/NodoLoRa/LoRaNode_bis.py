@@ -99,7 +99,7 @@ class LoRaNode:
         self.on_feedback = lambda feedback: print(f"[FEEDBACK UPDATE]: {feedback}")
         self.on_imu = lambda imu: print(f"[IMU UPDATE]: {imu}")
         self.on_photo = lambda photo: print(f"[RECEIVED PHOTO]")
-
+        self.on_collision = lambda: print(f"[OBJECT DETECTED]")
 
     # -------------------- MENSAJES --------------------
     def pack_message(self, addr_dest:int, msg_type: int, msg_id: int, message: str, relay_flag: int =0) -> bytes:
@@ -190,6 +190,8 @@ class LoRaNode:
                             self.temp_hum(message)
                         except Exception as e:
                             self.on_alert(f"Error procesando sensores periódicos (ID 40): {e}")
+                    elif msg_id == 50: # colision
+                        self.on_collision()
                     elif msg_id == 63: #imu
                         self.imu_pos(message)
                     elif msg_type == 64: # beteria
@@ -289,8 +291,9 @@ class LoRaNode:
                     if msg_type == 14:
                         if "1" in message:
                             self.auto_move_running = True
-                            self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
-                            self.mov_aut_thread.start()
+                            if not getattr(self, "mov_aut_thread", None) or not self.mov_aut_thread.is_alive():
+                                self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
+                                self.mov_aut_thread.start()
                         elif "0" in message:
                             self.on_alert("Movimiento autónomo loop detenido por EB.")
                             self.auto_move_running = False
@@ -312,6 +315,19 @@ class LoRaNode:
                             self.send_message(addr_sender, 0, 64, battery)
                         else:
                             self.on_alert(f"⚠️ Comando de monitorización de batería desconocido: {message}") 
+
+                    if msg_type == 16:
+                        if "1" in message:
+                            self.detect_collisions_running = True
+                            self.colision_dest = addr_dest
+                            if not getattr(self, "mov_aut_thread", None) or not self.mov_aut_thread.is_alive():
+                                self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
+                                self.mov_aut_thread.start()
+                        elif "0" in message:
+                            self.on_alert("Detacción de colisiones detenida por EB.")
+                            self.detect_collisions_running = False
+                        else: 
+                            self.on_alert(f"⚠️ Comando detección de colisiones desconocido: {message}") 
 
                     if self.robot.is_open and self.robot:
                         resp = self.send_to_robot(message)
@@ -474,6 +490,70 @@ class LoRaNode:
                 time.sleep(2)
         self.on_alert("IMU loop finalizado.")
     
+    # def _move_robot_loop(self):
+
+    #     UDP_IP = "0.0.0.0"
+    #     UDP_PORT = 5005
+
+    #     radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     radar_sock.bind((UDP_IP, UDP_PORT))
+    #     radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
+    #     radar_sock.setblocking(False)
+
+    #     print("🔄 Autonomía iniciada...")
+        
+    #     self.auto_move_running = True
+    #     last_cmd = None                     # para no enviar comandos repetidos
+    #     last_state = 0                      # último estado recibido del radar
+    #     self.robot.reset_input_buffer()
+
+    #     while self.auto_move_running :
+
+    #         # --- 1. Vaciar el buffer UDP ---
+    #         mensaje = None
+    #         while True:
+    #             try:
+    #                 data, _ = radar_sock.recvfrom(1024)
+    #                 mensaje = data.decode()
+    #             except BlockingIOError:
+    #                 break
+    #             except socket.timeout:
+    #                 break
+
+    #         # --- 2. Procesar último mensaje disponible ---
+    #         if mensaje is not None:
+    #             print(f"⚠️ Mensaje radar recibido: {mensaje}")
+    #             last_state = int(mensaje)   # 0 o 1
+
+    #         # --- 3. Lógica de control ---
+    #         if last_state == 1:
+    #             # Parar
+    #             cmd = {"T": 1, "L": 0, "R": 0}
+    #             print("⚠️ Colisión detectada → PARAR")
+    #             self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+
+    #             # Girar
+    #             time.sleep(0.5)
+    #             cmd = {"T": 1, "L": 0.1, "R": -0.1}
+    #             if cmd != last_cmd:
+    #                 print("⚠️ Colisión detectada → GIRAR")
+    #                 self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+    #                 time.sleep(1)
+    #                 last_cmd = cmd
+
+    #         else:
+    #             # Avanzar
+    #             cmd = {"T": 1, "L": 0.1, "R": 0.1}
+    #             print("✔️ Libre → AVANZAR")
+    #             self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+    #             last_cmd = cmd
+
+    #         time.sleep(0.15)  # control loop
+
+    #     radar_sock.close()
+    #     print("🛑 Autonomía detenida.")
+
+
     def _move_robot_loop(self):
 
         UDP_IP = "0.0.0.0"
@@ -491,7 +571,7 @@ class LoRaNode:
         last_state = 0                      # último estado recibido del radar
         self.robot.reset_input_buffer()
 
-        while self.auto_move_running:
+        while self.auto_move_running or self.detect_collisions_running:
 
             # --- 1. Vaciar el buffer UDP ---
             mensaje = None
@@ -510,33 +590,42 @@ class LoRaNode:
                 last_state = int(mensaje)   # 0 o 1
 
             # --- 3. Lógica de control ---
-            if last_state == 1:
-                # Parar
-                cmd = {"T": 1, "L": 0, "R": 0}
-                print("⚠️ Colisión detectada → PARAR")
-                self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
-
-                # Girar
-                time.sleep(0.5)
-                cmd = {"T": 1, "L": 0.1, "R": -0.1}
-                if cmd != last_cmd:
-                    print("⚠️ Colisión detectada → GIRAR")
+            if self.auto_move_running:
+                if last_state == 1:
+                    if self.detect_collisions_running:
+                        self.send_message(self.colision_dest, 0, 50, "1")
+                                            
+                    # Parar
+                    cmd = {"T": 1, "L": 0, "R": 0}
+                    print("⚠️ Colisión detectada → PARAR")
                     self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
-                    time.sleep(1)
+
+                    # Girar
+                    time.sleep(0.5)
+                    cmd = {"T": 1, "L": 0.1, "R": -0.1}
+                    if cmd != last_cmd:
+                        print("⚠️ Colisión detectada → GIRAR")
+                        self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+                        time.sleep(1)
+                        last_cmd = cmd
+
+                else:
+                    # Avanzar
+                    cmd = {"T": 1, "L": 0.1, "R": 0.1}
+                    print("✔️ Libre → AVANZAR")
+                    self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
                     last_cmd = cmd
 
-            else:
-                # Avanzar
-                cmd = {"T": 1, "L": 0.1, "R": 0.1}
-                print("✔️ Libre → AVANZAR")
-                self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
-                last_cmd = cmd
-
-            time.sleep(0.15)  # control loop
+                time.sleep(0.15)  # control loop
+            
+            elif self.detect_collisions_running:
+                if last_state == 1:
+                    self.send_message(self.colision_dest, 0, 50, "1")
+                    
 
         radar_sock.close()
         print("🛑 Autonomía detenida.")
-
+            
     def _battery_monitor_loop(self):
         """
         Envía periódicamente la lectura de batería al nodo solicitante mientras self.battery_monitor_running sea True.
