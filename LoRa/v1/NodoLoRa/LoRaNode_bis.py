@@ -53,6 +53,8 @@ class LoRaNode:
             self.lock_nodes = threading.Lock()
             self.connected_nodes = {}
             self.node_timers = {}
+            self.temp_mes = None
+            self.hum_mes = None
 
         if platform.system() == "Linux":
             try:
@@ -197,6 +199,18 @@ class LoRaNode:
                         self.node_timers[addr_sender] = timer
                         print(self.node_timers)
                         timer.start()
+
+                    if msg_type == 4:
+                        if message.startswith("Temp:"):
+                            try:
+                                parts = message.split(",")
+                                temp_str = parts[0].split(":")[1].strip().replace("°C", "")
+                                hum_str = parts[1].split(":")[1].strip().replace("%", "")
+                                self.temp_mes = float(temp_str)
+                                self.hum_mes = float(hum_str)
+                                # self.on_sensor(f"Sensor data from {addr_sender} - Temp: {self.temp_mes}°C, Hum: {self.hum_mes}%")
+                            except Exception as e:
+                                print(f"Error parsing sensor data: {e}")
 
                     self.remove_pending(addr_sender, msg_id)
                     return
