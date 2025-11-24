@@ -40,6 +40,7 @@ class EB_RobotGUI_bis(QWidget):
             self.loranode.on_alert = self._on_general_log
             self.loranode.on_position = self._on_refresh_position
             self.loranode.on_sensor = self._on_sensor_data
+            self.loranode.on_periodic_sensor = self._on_sensor_periodic_data 
             self.loranode.on_battery = self._on_battery_data
             self.loranode.on_feedback = self._on_feedback_data
             self.loranode.on_imu = self._on_imu_data
@@ -56,6 +57,12 @@ class EB_RobotGUI_bis(QWidget):
         self._path_points = {"x": [0.0], "y": [0.0]}
 
 # -------------------- IMU final --------------------
+
+        # sensores
+        self.temp_history = []
+        self.hum_history = []
+        self.time_history = []
+        self.start_time = time.time()
 
 
         if loranode is None:
@@ -96,58 +103,6 @@ class EB_RobotGUI_bis(QWidget):
 
         tab_move.setLayout(move_layout)
         tabs.addTab(tab_move, "🕹️")
-
-        # # === Layout principal vertical ===
-        # mv_layout = QVBoxLayout()
-
-        # # === Layout de velocidad ===
-        # speed_layout = QHBoxLayout()
-
-        # self.speed_label = QLabel("Velocidad: 50 %")
-        # self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.speed_label.setStyleSheet("font-weight: bold; color: #00aaff; font-size: 14px;")
-
-        # self.speed_slider = QSlider(Qt.Horizontal)
-        # self.speed_slider.setRange(0, 100)
-        # self.speed_slider.setValue(50)
-        # self.speed_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        # self.speed_slider.setTickInterval(10)
-        # self.speed_slider.valueChanged.connect(lambda v: self.speed_label.setText(f"Velocidad: {v} %"))
-
-        # speed_layout.addWidget(QLabel("0 %"))
-        # speed_layout.addWidget(self.speed_slider)
-        # speed_layout.addWidget(QLabel("100 %"))
-
-        # mv_layout.addLayout(speed_layout)
-        # mv_layout.addWidget(self.speed_label)
-
-        # # === Layout de movimiento ===
-        # move_layout = QGridLayout()
-
-        # self.btn_forward = QPushButton("↑")
-        # self.btn_left = QPushButton("←")
-        # self.btn_stop = QPushButton("Stop")
-        # self.btn_right = QPushButton("→")
-        # self.btn_backward = QPushButton("↓")
-
-        # buttons = [
-        #     (self.btn_forward, 0, 1, "forward"),
-        #     (self.btn_left, 1, 0, "left"),
-        #     (self.btn_stop, 1, 1, "stop"),
-        #     (self.btn_right, 1, 2, "right"),
-        #     (self.btn_backward, 2, 1, "backward"),
-        # ]
-
-        # for btn, r, c, cmd in buttons:
-        #     btn.setFixedSize(100, 35)
-        #     btn.clicked.connect(lambda _, d=cmd: self.move_robot(d))
-        #     move_layout.addWidget(btn, r, c)
-
-        # mv_layout.addLayout(move_layout)
-
-        # # === Asignar layout principal al tab ===
-        # tab_move.setLayout(mv_layout)
-        # tabs.addTab(tab_move, "🕹️ Movimiento")
 
         # ------------------ TAB 2: OLED ------------------
         tab_oled = QWidget()
@@ -226,22 +181,6 @@ class EB_RobotGUI_bis(QWidget):
         tab_cmd.setLayout(cmd_layout)
         tabs.addTab(tab_cmd, "⚙️")
 
-        # ----------------------- TAB 4: Imagen -----------------------
-        # tab_video = QWidget()
-        # video_layout = QVBoxLayout()
-
-        # self.btn_take_photo = QPushButton("Capturar foto 📸")
-        # self.btn_take_photo.clicked.connect(self.take_photo)
-        # video_layout.addWidget(self.btn_take_photo)
-
-        # # Placeholder para la imagen recibida
-        # self.photo_label = QLabel("Aquí se mostrará la foto")
-        # self.photo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.photo_label.setFixedSize(400, 300)
-        # video_layout.addWidget(self.photo_label)
-
-        # tab_video.setLayout(video_layout)
-        # tabs.addTab(tab_video, "📹")
         # ----------------------- TAB 4: Cámara -----------------------
         tab_video = QWidget()
         vlay = QVBoxLayout()
@@ -334,24 +273,54 @@ class EB_RobotGUI_bis(QWidget):
         # ----------------------- TAB 6: Tomar datos de los sensores -----------------------
         tab_sensors = QWidget()
         sensors_layout = QVBoxLayout()
+
+        from pyqtgraph import PlotWidget, plot
+        import pyqtgraph as pg
+
         
         self.btn_take_data = QPushButton("Medir temperatura y humedad 🌡️💧")
         self.btn_take_data.clicked.connect(self.take_data)
         sensors_layout.addWidget(self.btn_take_data)
+
+        temp_hum_layout = QHBoxLayout()
+
         # Recuadro para mostrar la temperatura
         self.temp_label = QLabel("Temperatura en °C")
         self.temp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.temp_label.setFixedSize(200, 50)
         self.temp_label.setStyleSheet("background-color: gray; border-radius: 8px;")
-        sensors_layout.addWidget(self.temp_label)
+        temp_hum_layout.addWidget(self.temp_label)
 
         # Recuadro para mostrar la humedad
         self.hum_label = QLabel("Humedad en %")
         self.hum_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hum_label.setFixedSize(200, 50)
         self.hum_label.setStyleSheet("background-color: gray; border-radius: 8px;")
-        sensors_layout.addWidget(self.hum_label)
-        
+        temp_hum_layout.addWidget(self.hum_label)
+
+        sensors_layout.addLayout(temp_hum_layout)
+
+
+        # ----------- GRÁFICA: Temperatura -----------
+        self.temp_plot = PlotWidget()
+        self.temp_plot.setBackground('black')
+        self.temp_plot.setTitle("Temperatura en el tiempo")
+        self.temp_plot.setLabel('left', '°C')
+        self.temp_plot.setLabel('bottom', 'Tiempo (s)')
+
+        self.temp_curve = self.temp_plot.plot([], [], pen='red', width=3)
+        sensors_layout.addWidget(self.temp_plot)
+
+        # ----------- GRÁFICA: Humedad -----------
+        self.hum_plot = PlotWidget()
+        self.hum_plot.setBackground('black')
+        self.hum_plot.setTitle("Humedad en el tiempo")
+        self.hum_plot.setLabel('left', '%')
+        self.hum_plot.setLabel('bottom', 'Tiempo (s)')
+
+        self.hum_curve = self.hum_plot.plot([], [], pen='cyan', width=3)
+        sensors_layout.addWidget(self.hum_plot)
+                
         # Encender/Apagar/Modo automático del led
         self.luz_groupbox = QGroupBox("Control del LED")
         self.luz_groupbox.setFixedSize(250, 120)
@@ -979,6 +948,28 @@ class EB_RobotGUI_bis(QWidget):
         except Exception as e:
             self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error procesando datos del sensor: {e}")
 
+    def _on_sensor_periodic_data(self, temp, hum):
+        """Actualiza solo los gráficos en tiempo real."""
+        ts = time.time() - self.start_time
+
+        # Guardar datos
+        self.time_history.append(ts)
+        self.temp_history.append(temp)
+        self.hum_history.append(hum)
+
+        # Limitar puntos para que no explote la memoria
+        if len(self.time_history) > 300:  # ~5 minutos si llega cada segundo
+            self.time_history.pop(0)
+            self.temp_history.pop(0)
+            self.hum_history.pop(0)
+
+        # Actualizar curvas
+        self.temp_curve.setData(self.time_history, self.temp_history)
+        self.hum_curve.setData(self.time_history, self.hum_history)
+
+        
+
+
 # ---------- bateria ----------
     def _on_battery_data(self, level):
         """Muestra la cadena de feedback tal cual en el panel de batería"""
@@ -1062,12 +1053,6 @@ class EB_RobotGUI_bis(QWidget):
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitud iniciar vídeo")
         self.set_selected_type(26, self.grups["Cámara/Radar (25–30)"][26])
         self.send_cmd("1") 
-
-    # def stop_video(self):
-    #     dest = int(self.dest_entry.text())
-    #     self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitud detener vídeo")
-    #     self.set_selected_type(26, self.grups["Cámara/Radar (25–30)"][26])
-    #     self.send_cmd("0") 
 
     def take_photo(self):
         dest = int(self.dest_entry.text())

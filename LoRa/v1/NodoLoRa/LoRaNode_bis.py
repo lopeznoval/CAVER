@@ -94,6 +94,7 @@ class LoRaNode:
         self.on_bytes = lambda data: print(f"📦 [BYTES] {data}")
         self.on_position = lambda pos: print(f"[POSITION UPDATE] {pos}")
         self.on_sensor = lambda sensor: print(f"[SENSOR UPDATE]{sensor}")
+        self.on_periodic_sensor = lambda temp, hum: print(f"[SENSOR PERIODIC UPDATE]{temp} ºC, {hum}%")
         self.on_battery = lambda battery_level: print(f"🔋 [BATTERY UPDATE]: {battery_level}")
         self.on_feedback = lambda feedback: print(f"[FEEDBACK UPDATE]: {feedback}")
         self.on_imu = lambda imu: print(f"[IMU UPDATE]: {imu}")
@@ -181,9 +182,14 @@ class LoRaNode:
                     if msg_id == 30:
                         try:
                             photo = base64.b64decode(message)
-                            self.on_photo(photo)  # llama al callback
+                            self.on_photo(photo)  
                         except Exception as e:
                             self.on_alert(f"Error decodificando foto: {e}")
+                    elif msg_id == 40: # sensores
+                        try:
+                            self.temp_hum(message)
+                        except Exception as e:
+                            self.on_alert(f"Error procesando sensores periódicos (ID 40): {e}")
                     elif msg_id == 63: #imu
                         self.imu_pos(message)
                     elif msg_type == 64: # beteria
@@ -320,6 +326,7 @@ class LoRaNode:
                             self.connect_sensors()
                             sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True)
                             sensor_th.start()
+                        self.sensor_dest = addr_sender
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
                     if msg_type == 22:  # Realizar lectura mandada por la EB
                         self.read_sensors_once()
@@ -690,7 +697,16 @@ class LoRaNode:
         if abs(self.roll) > ROLLOVER_THRESHOLD or abs(self.pitch) > ROLLOVER_THRESHOLD:
             self.on_alert(f"⚠️ ¡Posible vuelco detectado! Roll: {self.roll:.1f}°, Pitch: {self.pitch:.1f}°")
 
-                     
+    # ---------- SENSOR PERIODICO ----------
+    def temp_hum(self, sensordata):
+        # El formato del mensaje es:
+        # "Temp: 23.5°C, Hum: 58.0%"
+        parts = sensordata.replace("°C", "").replace("%", "").replace("Temp:", "").replace("Hum:", "")
+        temp_str, hum_str = parts.split(",")
+        temp = float(temp_str.strip())
+        hum = float(hum_str.strip())
+        self.on_periodic_sensor(temp,hum)
+
     # # -------------------- VÍDEO --------------------
     # def take_picture(self):
     #     if self.camera is not None:
@@ -850,6 +866,8 @@ class LoRaNode:
                     self.temp = float(parts[1].split(':')[1].replace('°C', ''))
 
                     print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
+
+                    self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
 
                     # with get_db_session() as session:
                     #     registrar_lectura(self.temp, self.hum, session)
