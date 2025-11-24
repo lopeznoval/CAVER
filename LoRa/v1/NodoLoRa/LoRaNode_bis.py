@@ -109,7 +109,7 @@ class LoRaNode:
         header = bytes([
             (addr_dest >> 8) & 0xFF, addr_dest & 0xFF,
             (self.addr >> 8) & 0xFF, self.addr & 0xFF,
-            (offset_freq & 0xFF),
+            (0x00),
             (relay_flag << 7) | (msg_type & 0x7F),
             msg_id & 0xFF
         ])
@@ -117,6 +117,20 @@ class LoRaNode:
         if len(header) + len(message.encode()) > 255:
             raise ValueError("⚠️ Message too long to pack in just a LoRa packet.")
         return header + message.encode()
+    
+    def pack_bytes(self, addr_dest:int, msg_type: int, msg_id: int, data: bytes, relay_flag: int =0) -> bytes:
+        offset_freq = self.freq - 410 # assuming base freq is 410MHz
+        header = bytes([
+            (addr_dest >> 8) & 0xFF, addr_dest & 0xFF,
+            (self.addr >> 8) & 0xFF, self.addr & 0xFF,
+            (0x01),
+            (relay_flag << 7) | (msg_type & 0x7F),
+            msg_id & 0xFF
+        ])
+        print(f"Bytes size: {len(data)} / Total size: {len(header) + len(data)} bytes")
+        if len(header) + len(data) > 255:
+            raise ValueError("⚠️ Data too long to pack in just a LoRa packet.")
+        return header + data
 
     def unpack_message(self, r_buff: bytes) -> tuple:
         if len(r_buff) < 7:
@@ -126,11 +140,14 @@ class LoRaNode:
         
         addr_dest = (r_buff[0] << 8) + r_buff[1]
         addr_sender = (r_buff[2] << 8) + r_buff[3]
-        freq = r_buff[4]
+        is_bytes = r_buff[4]
         msg_type = r_buff[5] & 0x7F
         relay_flag = r_buff[5] >> 7
         msg_id = r_buff[6]
-        message = r_buff[7:].decode(errors='ignore')
+        if is_bytes == 0:
+            message = r_buff[7:].decode(errors='ignore')
+        else:   
+            message = r_buff[7:] 
 
         print(f"Unpacked message: from {addr_sender} to {addr_dest}, type {msg_type}, id {msg_id}, relay {relay_flag}, msg: {message}")
         
@@ -897,7 +914,7 @@ class LoRaNode:
                 return filename, b64
             else:
                 # Guardar como pendiente para envio por WiFi
-                self.mark_pending(filename)
+                self._mark_pending(filename)
                 self.on_alert(f"Foto tomada (size {len(data)} bytes) — marcada pendiente (demasiado grande para LoRa).")
                 return filename, None
 
