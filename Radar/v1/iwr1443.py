@@ -249,11 +249,11 @@ class IWR1443:
             print(f"FLAG DE COLISIÓN: {radar_collision_stop}")
             if filtered_detObj and filtered_detObj["numObj"] > 0:
                 self.detObj = filtered_detObj
-                for i in range(filtered_detObj["numObj"]):
-                    print(f"Obj {i}: X={filtered_detObj['x'][i]:.2f}, "
-                          f"Y={filtered_detObj['y'][i]:.2f}, "
-                          f"Z={filtered_detObj['z'][i]:.2f}, "
-                          f"Distancia={filtered_detObj['range'][i]:.2f} m")
+                # for i in range(filtered_detObj["numObj"]):
+                #     print(f"Obj {i}: X={filtered_detObj['x'][i]:.2f}, "
+                #           f"Y={filtered_detObj['y'][i]:.2f}, "
+                #           f"Z={filtered_detObj['z'][i]:.2f}, "
+                #           f"Distancia={filtered_detObj['range'][i]:.2f} m")
             else:
                 self.detObj = {}
 

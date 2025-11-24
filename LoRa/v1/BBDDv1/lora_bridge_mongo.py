@@ -29,6 +29,7 @@ def procesar_paquete_lora(linea_json, ser):
             #    (Convertimos el timestamp a un objeto datetime)
             from datetime import datetime
             documento = {
+                "ID_robot": data["ir"],
                 "timestamp": datetime.fromisoformat(data["ts"]),
                 "temperatura": data["temp"],
                 "humedad": data["hum"]

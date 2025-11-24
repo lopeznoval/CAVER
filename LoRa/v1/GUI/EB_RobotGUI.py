@@ -947,16 +947,20 @@ class EB_RobotGUI_bis(QWidget):
 
     def _on_sensor_data(self, on_sensor_data):
         try:
-            # Si llega como string JSON, decodificamos
-            if isinstance(on_sensor_data, str):
-                data = json.loads(on_sensor_data)
-            else:
-                data = on_sensor_data
+            # # Si llega como string JSON, decodificamos
+            # if isinstance(on_sensor_data, str):
+            #     data = json.loads(on_sensor_data)
+            # else:
+            #     data = on_sensor_data
 
-            # Extraer datos (en español)
-            temperatura = float(data.get("Temperatura", 0))
-            humedad = float(data.get("Humedad", 0))
-            timestamp = data.get("timestamp", "")
+            # # Extraer datos (en español)
+            # temperatura = float(data.get("Temperatura", 0))
+            # humedad = float(data.get("Humedad", 0))
+            # timestamp = data.get("timestamp", "")
+
+            temperatura = self.loranode.temp_mes
+            humedad = self.loranode.hum_mes
+            timestamp = time.strftime('%H:%M:%S')
 
             # Mostrar en logs
             self.append_general_log(

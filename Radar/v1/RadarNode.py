@@ -24,12 +24,13 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 frameData = {}
 currentIndex = 0
-# collisions_array = np.array([], dtype=int)
-# last_state = 0
+collisions_array = np.array([], dtype=int)
+last_state = 0
 
 while True:
     try:
         dataOk, radar_collision_stop = radar.update()
+        
         if dataOk and radar.detObj:
             frameData[currentIndex] = radar.detObj
             currentIndex += 1
@@ -42,11 +43,30 @@ while True:
             count_zeros += 1
             count_ones = 0
 
-        if radar_collision_stop == 1:
+        # if radar_collision_stop == 1:
+        #     print("⚠️ Objeto detectado cerca, enviando alerta a Pi LoRaNode...")
+        #     sock.sendto(b"1", (UDP_IP, UDP_PORT))
+        # elif radar_collision_stop == 0: 
+        #     sock.sendto(b"0", (UDP_IP, UDP_PORT))
+
+        collisions_array = np.insert(collisions_array, 0, int(radar_collision_stop))
+        if collisions_array.size > 10:
+            collisions_array = collisions_array[:-1]  # elimina el último
+        
+        if np.sum(collisions_array) >= 6:
+            last_state = 1
             print("⚠️ Objeto detectado cerca, enviando alerta a Pi LoRaNode...")
             sock.sendto(b"1", (UDP_IP, UDP_PORT))
-        elif radar_collision_stop == 0: 
+            print("1 enviado")
+        elif np.sum(collisions_array) < 1: 
+            last_state = 0
             sock.sendto(b"0", (UDP_IP, UDP_PORT))
+
+            print("0 enviado")
+                
+        # sock.sendto(radar_collision_stop, (UDP_IP, UDP_PORT))
+
+
 
         time.sleep(0.033)  # ~30 Hz
 

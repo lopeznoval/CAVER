@@ -42,8 +42,8 @@ class LoRaNode:
         self.sensores = None
         self.sens_port = sens_port
         self.sens_baudrate = sens_baudrate
-        self.last_temp = None
-        self.last_hum = None
+        self.temp = None
+        self.hum = None
 
         self.radar_sock = None
         self.ip_sock = ip_sock
@@ -118,12 +118,12 @@ class LoRaNode:
             raise ValueError("⚠️ Message too long to pack in just a LoRa packet.")
         return header + message.encode()
     
-    def pack_bytes(self, addr_dest:int, msg_type: int, msg_id: int, data: bytes, relay_flag: int =0) -> bytes:
+    def pack_bytes(self, addr_dest:int, msg_type: int, msg_id: int, data: bytes, relay_flag: int = 0, part: int = 0) -> bytes:
         offset_freq = self.freq - 410 # assuming base freq is 410MHz
         header = bytes([
             (addr_dest >> 8) & 0xFF, addr_dest & 0xFF,
             (self.addr >> 8) & 0xFF, self.addr & 0xFF,
-            (0x01),
+            (0x01 if part == 0 else 0x02),
             (relay_flag << 7) | (msg_type & 0x7F),
             msg_id & 0xFF
         ])
@@ -140,18 +140,19 @@ class LoRaNode:
         
         addr_dest = (r_buff[0] << 8) + r_buff[1]
         addr_sender = (r_buff[2] << 8) + r_buff[3]
-        is_bytes = r_buff[4]
+        part = r_buff[4] & 0x02
+        is_b = r_buff[4] & 0x01
         msg_type = r_buff[5] & 0x7F
         relay_flag = r_buff[5] >> 7
         msg_id = r_buff[6]
-        if is_bytes == 0:
+        if is_b == 0:
             message = r_buff[7:].decode(errors='ignore')
         else:   
             message = r_buff[7:] 
 
         print(f"Unpacked message: from {addr_sender} to {addr_dest}, type {msg_type}, id {msg_id}, relay {relay_flag}, msg: {message}")
         
-        return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message
+        return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message, part, is_b
 
     # -------------------- HILOS --------------------
     def periodic_status(self):
@@ -166,6 +167,22 @@ class LoRaNode:
         if self.is_base and addr_dest != 0xFFFF:
             self.add_pending(addr_dest, msg_id)
 
+    def send_bytes(self, addr_dest: int, msg_type: int, msg_id: int, data: bytes, relay_flag: int = 0, callback=None):
+        while len(data) > 240:
+            chunk = data[:240]
+            data = data[240:]
+            part = 1
+            packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, chunk, relay_flag, part)
+            self.node.send_bytes(packed_data)
+            time.sleep(0.1)  # pequeño retardo entre fragmentos
+        part = 0
+        packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag, part)
+        self.node.send_bytes(packed_data)
+        # packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag)
+        # self.node.send_bytes(packed_data)
+        # if self.is_base and addr_dest != 0xFFFF:
+        #     self.add_pending(addr_dest, msg_id)
+
     def receive_loop(self):
         while self.running:
             msg = self.node.receive_bytes()
@@ -176,7 +193,7 @@ class LoRaNode:
 
     def processing_loop(self, msg):
             try:
-                addr_sender, addr_dest, msg_type, msg_id, relay_flag, message = self.unpack_message(msg)
+                addr_sender, addr_dest, msg_type, msg_id, relay_flag, message, part, is_b = self.unpack_message(msg)
             except Exception as e:
                 print(f"Error unpacking message: {e}")
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error unpacking message")
@@ -198,6 +215,13 @@ class LoRaNode:
             try: 
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
                 if msg_type == 0:
+                    if msg_id == 20: # hacer lo que sea en la EB
+                        try:
+                            resp = procesar_paquete_lora(message)
+                            self.send_message(addr_sender, 0, 21, resp)
+                        except Exception as e:
+                            self.on_alert(f"Error sincronizando sensores LoRa: {e}")
+                    
                     if msg_id == 30:
                         try:
                             photo = base64.b64decode(message)
@@ -253,7 +277,7 @@ class LoRaNode:
                                 hum_str = parts[1].split(":")[1].strip().replace("%", "")
                                 self.temp_mes = float(temp_str)
                                 self.hum_mes = float(hum_str)
-                                # self.on_sensor(f"Sensor data from {addr_sender} - Temp: {self.temp_mes}°C, Hum: {self.hum_mes}%")
+                                self.on_sensor(f"Sensor data from {addr_sender} - Temp: {self.temp_mes}°C, Hum: {self.hum_mes}%")
                             except Exception as e:
                                 print(f"Error parsing sensor data: {e}")
 
@@ -373,14 +397,14 @@ class LoRaNode:
                             self.connect_sensors()
                             sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True)
                             sensor_th.start()
-                        self.sensor_dest = addr_sender
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
                     if msg_type == 22:  # Realizar lectura mandada por la EB
                         self.read_sensors_once()
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
                     if msg_type == 22:  # Sincronizar sensores pendientes
                         # with get_db_session() as session:
-                        #     sincronizar_sensores_lora(self, session)
+                        #     message_send = sincronizar_sensores_lora(self, session)
+                        # self.send_message(addr_sender, 4, msg_id, message_send)
                         ...
                     if msg_type == 20:  # Encender led
                         self.control_led("ON")
@@ -394,8 +418,7 @@ class LoRaNode:
                     if msg_type == 25:  # Tomar foto
                         # img_b64 = self.take_picture_and_save()
                         # ------ PROBAR ------
-                        self.photo_dest = addr_sender
-                        self.take_picture_and_save_compressed() 
+                        self.take_picture_and_save_compressed(addr_sender) 
                         # self.send_message(addr_sender, 4, msg_id, img_b64)
                         print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
@@ -479,9 +502,15 @@ class LoRaNode:
             self.robot_listener = threading.Thread(target=self.receive_from_robot)
             self.robot_listener.daemon = True
             self.robot_listener.start()
+            return True
         except serial.SerialException as e:
             print(f"Failed to connect to robot: {e}")
-            return
+            return False
+    
+    def sincro_robot(self):
+        with get_db_session() as session:
+            message_send = sincronizar_sensores_lora(self, session)
+        self.send_message(0xFFFF, 0, 20, message_send)
 
     def receive_from_robot(self):
         while self.robot:
@@ -666,7 +695,8 @@ class LoRaNode:
                 try:
                     resp = self.send_to_robot("{\"T\":130}")  
                     # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
-                    battery = resp
+                    data = json.loads(resp)
+                    battery = data.get("v", 0) 
                     self.send_message(self.battery_dest, 0, 64, battery)
                 except Exception as e:
                     self.on_alert(f"Error leyendo batería: {e}")
@@ -923,15 +953,14 @@ class LoRaNode:
             return None, None
     
     # ------ PROBAR ------
-    def take_picture_and_save_compressed(self, max_lora_bytes=18000, quality=15):
+    def take_picture_and_save_compressed(self, photo_dest, max_lora_bytes=18000, quality=15):
         """
         Captura imagen usando capture_recording_optimized de LoRaCamSender.
         """
         img_bytes = self.lora_cam_sender.capture_recording_optimized()
         if img_bytes is not None:
             if len(img_bytes) <= 18000:  # tamaño máximo LoRa
-                img_b64 = base64.b64encode(img_bytes).decode("utf-8")
-                self.send_message(self.photo_dest, 0, 30, img_b64)
+                self.send_bytes(photo_dest, 0, 30, img_bytes)
             else:
                 self.on_alert("⚠️ Imagen demasiado grande para LoRa, marcada como pendiente.")
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -987,7 +1016,7 @@ class LoRaNode:
 
                     print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
-                    self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
+                    # self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
 
                     # with get_db_session() as session:
                     #     registrar_lectura(self.temp, self.hum, session)
@@ -1067,7 +1096,9 @@ class LoRaNode:
         receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
         # -------------------- ROBOT --------------------
         if self.robot_port and self.robot_baudrate:
-            self.connect_robot()
+            flag_robot = self.connect_robot()
+            if flag_robot:
+                ...
         # -------------------- RADAR --------------------
 
         # if (self.ip_sock is not None) and (self.port_sock is not None):

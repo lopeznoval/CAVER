@@ -40,6 +40,7 @@ class LoRaCamSender:
             self.camera.capture_file(self.stream, format='jpeg')
 
             img_bytes = self.stream.getvalue()
+            self.camera.stop()
             self.stream.seek(0)
             self.stream.truncate()
 
