@@ -745,7 +745,6 @@ class EB_RobotGUI_bis(QWidget):
         self.send_cmd("1")
         self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🔋 Monitorización de batería iniciada.\n")
 
-
     def stop_battery_monitor(self):
         """Enviar mensaje LoRa al robot para detener monitorización continua"""
         self.selected_type = 15
