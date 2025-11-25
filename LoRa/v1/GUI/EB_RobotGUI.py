@@ -765,14 +765,14 @@ class EB_RobotGUI_bis(QWidget):
         self.selected_type = 10
         self.append_general_log("🛰️ Enviando comando: Comenzar Feedback continuo")
         self.send_cmd("1")
-        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] Feedback continuo iniciado.\n")
+        self.feedback_output.append(f"[{time.strftime('%H:%M:%S')}] Feedback continuo iniciado.\n")
 
     def stop_feedback(self):
         """Enviar mensaje LoRa al robot para detener feedback continuo"""
         self.selected_type = 10
         self.append_general_log("🛰️ Enviando comando: Detener Feedback continuo")
         self.send_cmd("0")
-        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🛑 Feedback continuo detenido.\n")
+        self.feedback_output.append(f"[{time.strftime('%H:%M:%S')}] 🛑 Feedback continuo detenido.\n")
 
     def get_feedback_now(self):
         """Enviar mensaje LoRa al robot para obtener feedbak bajo demanda"""
@@ -1038,7 +1038,7 @@ class EB_RobotGUI_bis(QWidget):
     def _on_imu_data(self, imu_str):
         """Muestra la cadena de imu tal cual en el panel de imu"""
         ts = time.strftime('%H:%M:%S')
-        self.imu_output.append(f"[{ts}] Feedback: {imu_str}")
+        self.imu_output.append(f"[{ts}] Imu info: {imu_str}")
         self.imu_output.ensureCursorVisible()
 
 # --------- foto ----------
