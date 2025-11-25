@@ -369,6 +369,9 @@ class LoRaNode:
                             print("[DEBUG RAW RESP]:", repr(resp))
                             data = json.loads(resp)
                             battery = data.get("v", 0)   # por si no existe, devuelve 0
+                            print("BATERIA")
+                            print(battery)
+                            print("BATERIA ")
                             # self.send_message(self.battery_dest, 0, 64, battery)
                             self.send_message(addr_sender, 0, 64, battery)
                         else:
@@ -697,6 +700,9 @@ class LoRaNode:
             if self.robot and self.robot.is_open:
                 try:
                     resp = self.send_to_robot("{\"T\":130}")
+                    print("BATERIA RESPPPPPPPPPPPPPPPPPPPP")
+                    print(resp)
+                    print("BATERIA RESPPPPPPPPPPPPPPPPPPPP")
                     # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
                     data = json.loads(resp)
                     battery = data.get("v", 0)
