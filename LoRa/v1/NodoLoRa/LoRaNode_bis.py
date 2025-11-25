@@ -1036,7 +1036,7 @@ class LoRaNode:
             except Exception as e:
                 print(f"[SENSORS] Error leyendo ESP32: {e}")
             
-            time.sleep(60) #cmabiar a 120 o lo que queramos
+            time.sleep(5) #cmabiar a 120 o lo que queramos
 
     def read_sensors_once(self):
         """Lee datos de temperatura y humedad del ESP32 conectado por serie una vez."""
