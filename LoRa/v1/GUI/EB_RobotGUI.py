@@ -1001,11 +1001,12 @@ class EB_RobotGUI_bis(QWidget):
     def _on_sensor_periodic_data(self, temp, hum):
         """Actualiza solo los gráficos en tiempo real."""
         ts = time.time() - self.start_time
-
+        temperatura = self.loranode.temp_mes
+        humedad = self.loranode.hum_mes
         # Guardar datos
         self.time_history.append(ts)
-        self.temp_history.append(temp)
-        self.hum_history.append(hum)
+        self.temp_history.append(temperatura)
+        self.hum_history.append(humedad)
 
         # Limitar puntos para que no explote la memoria
         if len(self.time_history) > 300:  # ~5 minutos si llega cada segundo
@@ -1065,7 +1066,6 @@ class EB_RobotGUI_bis(QWidget):
         ts = time.strftime('%H:%M:%S')
         self.collision_log.append(f"[{ts}] ⚠️ Colisión detectada")
         self.collision_log.ensureCursorVisible()
-        self.append_general_log(f"[{ts}] ⚠️ Colisión detectada")
 
 
         

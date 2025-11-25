@@ -628,9 +628,9 @@ class LoRaNode:
         radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
         radar_sock.setblocking(False)
 
-        print("🔄 Autonomía iniciada...")
+               
+        # self.auto_move_running = False
         
-        # self.auto_move_running = True
         last_cmd = None                     # para no enviar comandos repetidos
         last_state = 0                      # último estado recibido del radar
         self.robot.reset_input_buffer()
@@ -650,11 +650,11 @@ class LoRaNode:
 
             # --- 2. Procesar último mensaje disponible ---
             if mensaje is not None:
-                #print(f"⚠️ Mensaje radar recibido: {mensaje}")
                 last_state = int(mensaje)   # 0 o 1
 
             # --- 3. Lógica de control ---
             if self.auto_move_running:
+                print("🔄 Autonomía iniciada...")
                 if last_state == 1:
                     if self.detect_collisions_running:
                         self.send_message(self.colision_dest, 0, 50, "1")
@@ -683,6 +683,7 @@ class LoRaNode:
                 time.sleep(0.15)  # control loop
             
             elif self.detect_collisions_running:
+                print("🔄 Detección de colisiones iniciada...")
                 if last_state == 1:
                     self.send_message(self.colision_dest, 0, 50, "1")
                     
