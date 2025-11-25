@@ -662,10 +662,10 @@ class EB_RobotGUI_bis(QWidget):
 
     def move_robot(self, direction):
         commands = {
-            "forward": {"T": 1, "L": 0.5, "R": 0.5},
-            "backward": {"T": 1, "L": -0.5, "R": -0.5},
-            "left": {"T": 1, "L": -0.3, "R": 0.3},
-            "right": {"T": 1, "L": 0.3, "R": -0.3},
+            "forward": {"T": 1, "L": 0.3, "R": 0.3},
+            "backward": {"T": 1, "L": -0.3, "R": -0.3},
+            "left": {"T": 1, "L": -0.2, "R": 0.2},
+            "right": {"T": 1, "L": 0.2, "R": -0.2},
             "stop": {"T": 1, "L": 0, "R": 0},
         }
         cmd = commands.get(direction)

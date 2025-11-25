@@ -386,7 +386,7 @@ class LoRaNode:
                     if msg_type == 16:
                         if "1" in message:
                             self.detect_collisions_running = True
-                            self.colision_dest = addr_dest
+                            self.colision_dest = addr_sender
                             if not getattr(self, "mov_aut_thread", None) or not self.mov_aut_thread.is_alive():
                                 self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                                 self.mov_aut_thread.start()
@@ -686,9 +686,10 @@ class LoRaNode:
                 time.sleep(0.15)  # control loop
             
             elif self.detect_collisions_running:
-                print("🔄 Detección de colisiones iniciada...")
+                # print("🔄 Detección de colisiones iniciada...")
                 if last_state == 1:
                     self.send_message(self.colision_dest, 0, 50, "1")
+                time.sleep(0.15) 
                     
 
         radar_sock.close()
