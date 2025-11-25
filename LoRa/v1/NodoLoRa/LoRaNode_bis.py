@@ -9,7 +9,7 @@ import base64
 import math
 import socket
 import serial
-from BBDDv1.lora_bridge_mongo import connect_mongo, iniciar_escucha_lora, procesar_paquete_lora
+from BBDDv1.lora_bridge_mongo import connect_mongo, procesar_paquete_lora
 from BBDDv1.registro_datos import registrar_lectura
 from BBDDv1.database_SQLite import *
 from BBDDv1.sincronizar_robot import actualizar_BBDD_robot, sincronizar_sensores_lora
@@ -220,23 +220,23 @@ class LoRaNode:
                             resp = procesar_paquete_lora(message)
                             self.send_message(addr_sender, 0, 21, resp)
                         except Exception as e:
-                            self.on_alert(f"Error sincronizando sensores LoRa: {e}")
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando sensores LoRa: {e}")
                     if msg_id == 21: 
                         with get_db_session() as session:
                             actualizar_BBDD_robot(message, session)  
-                        print("BBDD robot actualizada tras ACK")
+                        print(f"[{time.strftime('%H:%M:%S')}] BBDD robot actualizada tras ACK")
                     
                     if msg_id == 30:
                         try:
                             photo = base64.b64decode(message)
                             self.on_photo(photo)  
                         except Exception as e:
-                            self.on_alert(f"Error decodificando foto: {e}")
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error decodificando foto: {e}")
                     elif msg_id == 40: # sensores
                         try:
                             self.temp_hum(message)
                         except Exception as e:
-                            self.on_alert(f"Error procesando sensores periódicos (ID 40): {e}")
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error procesando sensores periódicos (ID 40): {e}")
                     elif msg_id == 50: # colision
                         self.on_collision()
                     elif msg_id == 63: #imu
@@ -281,9 +281,9 @@ class LoRaNode:
                                 hum_str = parts[1].split(":")[1].strip().replace("%", "")
                                 self.temp_mes = float(temp_str)
                                 self.hum_mes = float(hum_str)
-                                self.on_sensor(f"Sensor data from {addr_sender} - Temp: {self.temp_mes}°C, Hum: {self.hum_mes}%")
+                                self.on_sensor(f"[{time.strftime('%H:%M:%S')}] Sensor data from {addr_sender} - Temp: {self.temp_mes}°C, Hum: {self.hum_mes}%")
                             except Exception as e:
-                                print(f"Error parsing sensor data: {e}")
+                                print(f"[{time.strftime('%H:%M:%S')}] Error parsing sensor data: {e}")
 
                     self.remove_pending(addr_sender, msg_id)
                     return
@@ -325,27 +325,27 @@ class LoRaNode:
                             resp = self.send_to_robot("{\"T\":130}")  
                             self.send_message(addr_sender, 0, 65, resp)
                         else:
-                            self.on_alert(f"⚠️ Comando de feedback desconocido: {message}") 
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}]⚠️ Comando de feedback desconocido: {message}") 
 
                     if msg_type == 13: # pedir o parar datos imu
                         if "1" in message:
                             print("llego el 1 para empezar")
                             if getattr(self, "imu_thread", None) and self.imu_thread.is_alive():
-                                self.on_alert("⚠️ IMU loop ya estaba activo.")
+                                self.on_alert("[{time.strftime('%H:%M:%S')}] ⚠️ IMU loop ya estaba activo.")
                             else:
                                 self.stop_imu_flag = False
                                 self.imu_dest = addr_sender
                                 self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
                                 self.imu_thread.start()
-                                self.on_alert("🟢 IMU loop activado por EB.")
+                                self.on_alert(f"[{time.strftime('%H:%M:%S')}] 🟢 IMU loop activado por EB.")
                         elif "0" in message:
                             self.stop_imu_flag = True
-                            self.on_alert("🔴 IMU loop detenido por EB.")
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] 🔴 IMU loop detenido por EB.")
                         elif "2" in message:
                             resp = self.send_to_robot("{\"T\":126}")  
                             self.send_message(addr_sender, 0, 66, resp)
                         else:
-                            self.on_alert(f"⚠️ Comando IMU desconocido: {message}") 
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando IMU desconocido: {message}") 
                     
                     if msg_type == 14:
                         if "1" in message:
@@ -354,10 +354,10 @@ class LoRaNode:
                                 self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                                 self.mov_aut_thread.start()
                         elif "0" in message:
-                            self.on_alert("Movimiento autónomo loop detenido por EB.")
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Movimiento autónomo loop detenido por EB.")
                             self.auto_move_running = False
                         else: 
-                            self.on_alert(f"⚠️ Comando movimiento autónomo desconocido: {message}") 
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando movimiento autónomo desconocido: {message}") 
 
                     if msg_type == 15:
                         if "0" in message:
@@ -373,7 +373,7 @@ class LoRaNode:
                             battery = resp
                             self.send_message(addr_sender, 0, 64, battery)
                         else:
-                            self.on_alert(f"⚠️ Comando de monitorización de batería desconocido: {message}") 
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando de monitorización de batería desconocido: {message}") 
 
                     if msg_type == 16:
                         if "1" in message:
@@ -386,7 +386,7 @@ class LoRaNode:
                             self.on_alert("Detacción de colisiones detenida por EB.")
                             self.detect_collisions_running = False
                         else: 
-                            self.on_alert(f"⚠️ Comando detección de colisiones desconocido: {message}") 
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando detección de colisiones desconocido: {message}") 
 
                     if self.robot.is_open and self.robot:
                         resp = self.send_to_robot(message)
@@ -430,7 +430,7 @@ class LoRaNode:
                     elif msg_type == 26:  # iniciar grabación
                         video_bytes = self.start_video_recording()
                         if video_bytes:
-                            self.on_alert(f"Vídeo comprimido listo ({len(video_bytes)} bytes).")
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Vídeo comprimido listo ({len(video_bytes)} bytes).")
                        
                         # # ---------------------- INICIAR VIDEO ----------------------
                         # if "1" in message:
@@ -501,14 +501,14 @@ class LoRaNode:
             self.robot.setDTR(False)
             self.robot.write(("{\"T\":131,\"cmd\":0}" + "\r\n").encode('utf-8'))      # se desactiva el chasis feedback
             # self.robot.write(("{\"T\":142,\"cmd\":10000}" + "\r\n").encode('utf-8'))  # timer cahsis feedback
-            print(f"Connected to robot on {self.robot_port}")
+            print(f"[{time.strftime('%H:%M:%S')}] Connected to robot on {self.robot_port}")
             self.robot.flushInput()
             self.robot_listener = threading.Thread(target=self.receive_from_robot)
             self.robot_listener.daemon = True
             self.robot_listener.start()
             return True
         except serial.SerialException as e:
-            print(f"Failed to connect to robot: {e}")
+            print(f"[{time.strftime('%H:%M:%S')}] Failed to connect to robot: {e}")
             return False 
 
     def receive_from_robot(self):
@@ -516,17 +516,17 @@ class LoRaNode:
             data = self.robot.readline().decode('utf-8')
             if data:
                 try:
-                    print(f"Received from robot: {data}")
+                    print(f"[{time.strftime('%H:%M:%S')}] Received from robot: {data}")
                     self.response_queue.put(data)  # Guarda cada respuesta
                 except Exception as e:
-                    print(f"Error reading: {e}")
+                    print(f"[{time.strftime('%H:%M:%S')}] Error reading: {e}")
 
     def send_to_robot(self, command: str) -> str:
         """Envía un comando al robot y devuelve la respuesta."""
         if self.running and self.robot and self.robot.is_open:
             self.robot.reset_input_buffer()
             self.robot.write((command + "\r\n").encode('utf-8'))
-            print("Enviando comando al robot.")  
+            print(f"[{time.strftime('%H:%M:%S')}] Enviando comando al robot.")  
             try:
                 response = self.response_queue.get(timeout=5)
                 return response
@@ -544,9 +544,9 @@ class LoRaNode:
                 time.sleep(10)
                 # time.sleep(40)
             except Exception as e:
-                self.on_alert(f"Error en IMU loop: {e}")
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error en IMU loop: {e}")
                 time.sleep(2)
-        self.on_alert("IMU loop finalizado.")
+        self.on_alert(f"[{time.strftime('%H:%M:%S')}] IMU loop finalizado.")
     
     # def _move_robot_loop(self):
 
@@ -622,7 +622,7 @@ class LoRaNode:
         radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
         radar_sock.setblocking(False)
 
-        print("🔄 Autonomía iniciada...")
+        print(f"[{time.strftime('%H:%M:%S')}] 🔄 Autonomía iniciada...")
         
         self.auto_move_running = True
         last_cmd = None                     # para no enviar comandos repetidos
@@ -644,7 +644,7 @@ class LoRaNode:
 
             # --- 2. Procesar último mensaje disponible ---
             if mensaje is not None:
-                print(f"⚠️ Mensaje radar recibido: {mensaje}")
+                print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Mensaje radar recibido: {mensaje}")
                 last_state = int(mensaje)   # 0 o 1
 
             # --- 3. Lógica de control ---
@@ -655,14 +655,14 @@ class LoRaNode:
                                             
                     # Parar
                     cmd = {"T": 1, "L": 0, "R": 0}
-                    print("⚠️ Colisión detectada → PARAR")
+                    print("[{time.strftime('%H:%M:%S')}] ⚠️ Colisión detectada → PARAR")
                     self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
 
                     # Girar
                     time.sleep(0.5)
                     cmd = {"T": 1, "L": 0.1, "R": -0.1}
                     if cmd != last_cmd:
-                        print("⚠️ Colisión detectada → GIRAR")
+                        print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Colisión detectada → GIRAR")
                         self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
                         time.sleep(1)
                         last_cmd = cmd
@@ -670,7 +670,7 @@ class LoRaNode:
                 else:
                     # Avanzar
                     cmd = {"T": 1, "L": 0.1, "R": 0.1}
-                    print("✔️ Libre → AVANZAR")
+                    print(f"[{time.strftime('%H:%M:%S')}] ✔️ Libre → AVANZAR")
                     self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
                     last_cmd = cmd
 
@@ -682,7 +682,7 @@ class LoRaNode:
                     
 
         radar_sock.close()
-        print("🛑 Autonomía detenida.")
+        print(f"[{time.strftime('%H:%M:%S')}]🛑 Autonomía detenida.")
             
     def _battery_monitor_loop(self):
         """
@@ -796,7 +796,7 @@ class LoRaNode:
             try:
                 imudata = json.loads(imudata)
             except json.JSONDecodeError:
-                self.on_alert("⚠️ IMU data inválida (no es JSON).")
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ IMU data inválida (no es JSON).")
                 return
 
         # --- Inicializar variables persistentes ---
@@ -843,7 +843,7 @@ class LoRaNode:
         # --- Detectar vuelco ---
         ROLLOVER_THRESHOLD = 60  # grados, ajustar según necesidad
         if abs(self.roll) > ROLLOVER_THRESHOLD or abs(self.pitch) > ROLLOVER_THRESHOLD:
-            self.on_alert(f"⚠️ ¡Posible vuelco detectado! Roll: {self.roll:.1f}°, Pitch: {self.pitch:.1f}°")
+            self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ ¡Posible vuelco detectado! Roll: {self.roll:.1f}°, Pitch: {self.pitch:.1f}°")
 
     # ---------- SENSOR PERIODICO ----------
     def temp_hum(self, sensordata):
@@ -888,14 +888,14 @@ class LoRaNode:
             if filepath not in self.pending:
                 self.pending.append(filepath)
                 self._save_pending_list()
-                self.on_alert(f"Archivo marcado como pendiente: {filepath}")
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Archivo marcado como pendiente: {filepath}")
 
     def clear_pending(self, filepath):
         with self.pending_lock:
             if filepath in self.pending:
                 self.pending.remove(filepath)
                 self._save_pending_list()
-                self.on_alert(f"Archivo enviado/limpiado: {filepath}")
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Archivo enviado/limpiado: {filepath}")
 
     # -------------------- FOTO --------------------
     def take_picture_and_save(self, quality_jpeg=80, max_lora_bytes=18000):
@@ -905,7 +905,7 @@ class LoRaNode:
         Si la imagen es > max_lora_bytes se devuelve None como b64 y queda en pending.
         """
         if self.camera is None:
-            self.on_alert("Cámara no disponible para foto.")
+            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Cámara no disponible para foto.")
             return None, None
 
         try:
@@ -938,16 +938,16 @@ class LoRaNode:
             # Si el tamaño es pequeño, devolver base64 listo para enviar por LoRa
             if len(data) <= max_lora_bytes:
                 b64 = base64.b64encode(data).decode("utf-8")
-                self.on_alert(f"Foto tomada y codificada (size {len(data)} bytes).")
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto tomada y codificada (size {len(data)} bytes).")
                 return filename, b64
             else:
                 # Guardar como pendiente para envio por WiFi
                 self._mark_pending(filename)
-                self.on_alert(f"Foto tomada (size {len(data)} bytes) — marcada pendiente (demasiado grande para LoRa).")
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto tomada (size {len(data)} bytes) — marcada pendiente (demasiado grande para LoRa).")
                 return filename, None
 
         except Exception as e:
-            self.on_alert(f"Error tomando foto: {e}")
+            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error tomando foto: {e}")
             return None, None
     
     # ------ PROBAR ------
@@ -960,13 +960,13 @@ class LoRaNode:
             if len(img_bytes) <= 18000:  # tamaño máximo LoRa
                 self.send_bytes(photo_dest, 0, 30, img_bytes)
             else:
-                self.on_alert("⚠️ Imagen demasiado grande para LoRa, marcada como pendiente.")
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Imagen demasiado grande para LoRa, marcada como pendiente.")
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = os.path.join(self.photo_dir, f"photo_{timestamp}.jpg")
                 with open(filename, "wb") as f:
                     f.write(img_bytes)
                 self._mark_pending(filename)
-                print(f"Foto guardada y marcada como pendiente: {filename}")
+                print(f"[{time.strftime('%H:%M:%S')}] Foto guardada y marcada como pendiente: {filename}")
         else:
             self.on_alert("⚠️ Error tomando foto.")
     
@@ -981,7 +981,7 @@ class LoRaNode:
         with open(filename, "wb") as f:
             f.write(self.video_bytes)
         self._mark_pending(filename)
-        print(f"Vídeo guardado y marcado como pendiente: {filename}")
+        print(f"[{time.strftime('%H:%M:%S')}] Vídeo guardado y marcado como pendiente: {filename}")
         self.video_bytes = None
 
 
@@ -996,7 +996,7 @@ class LoRaNode:
         try:
             self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
             time.sleep(2)
-            print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+            print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Conectado al ESP32 en", self.sens_port)
             return True
         except Exception as e:
             print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
@@ -1013,7 +1013,7 @@ class LoRaNode:
                     self.hum = float(parts[0].split(':')[1].replace('%', ''))
                     self.temp = float(parts[1].split(':')[1].replace('°C', ''))
 
-                    print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
+                    print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
                     # self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
 
@@ -1021,7 +1021,7 @@ class LoRaNode:
                         registrar_lectura(self.temp, self.hum, session)
 
             except Exception as e:
-                print(f"[SENSORS] Error leyendo ESP32: {e}")
+                print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Error leyendo ESP32: {e}")
             
             time.sleep(60) #cmabiar a 120 o lo que queramos
 
@@ -1035,7 +1035,7 @@ class LoRaNode:
                     self.hum = float(parts[0].split(':')[1].replace('%', ''))
                     self.temp = float(parts[1].split(':')[1].replace('°C', ''))
 
-                    print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
+                    print(f"[{time.strftime('%H:%M:%S')}][SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
                     # with get_db_session() as session:
                     #     registrar_lectura(self.temp, self.hum, session)
@@ -1084,9 +1084,9 @@ class LoRaNode:
         try:
             if self.sensores and self.sensores.is_open:
                 self.sensores.write((orden + "\n").encode())
-                print(f"[LED] Orden enviada al ESP32: {orden}")
+                print(f"[{time.strftime('%H:%M:%S')}][LED] Orden enviada al ESP32: {orden}")
             else:
-                print("[LED] ❌ Puerto de sensores no está abierto.")
+                print(f"[{time.strftime('%H:%M:%S')}][LED] ❌ Puerto de sensores no está abierto.")
         except Exception as e:
             print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
 
@@ -1099,7 +1099,7 @@ class LoRaNode:
                     payload = sincronizar_sensores_lora(self, session)
                 self.send_message(0xFFFF, 0, 20, payload)
             except Exception as e:
-                self.on_alert(f"Error sincronizando BBDD: {e}")
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando BBDD: {e}")
             time.sleep(30)  # cada 30 segundos
 
     # -------------------- EJECUCIÓN --------------------
@@ -1130,7 +1130,7 @@ class LoRaNode:
             # self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
         # else:
         #     self.imu_thread = threading.Thread(target=self._get_imu_loop_EB, daemon=True)
-        print("LoRaNode running... Ctrl+C to stop")
+        print(f"[{time.strftime('%H:%M:%S')}] LoRaNode running... Ctrl+C to stop")
         # try:
         #     while True:
         #         # self.receive_loop()
@@ -1140,7 +1140,7 @@ class LoRaNode:
     
 
     def stop(self):
-        print("Stopping LoRaNode...")
+        print(f"[{time.strftime('%H:%M:%S')}] Stopping LoRaNode...")
         self.running = False
         time.sleep(0.2)
         if self.robot and self.robot.is_open:
