@@ -24,6 +24,7 @@ def sincronizar_sensores_lora(lora, session):
         return
     
     print(f"(LoRa) Iniciando envío de {len(lecturas_pendientes)} lecturas...")
+    packet_str = ""
     for lectura in lecturas_pendientes:
         payload = {
             "type": "sensor",
@@ -32,8 +33,11 @@ def sincronizar_sensores_lora(lora, session):
             "temp": lectura.temperatura,
             "hum": lectura.humedad
         }
-        packet_str = json.dumps(payload)
-        packet_bytes = (packet_str + '\n').encode('utf-8')
+        packet_str_p = json.dumps(payload)
+        packet_str = packet_str + "\n" + packet_str_p
+        
+    packet_bytes = (packet_str).encode('utf-8')
+    return packet_str
         
         # try:
         #     lora.send_message(0xFFFF, 1, 0, packet_str)

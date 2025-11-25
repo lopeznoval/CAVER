@@ -42,8 +42,8 @@ class LoRaNode:
         self.sensores = None
         self.sens_port = sens_port
         self.sens_baudrate = sens_baudrate
-        self.last_temp = None
-        self.last_hum = None
+        self.temp = None
+        self.hum = None
 
         self.radar_sock = None
         self.ip_sock = ip_sock
@@ -215,6 +215,13 @@ class LoRaNode:
             try: 
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
                 if msg_type == 0:
+                    if msg_id == 20: # hacer lo que sea en la EB
+                        try:
+                            resp = procesar_paquete_lora(message)
+                            self.send_message(addr_sender, 0, 21, resp)
+                        except Exception as e:
+                            self.on_alert(f"Error sincronizando sensores LoRa: {e}")
+                    
                     if msg_id == 30:
                         try:
                             photo = base64.b64decode(message)
@@ -390,14 +397,14 @@ class LoRaNode:
                             self.connect_sensors()
                             sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True)
                             sensor_th.start()
-                        self.sensor_dest = addr_sender
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
                     if msg_type == 22:  # Realizar lectura mandada por la EB
                         self.read_sensors_once()
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
                     if msg_type == 22:  # Sincronizar sensores pendientes
                         # with get_db_session() as session:
-                        #     sincronizar_sensores_lora(self, session)
+                        #     message_send = sincronizar_sensores_lora(self, session)
+                        # self.send_message(addr_sender, 4, msg_id, message_send)
                         ...
                     if msg_type == 20:  # Encender led
                         self.control_led("ON")
@@ -495,9 +502,15 @@ class LoRaNode:
             self.robot_listener = threading.Thread(target=self.receive_from_robot)
             self.robot_listener.daemon = True
             self.robot_listener.start()
+            return True
         except serial.SerialException as e:
             print(f"Failed to connect to robot: {e}")
-            return
+            return False
+    
+    def sincro_robot(self):
+        with get_db_session() as session:
+            message_send = sincronizar_sensores_lora(self, session)
+        self.send_message(0xFFFF, 0, 20, message_send)
 
     def receive_from_robot(self):
         while self.robot:
@@ -1002,7 +1015,7 @@ class LoRaNode:
 
                     print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
-                    self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
+                    # self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
 
                     # with get_db_session() as session:
                     #     registrar_lectura(self.temp, self.hum, session)
@@ -1082,7 +1095,9 @@ class LoRaNode:
         receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
         # -------------------- ROBOT --------------------
         if self.robot_port and self.robot_baudrate:
-            self.connect_robot()
+            flag_robot = self.connect_robot()
+            if flag_robot:
+                ...
         # -------------------- RADAR --------------------
 
         # if (self.ip_sock is not None) and (self.port_sock is not None):
