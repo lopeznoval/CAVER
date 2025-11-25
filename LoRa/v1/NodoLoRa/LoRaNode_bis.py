@@ -538,8 +538,8 @@ class LoRaNode:
                 return response
             except queue.Empty:
                 return "OK"
-        else:
-            return "OK"
+        #else:
+        #    return "OK"
         
     def _get_imu_loop_raspi(self): # IMU
         while not getattr(self, "stop_imu_flag", False):
