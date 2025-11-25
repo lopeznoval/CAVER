@@ -1066,7 +1066,6 @@ class EB_RobotGUI_bis(QWidget):
         ts = time.strftime('%H:%M:%S')
         self.collision_log.append(f"[{ts}] ⚠️ Colisión detectada")
         self.collision_log.ensureCursorVisible()
-        self.append_general_log(f"[{ts}] ⚠️ Colisión detectada")
 
 
         
