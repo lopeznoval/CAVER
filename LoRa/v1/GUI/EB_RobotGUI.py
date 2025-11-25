@@ -994,29 +994,35 @@ class EB_RobotGUI_bis(QWidget):
             self.hum_label.setStyleSheet(
                 f"background-color: {color_hum}; border-radius: 8px; font-weight: bold;"
             )
+        
+            # **Actualizar gráficos**
+            self._update_sensor_graphs(temperatura, humedad)
 
         except Exception as e:
             self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error procesando datos del sensor: {e}")
 
     def _on_sensor_periodic_data(self, temp, hum):
         """Actualiza solo los gráficos en tiempo real."""
-        ts = time.time() - self.start_time
+        # ts = time.time() - self.start_time
         temperatura = self.loranode.temp_mes
         humedad = self.loranode.hum_mes
-        # Guardar datos
-        self.time_history.append(ts)
-        self.temp_history.append(temperatura)
-        self.hum_history.append(humedad)
+        # # Guardar datos
+        # self.time_history.append(ts)
+        # self.temp_history.append(temperatura)
+        # self.hum_history.append(humedad)
 
-        # Limitar puntos para que no explote la memoria
-        if len(self.time_history) > 300:  # ~5 minutos si llega cada segundo
-            self.time_history.pop(0)
-            self.temp_history.pop(0)
-            self.hum_history.pop(0)
+        # # Limitar puntos para que no explote la memoria
+        # if len(self.time_history) > 300:  # ~5 minutos si llega cada segundo
+        #     self.time_history.pop(0)
+        #     self.temp_history.pop(0)
+        #     self.hum_history.pop(0)
 
-        # Actualizar curvas
-        self.temp_curve.setData(self.time_history, self.temp_history)
-        self.hum_curve.setData(self.time_history, self.hum_history)
+        # # Actualizar curvas
+        # self.temp_curve.setData(self.time_history, self.temp_history)
+        # self.hum_curve.setData(self.time_history, self.hum_history)
+        
+        # Solo actualizar gráficos
+        self._update_sensor_graphs(temperatura, humedad)
 
         
 
@@ -1129,5 +1135,35 @@ class EB_RobotGUI_bis(QWidget):
                 self.pending_list_widget.addItem(QListWidgetItem(p))
         except:
             pass
+
+    def _update_sensor_graphs(self, temperatura: float, humedad: float):
+        ts = time.time() - self.start_time
+
+        # Guardar datos en histórico
+        self.time_history.append(ts)
+        self.temp_history.append(temperatura)
+        self.hum_history.append(humedad)
+
+        # Limitar puntos a 300
+        if len(self.time_history) > 300:
+            self.time_history.pop(0)
+            self.temp_history.pop(0)
+            self.hum_history.pop(0)
+
+        # Actualizar gráficos
+        self.temp_curve.setData(self.time_history, self.temp_history)
+        self.hum_curve.setData(self.time_history, self.hum_history)
+
+        # # Actualizar etiquetas
+        # self.temp_label.setText(f"Temperatura: {temperatura:.1f} °C")
+        # self.hum_label.setText(f"Humedad: {humedad:.1f} %")
+
+        # # Actualizar colores de las etiquetas
+        # color_temp = "lightblue" if temperatura < 15 else "lightgreen" if temperatura <= 25 else "lightcoral"
+        # color_hum = "khaki" if humedad < 30 else "lightgreen" if humedad <= 60 else "lightblue"
+
+        # self.temp_label.setStyleSheet(f"background-color: {color_temp}; border-radius: 8px; font-weight: bold;")
+        # self.hum_label.setStyleSheet(f"background-color: {color_hum}; border-radius: 8px; font-weight: bold;")
+
 
 
