@@ -365,8 +365,12 @@ class LoRaNode:
                             self.battery_monitor_thread.start()
                         elif "2" in message:
                             resp = self.send_to_robot("{\"T\":130}")  
-                            # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
-                            battery = resp
+                            data = json.loads(resp)
+                            battery = data.get("v", 0)   # por si no existe, devuelve 0
+                            print("BATERIA")
+                            print(battery)
+                            print("BATERIA")
+                            # self.send_message(self.battery_dest, 0, 64, battery)
                             self.send_message(addr_sender, 0, 64, battery)
                         else:
                             self.on_alert(f"⚠️ Comando de monitorización de batería desconocido: {message}") 
@@ -695,18 +699,11 @@ class LoRaNode:
                 try:
                     resp = self.send_to_robot("{\"T\":130}")  
                     # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
-                    # data = json.loads(resp)
-
-                    # battery = data.get("v", 0) 
-                    
-                    resp_lines = resp.splitlines()
-                    json_line = next((l for l in resp_lines if l.strip().startswith("{")), None)
-                    if not json_line:
-                        raise ValueError("No se encontró JSON en la respuesta del robot")
-
-                    data = json.loads(json_line)
+                    data = json.loads(resp)
                     battery = data.get("v", 0)
-
+                    print("BATERIA")
+                    print(battery)
+                    print("BATERIA")
                     self.send_message(self.battery_dest, 0, 64, battery)
                 except Exception as e:
                     self.on_alert(f"Error leyendo batería: {e}")
