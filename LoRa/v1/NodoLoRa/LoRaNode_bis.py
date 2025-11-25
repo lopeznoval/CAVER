@@ -369,7 +369,6 @@ class LoRaNode:
                             self.battery_monitor_thread.start()
                         elif "2" in message:
                             resp = self.send_to_robot("{\"T\":130}")  
-                            # resp = self.send_to_robot(json.dumps("{\"T\":130}"))  
                             print("[DEBUG RAW RESP]:", repr(resp))
                             data = json.loads(resp)
                             battery = data.get("v", 0)   # por si no existe, devuelve 0
@@ -630,7 +629,7 @@ class LoRaNode:
 
         print("🔄 Autonomía iniciada...")
         
-        self.auto_move_running = True
+        # self.auto_move_running = True
         last_cmd = None                     # para no enviar comandos repetidos
         last_state = 0                      # último estado recibido del radar
         self.robot.reset_input_buffer()
