@@ -31,15 +31,16 @@ class LoRaCamSender:
 
             # Baja resolución (muy comprimida)
             self.camera.configure(self.camera.create_still_configuration(
-                main={"size": (160, 120), "format": "JPEG"}
+                main={"size": (160, 120)}
             ))
             self.camera.start()
             time.sleep(0.1)  # permitir que se estabilice
 
             # Capturar JPEG comprimido
-            self.camera.capture_file(self.stream, format='jpeg', quality=15)
+            self.camera.capture_file(self.stream, format='jpeg')
 
             img_bytes = self.stream.getvalue()
+            self.camera.stop()
             self.stream.seek(0)
             self.stream.truncate()
 
