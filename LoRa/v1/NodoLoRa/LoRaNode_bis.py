@@ -682,7 +682,8 @@ class LoRaNode:
                 try:
                     resp = self.send_to_robot("{\"T\":130}")  
                     # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
-                    battery = resp
+                    data = json.loads(resp)
+                    battery = data.get("v", 0) 
                     self.send_message(self.battery_dest, 0, 64, battery)
                 except Exception as e:
                     self.on_alert(f"Error leyendo batería: {e}")
