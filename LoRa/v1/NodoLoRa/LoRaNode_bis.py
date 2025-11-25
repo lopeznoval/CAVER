@@ -89,6 +89,8 @@ class LoRaNode:
             self.stream = None
 
 
+        self.auto_move_running = False
+        self.detect_collisions_running = False
 
 
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
@@ -629,7 +631,8 @@ class LoRaNode:
 
         print("🔄 Autonomía iniciada...")
         
-        # self.auto_move_running = True
+        # self.auto_move_running = False
+        
         last_cmd = None                     # para no enviar comandos repetidos
         last_state = 0                      # último estado recibido del radar
         self.robot.reset_input_buffer()
@@ -649,7 +652,7 @@ class LoRaNode:
 
             # --- 2. Procesar último mensaje disponible ---
             if mensaje is not None:
-                print(f"⚠️ Mensaje radar recibido: {mensaje}")
+                # print(f"⚠️ Mensaje radar recibido: {mensaje}")
                 last_state = int(mensaje)   # 0 o 1
 
             # --- 3. Lógica de control ---
