@@ -222,12 +222,13 @@ class LoRaNode:
                             self.send_message(addr_sender, 0, 21, resp)
                         except Exception as e:
                             self.on_alert(f"Error sincronizando sensores LoRa: {e}")
-                    if msg_id == 21: 
+
+                    elif msg_id == 21: 
                         with get_db_session() as session:
                             actualizar_BBDD_robot(message, session)  
                         print("BBDD robot actualizada tras ACK")
                     
-                    if msg_id == 30:
+                    elif msg_id == 30:
                         try:
                             photo = base64.b64decode(message)
                             self.on_photo(photo)  
