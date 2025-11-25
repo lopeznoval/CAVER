@@ -35,7 +35,13 @@ while True:
             frameData[currentIndex] = radar.detObj
             currentIndex += 1
 
-        # if any(r < radar.STOP_DISTANCE_THRESHOLD for r in radar.detObj["range"]):
+        # ---- LÓGICA DE FILTRADO DE 1s / 0s ----
+        if radar_collision_stop == 1:
+            count_ones += 1
+            count_zeros = 0
+        else:
+            count_zeros += 1
+            count_ones = 0
 
         # if radar_collision_stop == 1:
         #     print("⚠️ Objeto detectado cerca, enviando alerta a Pi LoRaNode...")
@@ -55,36 +61,15 @@ while True:
         elif np.sum(collisions_array) < 1: 
             last_state = 0
             sock.sendto(b"0", (UDP_IP, UDP_PORT))
+
             print("0 enviado")
                 
         # sock.sendto(radar_collision_stop, (UDP_IP, UDP_PORT))
 
 
+
         time.sleep(0.033)  # ~30 Hz
 
-    # Propuesta para detectar cambios de estado y enviar alerta solo al cambiar
-    # last_state = None
-
-    # while True:
-    #     try:
-    #         dataOk, radar_collision_stop = radar.update()
-            
-    #         if dataOk and radar.detObj:
-    #             frameData[currentIndex] = radar.detObj
-    #             currentIndex += 1
-
-    #         # Si cambia el estado, enviamos alerta
-    #         if radar_collision_stop != last_state:
-    #             last_state = radar_collision_stop
-                
-    #             if radar_collision_stop == 1:
-    #                 print("⚠️ Objeto cerca → STOP_ROBOT")
-    #                 sock.sendto(b"STOP_ROBOT", (UDP_IP, UDP_PORT))
-    #             else:
-    #                 print("✔️ Camino libre → START_ROBOT")
-    #                 sock.sendto(b"START_ROBOT", (UDP_IP, UDP_PORT))
-
-    #         time.sleep(0.033)  # ~30 Hz loop
     except KeyboardInterrupt:
         radar.CLIport.write(('sensorStop\n').encode())
         radar.CLIport.close()

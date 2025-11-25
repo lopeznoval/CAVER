@@ -4,18 +4,22 @@ import json
 import threading
 import time
 import requests
+import os
+import traceback
+import base64
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
     QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
-from PyQt6.QtGui import QAction, QPainter, QColor, QFont
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray
+from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage, QPixmap
 
 from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
 from NodoLoRa.LoRaNode_bis import LoRaNode
 
-
+from io import BytesIO
+from PIL import Image
 
 
 class EB_RobotGUI_bis(QWidget):
@@ -31,11 +35,17 @@ class EB_RobotGUI_bis(QWidget):
 
         
         if loranode is not None:
+            self.loranode.on_bytes = self._on_image_bytes
             self.loranode.on_message = self._on_lora_message
             self.loranode.on_alert = self._on_general_log
             self.loranode.on_position = self._on_refresh_position
             self.loranode.on_sensor = self._on_sensor_data
-
+            self.loranode.on_periodic_sensor = self._on_sensor_periodic_data 
+            self.loranode.on_battery = self._on_battery_data
+            self.loranode.on_feedback = self._on_feedback_data
+            self.loranode.on_imu = self._on_imu_data
+            self.loranode.on_photo = self._on_photo_received
+            self.loranode.on_collision = self._on_collision_detected
 
 # -------------------- IMU inicio --------------------
 
@@ -48,6 +58,12 @@ class EB_RobotGUI_bis(QWidget):
         self._path_points = {"x": [0.0], "y": [0.0]}
 
 # -------------------- IMU final --------------------
+
+        # sensores
+        self.temp_history = []
+        self.hum_history = []
+        self.time_history = []
+        self.start_time = time.time()
 
 
         if loranode is None:
@@ -89,58 +105,6 @@ class EB_RobotGUI_bis(QWidget):
         tab_move.setLayout(move_layout)
         tabs.addTab(tab_move, "🕹️")
 
-        # # === Layout principal vertical ===
-        # mv_layout = QVBoxLayout()
-
-        # # === Layout de velocidad ===
-        # speed_layout = QHBoxLayout()
-
-        # self.speed_label = QLabel("Velocidad: 50 %")
-        # self.speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        # self.speed_label.setStyleSheet("font-weight: bold; color: #00aaff; font-size: 14px;")
-
-        # self.speed_slider = QSlider(Qt.Horizontal)
-        # self.speed_slider.setRange(0, 100)
-        # self.speed_slider.setValue(50)
-        # self.speed_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        # self.speed_slider.setTickInterval(10)
-        # self.speed_slider.valueChanged.connect(lambda v: self.speed_label.setText(f"Velocidad: {v} %"))
-
-        # speed_layout.addWidget(QLabel("0 %"))
-        # speed_layout.addWidget(self.speed_slider)
-        # speed_layout.addWidget(QLabel("100 %"))
-
-        # mv_layout.addLayout(speed_layout)
-        # mv_layout.addWidget(self.speed_label)
-
-        # # === Layout de movimiento ===
-        # move_layout = QGridLayout()
-
-        # self.btn_forward = QPushButton("↑")
-        # self.btn_left = QPushButton("←")
-        # self.btn_stop = QPushButton("Stop")
-        # self.btn_right = QPushButton("→")
-        # self.btn_backward = QPushButton("↓")
-
-        # buttons = [
-        #     (self.btn_forward, 0, 1, "forward"),
-        #     (self.btn_left, 1, 0, "left"),
-        #     (self.btn_stop, 1, 1, "stop"),
-        #     (self.btn_right, 1, 2, "right"),
-        #     (self.btn_backward, 2, 1, "backward"),
-        # ]
-
-        # for btn, r, c, cmd in buttons:
-        #     btn.setFixedSize(100, 35)
-        #     btn.clicked.connect(lambda _, d=cmd: self.move_robot(d))
-        #     move_layout.addWidget(btn, r, c)
-
-        # mv_layout.addLayout(move_layout)
-
-        # # === Asignar layout principal al tab ===
-        # tab_move.setLayout(mv_layout)
-        # tabs.addTab(tab_move, "🕹️ Movimiento")
-
         # ------------------ TAB 2: OLED ------------------
         tab_oled = QWidget()
         oled_layout = QGridLayout()
@@ -172,41 +136,95 @@ class EB_RobotGUI_bis(QWidget):
         cmd_layout = QGridLayout()
 
         self.btn_imu = QPushButton("IMU Data")
+        self.btn_imu.clicked.connect(self.get_imu_now)
+               
+        self.imu_output = QTextEdit()
+        self.imu_output.setReadOnly(True)
+        self.imu_output.setFixedHeight(120)
+
+        cmd_layout.addWidget(self.btn_imu, 0, 0, 1, 3)
+        cmd_layout.addWidget(self.imu_output, 1, 0, 1, 3) 
+
         self.btn_feedback = QPushButton("Chassis Feedback")
-        self.btn_imu.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 126})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
-        self.btn_feedback.clicked.connect(lambda: (self.send_cmd(json.dumps({"T": 130})), self.set_selected_type(10, self.grups["Robot (10–19)"][10])))
-
-        cmd_layout.addWidget(self.btn_imu, 0, 0)
-        cmd_layout.addWidget(self.btn_feedback, 0, 1)
-
-        self.btn_start_feedback = QPushButton("Start Feedback")
-        self.btn_stop_feedback = QPushButton("Stop Feedback")
+        self.btn_start_feedback = QPushButton("Start Periodic Feedback")
+        self.btn_stop_feedback = QPushButton("Stop Periodic Feedback")
+        self.btn_feedback.clicked.connect(self.get_feedback_now)
         self.btn_start_feedback.clicked.connect(self.start_feedback)
         self.btn_stop_feedback.clicked.connect(self.stop_feedback)
         self.btn_stop_feedback.setObjectName("danger")
+        
+        self.feedback_output = QTextEdit()
+        self.feedback_output.setReadOnly(True)
+        self.feedback_output.setFixedHeight(120)
 
-        cmd_layout.addWidget(self.btn_start_feedback, 1, 0)
-        cmd_layout.addWidget(self.btn_stop_feedback, 1, 1)
+        cmd_layout.addWidget(self.btn_feedback, 2, 0)
+        cmd_layout.addWidget(self.btn_start_feedback, 2, 1)
+        cmd_layout.addWidget(self.btn_stop_feedback, 2, 2)
+        cmd_layout.addWidget(self.feedback_output, 3, 0, 1, 3) 
+
+        # --- bateria ---
+        self.btn_start_battery = QPushButton("Start Battery Monitor")
+        self.btn_stop_battery = QPushButton("Stop Battery Monitor")
+        self.btn_get_battery = QPushButton("Get Battery Now")
+        self.btn_stop_battery.setObjectName("danger")
+        self.btn_start_battery.clicked.connect(self.start_battery_monitor)
+        self.btn_stop_battery.clicked.connect(self.stop_battery_monitor)
+        self.btn_get_battery.clicked.connect(self.get_battery_now)
+        self.battery_output = QTextEdit()
+        self.battery_output.setReadOnly(True)
+        self.battery_output.setFixedHeight(120)
+        
+        cmd_layout.addWidget(self.btn_get_battery, 4, 0)
+        cmd_layout.addWidget(self.btn_start_battery, 4, 1)
+        cmd_layout.addWidget(self.btn_stop_battery, 4, 2)
+        cmd_layout.addWidget(self.battery_output, 5, 0, 1, 3)
 
         tab_cmd.setLayout(cmd_layout)
         tabs.addTab(tab_cmd, "⚙️")
 
-        # ----------------------- TAB 4: Imagen -----------------------
+        # ----------------------- TAB 4: Cámara -----------------------
         tab_video = QWidget()
-        video_layout = QVBoxLayout()
+        vlay = QVBoxLayout()
 
-        self.btn_take_photo = QPushButton("Capturar foto 📸")
-        self.btn_take_photo.clicked.connect(self.take_photo)
-        video_layout.addWidget(self.btn_take_photo)
+        # --- Botones de control ---
+        hbtn = QHBoxLayout()
 
-        # Placeholder para la imagen recibida
-        self.photo_label = QLabel("Aquí se mostrará la foto")
+        btn_photo = QPushButton("📸 Tomar Foto")
+        btn_photo.clicked.connect(self.take_photo)
+        hbtn.addWidget(btn_photo)
+
+        self.btn_start_video = QPushButton("▶️ Tomar Video")
+        self.btn_start_video.clicked.connect(self.start_video)
+        hbtn.addWidget(self.btn_start_video)
+
+        vlay.addLayout(hbtn)
+
+        # --- Imagen mostrada ---
+        self.photo_label = QLabel("Aquí se mostrará la imagen")
         self.photo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.photo_label.setFixedSize(400, 300)
-        video_layout.addWidget(self.photo_label)
+        self.photo_label.setFixedSize(340, 240)
+        self.photo_label.setStyleSheet("background-color: #000; border: 1px solid gray;")
+        self.photo_label.setText("📷 Esperando foto...")
 
-        tab_video.setLayout(video_layout)
+        vlay.addWidget(self.photo_label)
+
+        # --- Archivos pendientes ---
+        self.btn_view_pending = QPushButton("Ver archivos pendientes")
+        self.btn_view_pending.clicked.connect(self.show_pending)
+        vlay.addWidget(self.btn_view_pending)
+
+        self.pending_list_widget = QListWidget()
+        vlay.addWidget(self.pending_list_widget)
+
+        tab_video.setLayout(vlay)
         tabs.addTab(tab_video, "📹")
+
+        # --- Timer para refrescar lista automáticamente ---
+        self.pending_timer = QTimer()
+        self.pending_timer.timeout.connect(self.refresh_pending)
+        self.pending_timer.start(3000)
+
+
     
         # ------------------ TAB 5: Posición ------------------
         tab_position = QWidget()
@@ -256,24 +274,54 @@ class EB_RobotGUI_bis(QWidget):
         # ----------------------- TAB 6: Tomar datos de los sensores -----------------------
         tab_sensors = QWidget()
         sensors_layout = QVBoxLayout()
+
+        from pyqtgraph import PlotWidget, plot
+        import pyqtgraph as pg
+
         
         self.btn_take_data = QPushButton("Medir temperatura y humedad 🌡️💧")
         self.btn_take_data.clicked.connect(self.take_data)
         sensors_layout.addWidget(self.btn_take_data)
+
+        temp_hum_layout = QHBoxLayout()
+
         # Recuadro para mostrar la temperatura
         self.temp_label = QLabel("Temperatura en °C")
         self.temp_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.temp_label.setFixedSize(200, 50)
         self.temp_label.setStyleSheet("background-color: gray; border-radius: 8px;")
-        sensors_layout.addWidget(self.temp_label)
+        temp_hum_layout.addWidget(self.temp_label)
 
         # Recuadro para mostrar la humedad
         self.hum_label = QLabel("Humedad en %")
         self.hum_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.hum_label.setFixedSize(200, 50)
         self.hum_label.setStyleSheet("background-color: gray; border-radius: 8px;")
-        sensors_layout.addWidget(self.hum_label)
-        
+        temp_hum_layout.addWidget(self.hum_label)
+
+        sensors_layout.addLayout(temp_hum_layout)
+
+
+        # ----------- GRÁFICA: Temperatura -----------
+        self.temp_plot = PlotWidget()
+        self.temp_plot.setBackground('black')
+        self.temp_plot.setTitle("Temperatura en el tiempo")
+        self.temp_plot.setLabel('left', '°C')
+        self.temp_plot.setLabel('bottom', 'Tiempo (s)')
+
+        self.temp_curve = self.temp_plot.plot([], [], pen='red', width=3)
+        sensors_layout.addWidget(self.temp_plot)
+
+        # ----------- GRÁFICA: Humedad -----------
+        self.hum_plot = PlotWidget()
+        self.hum_plot.setBackground('black')
+        self.hum_plot.setTitle("Humedad en el tiempo")
+        self.hum_plot.setLabel('left', '%')
+        self.hum_plot.setLabel('bottom', 'Tiempo (s)')
+
+        self.hum_curve = self.hum_plot.plot([], [], pen='cyan', width=3)
+        sensors_layout.addWidget(self.hum_plot)
+                
         # Encender/Apagar/Modo automático del led
         self.luz_groupbox = QGroupBox("Control del LED")
         self.luz_groupbox.setFixedSize(250, 120)
@@ -356,18 +404,51 @@ class EB_RobotGUI_bis(QWidget):
         # Añadir el tab al QTabWidget
         tabs.addTab(tab_logs, "📝")
 
-        # ------------------ TAB 8: Movimiento automático ------------------
+         
+        # ------------------ TAB 8: Radar / Movimiento autónomo y log de colisiones ------------------
         tab_radar = QWidget()
-        buttons_mov_auto_layout = QHBoxLayout()
+        tab_radar_layout = QVBoxLayout()
+        tab_radar.setLayout(tab_radar_layout)
 
-        self.btn_start_mov_aut = QPushButton("▶️ Comenzar movimiento automático")
+        # --- Sección Movimiento Autónomo (mitad superior) ---
+        mov_group = QGroupBox("Movimiento Autónomo")
+        mov_layout = QHBoxLayout()
+        self.btn_start_mov_aut = QPushButton("▶️ Comenzar")
+        self.btn_stop_mov_aut = QPushButton("⏹️ Detener")
+        mov_layout.addWidget(self.btn_start_mov_aut)
+        mov_layout.addWidget(self.btn_stop_mov_aut)
+        mov_group.setLayout(mov_layout)
+        mov_group.setFixedHeight(100)
+        tab_radar_layout.addWidget(mov_group)
+
         self.btn_start_mov_aut.clicked.connect(self._start_mov_auto)
-        buttons_mov_auto_layout.addWidget(self.btn_start_mov_aut)
-        self.btn_stop_mov_aut = QPushButton("⏹️ Parar movimiento autónomo")
         self.btn_stop_mov_aut.clicked.connect(self._stop_mov_auto)
-        buttons_mov_auto_layout.addWidget(self.btn_stop_mov_aut)
 
-        tab_radar.setLayout(buttons_mov_auto_layout)
+        # --- Sección Log de Colisiones (mitad inferior) ---
+        collision_group = QGroupBox("Log de Colisiones")
+        collision_layout = QVBoxLayout()
+
+        self.collision_log = QTextEdit()
+        self.collision_log.setReadOnly(True)
+        self.collision_log.setPlaceholderText("Aquí se mostrarán las colisiones detectadas...")
+        collision_layout.addWidget(self.collision_log)
+
+        collision_group.setLayout(collision_layout)
+        collision_group.setFixedHeight(200)  # tamaño compacto
+        tab_radar_layout.addWidget(collision_group)
+
+        # Botones de control (opcional, si quieres activar/desactivar detección)
+        btn_collision_layout = QHBoxLayout()
+        self.btn_start_collision = QPushButton("▶️ Activar Detección")
+        self.btn_stop_collision = QPushButton("⏹️ Detener Detección")
+        btn_collision_layout.addWidget(self.btn_start_collision)
+        btn_collision_layout.addWidget(self.btn_stop_collision)
+        collision_layout.addLayout(btn_collision_layout)
+
+        self.btn_start_collision.clicked.connect(self.start_collision_detection)
+        self.btn_stop_collision.clicked.connect(self.stop_collision_detection)
+
+        # Añadir la TAB 8 al conjunto de tabs
         tabs.addTab(tab_radar, "Radar")
 
 
@@ -421,8 +502,8 @@ class EB_RobotGUI_bis(QWidget):
                 12: "Oled",
                 13: "IMU",
                 14: "Movimiento autónomo",
-                15: "",
-                19: ""
+                15: "Bateria",
+                16: "Detección de colisiones"
             },
             "Sensores (20–24)": {
                 20: "Encender led",
@@ -433,7 +514,7 @@ class EB_RobotGUI_bis(QWidget):
             },
             "Cámara/Radar (25–30)": {
                 25: "Captura de imagen",
-                26: "Iniciar streaming",
+                26: "Iniciar/Detener streaming",
                 27: "Detección de movimiento",
                 28: "Seguimiento de objetivo",
                 30: "Reset del módulo"
@@ -629,20 +710,11 @@ class EB_RobotGUI_bis(QWidget):
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Sending command to {dest}: {alert}")
         self.loranode.send_message(dest, msg_type, self.msg_id, cmd, relay)
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type} to {dest}")
-    
-    def take_photo(self):
-        dest = int(self.dest_entry.text())
-        msg_type = 30
-        relay = int(self.relay_combo.currentText())
-        self.msg_id += 1
-        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 📸 Comando enviado para tomar foto")
-        self.loranode.send_message(dest, msg_type, self.msg_id, "", relay)
-        self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type}")
-        
+
     def take_data(self):
         # Envia una orden al nodo para obtener la temperatura y humedad
         dest = int(self.dest_entry.text())
-        msg_type = 20
+        msg_type = 21
         relay = int(self.relay_combo.currentText())
         self.msg_id += 1
         # Comandos de solicitud
@@ -669,37 +741,69 @@ class EB_RobotGUI_bis(QWidget):
         self.loranode.send_message(dest, msg_type, self.msg_id, " ", relay)
         self._append_output(f"[{time.strftime('%H:%M:%S')}] 📡 Enviado: {msg_type} to {dest}")
 
+    def start_battery_monitor(self):
+        """Enviar mensaje LoRa al robot para iniciar monitorización continua"""       
+        self.selected_type = 15
+        self.append_general_log("🛰️ Enviando comando: Comenzar Battery Monitor")
+        self.send_cmd("1")
+        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🔋 Monitorización de batería iniciada.\n")
+
+    def stop_battery_monitor(self):
+        """Enviar mensaje LoRa al robot para detener monitorización continua"""
+        self.selected_type = 15
+        self.append_general_log("🛰️ Enviando comando: Detener  Battery Monitor")
+        self.send_cmd("0")
+        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🛑 Monitorización de batería detenida.\n")
+
+    def get_battery_now(self):
+        """Enviar mensaje LoRa al robot para obtener batería bajo demanda"""
+        self.selected_type = 15
+        self.send_cmd("2")
+
     def start_feedback(self):
-        if self.feedback_running:
-            QMessageBox.information(self, "Info", "Auto feedback ya está activo.")
-            return
-        self.feedback_running = True
-        self.send_cmd(json.dumps({"T": 131, "cmd": 1}))
-        self.set_selected_type(10, self.grups["Robot (10–19)"][10])
-        self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
-        self.feedback_thread.start()
-        self._append_output(f"[{time.strftime('%H:%M:%S')}] ✅ Auto feedback iniciado.\n")
+        """Enviar mensaje LoRa al robot para iniciar feedback continuo"""       
+        self.selected_type = 10
+        self.append_general_log("🛰️ Enviando comando: Comenzar Feedback continuo")
+        self.send_cmd("1")
+        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] Feedback continuo iniciado.\n")
 
     def stop_feedback(self):
-        if not self.feedback_running:
-            QMessageBox.information(self, "Info", "Auto feedback no está activo.")
-            return
-        self.feedback_running = False
-        self.send_cmd(json.dumps({"T": 131, "cmd": 0}))
-        self.set_selected_type(10, self.grups["Robot (10–19)"][10])
-        self._append_output(f"[{time.strftime('%H:%M:%S')}] 🛑 Auto feedback detenido.\n")
+        """Enviar mensaje LoRa al robot para detener feedback continuo"""
+        self.selected_type = 10
+        self.append_general_log("🛰️ Enviando comando: Detener Feedback continuo")
+        self.send_cmd("0")
+        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🛑 Feedback continuo detenido.\n")
+
+    def get_feedback_now(self):
+        """Enviar mensaje LoRa al robot para obtener feedbak bajo demanda"""
+        self.selected_type = 10
+        self.send_cmd("2")
+
+    def get_imu_now(self):
+        """Enviar mensaje LoRa al robot para obtener imu bajo demanda"""
+        self.selected_type = 13
+        self.send_cmd("2")
 
     def _feedback_loop(self):
-        ip = "192.168.4.1"
+        # ip = "192.168.4.1"
         while self.feedback_running:
-            if ip:
+        #     if ip:
                 try:
-                    url = f"http://{ip}/js?json={json.dumps({'T':130})}"
-                    r = requests.get(url, timeout=3)
-                    self._append_output(f"[{time.strftime('%H:%M:%S')}] [Feedback] {r.text.strip()}\n")
+                    cmd = json.dumps({"T": 130})
+                    self.robot.reset_input_buffer()           # vaciar buffer previo
+                    self.robot.write((cmd + "\r\n").encode()) # enviar comando
+                    time.sleep(0.05)       
+
+                    response = self.robot.readline().decode('utf-8', errors='ignore').strip()
+                    if response:
+                        self._append_output(f"[{time.strftime('%H:%M:%S')}] [Feedback Serial] {response}\n")
+
+        #             url = f"http://{ip}/js?json={json.dumps({'T':130})}"
+        #             r = requests.get(url, timeout=3)
+        #             self._append_output(f"[{time.strftime('%H:%M:%S')}] [Feedback] {r.text.strip()}\n")
                 except Exception as e:
                     self._append_output(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error feedback: {e}\n")
-            time.sleep(1)
+                time.sleep(1)
 
     def _start_imu(self):
         """Envía al robot la orden de comenzar a enviar datos IMU periódicamente."""
@@ -721,6 +825,18 @@ class EB_RobotGUI_bis(QWidget):
         self.set_selected_type(14, self.grups["Robot (10–19)"][14])
         self.append_general_log("🛰️ Enviando comando: Comenzar  movimiento autónomo")
         self.send_cmd("1")
+        
+    def start_collision_detection(self):
+        """Inicia la detección de colisiones"""
+        self.append_general_log("🛰️ Activando detección de colisiones")
+        self.set_selected_type(16, self.grups["Robot (10–19)"][16])
+        self.send_cmd("1")
+
+    def stop_collision_detection(self):
+        """Detiene la detección de colisiones"""
+        self.append_general_log("🛰️ Deteniendo detección de colisiones")
+        self.set_selected_type(16, self.grups["Robot (10–19)"][16])
+        self.send_cmd("0")
 
     def _stop_mov_auto(self):
         """Envía al robot la orden de detener el movimiento autónomo."""        
@@ -747,6 +863,34 @@ class EB_RobotGUI_bis(QWidget):
         """Manejador de mensajes entrantes desde LoRaNode"""
         self._append_input(msg)
                 
+    def _on_image_bytes(self, b64string):
+        try:
+            if not b64string:
+                self.append_general_log("Imagen vacía recibida.")
+                return
+
+            if isinstance(b64string, bytes):
+                b64string = b64string.decode("utf-8", errors="ignore")
+
+            data = base64.b64decode(b64string)
+            img = QImage.fromData(QByteArray(data))
+
+            if img.isNull():
+                pix = QPixmap()
+                pix.loadFromData(data, "JPEG")
+            else:
+                pix = QPixmap.fromImage(img)
+
+            pix = pix.scaled(self.photo_label.width(),
+                            self.photo_label.height(),
+                            Qt.AspectRatioMode.KeepAspectRatio)
+
+            self.photo_label.setPixmap(pix)
+
+            self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 📸 Imagen recibida")
+        except Exception as e:
+            self.append_general_log(f"Error mostrando imagen: {e}")
+
     # -------------------- IMU inicio --------------------
     def _on_refresh_position (self, pos):
         try:
@@ -803,16 +947,20 @@ class EB_RobotGUI_bis(QWidget):
 
     def _on_sensor_data(self, on_sensor_data):
         try:
-            # Si llega como string JSON, decodificamos
-            if isinstance(on_sensor_data, str):
-                data = json.loads(on_sensor_data)
-            else:
-                data = on_sensor_data
+            # # Si llega como string JSON, decodificamos
+            # if isinstance(on_sensor_data, str):
+            #     data = json.loads(on_sensor_data)
+            # else:
+            #     data = on_sensor_data
 
-            # Extraer datos (en español)
-            temperatura = float(data.get("Temperatura", 0))
-            humedad = float(data.get("Humedad", 0))
-            timestamp = data.get("timestamp", "")
+            # # Extraer datos (en español)
+            # temperatura = float(data.get("Temperatura", 0))
+            # humedad = float(data.get("Humedad", 0))
+            # timestamp = data.get("timestamp", "")
+
+            temperatura = self.loranode.temp_mes
+            humedad = self.loranode.hum_mes
+            timestamp = time.strftime('%H:%M:%S')
 
             # Mostrar en logs
             self.append_general_log(
@@ -850,7 +998,77 @@ class EB_RobotGUI_bis(QWidget):
         except Exception as e:
             self.append_general_log(f"[{time.strftime('%H:%M:%S')}] ⚠️ Error procesando datos del sensor: {e}")
 
+    def _on_sensor_periodic_data(self, temp, hum):
+        """Actualiza solo los gráficos en tiempo real."""
+        ts = time.time() - self.start_time
 
+        # Guardar datos
+        self.time_history.append(ts)
+        self.temp_history.append(temp)
+        self.hum_history.append(hum)
+
+        # Limitar puntos para que no explote la memoria
+        if len(self.time_history) > 300:  # ~5 minutos si llega cada segundo
+            self.time_history.pop(0)
+            self.temp_history.pop(0)
+            self.hum_history.pop(0)
+
+        # Actualizar curvas
+        self.temp_curve.setData(self.time_history, self.temp_history)
+        self.hum_curve.setData(self.time_history, self.hum_history)
+
+        
+
+
+# ---------- bateria ----------
+    def _on_battery_data(self, level):
+        """Muestra la cadena de feedback tal cual en el panel de batería"""
+        ts = time.strftime('%H:%M:%S')
+        self.battery_output.append(f"[{ts}] Nivel de batería: {level}")
+        self.battery_output.ensureCursorVisible()
+
+# ---------- feedback ----------
+    def _on_feedback_data(self, feedback_str):
+        """Muestra la cadena de feedback tal cual en el panel de feedback"""
+        ts = time.strftime('%H:%M:%S')
+        self.feedback_output.append(f"[{ts}] Feedback: {feedback_str}")
+        self.feedback_output.ensureCursorVisible()
+
+# ---------- imu ----------
+    def _on_imu_data(self, imu_str):
+        """Muestra la cadena de imu tal cual en el panel de imu"""
+        ts = time.strftime('%H:%M:%S')
+        self.imu_output.append(f"[{ts}] Feedback: {imu_str}")
+        self.imu_output.ensureCursorVisible()
+
+# --------- foto ----------
+    def _on_photo_received(self, img_bytes):
+        try:
+            # Abrir con PIL
+            img = Image.open(BytesIO(img_bytes))
+            img = img.convert("RGB")  # asegurar RGB
+            # Convertir a QImage
+            w, h = img.size
+            data = img.tobytes("raw", "RGB")
+            qimg = QImage(data, w, h, QImage.Format.Format_RGB888)
+            # Colocar en QLabel
+            pixmap = QPixmap.fromImage(qimg).scaled(
+                self.photo_label.width(), self.photo_label.height(),
+                Qt.AspectRatioMode.KeepAspectRatio
+            )
+            self.photo_label.setPixmap(pixmap)
+        except Exception as e:
+            print(f"Error mostrando foto: {e}")
+
+    def _on_collision_detected(self):
+        """Actualiza la pantalla de colisiones con timestamp"""
+        ts = time.strftime('%H:%M:%S')
+        self.collision_log.append(f"[{ts}] ⚠️ Colisión detectada")
+        self.collision_log.ensureCursorVisible()
+        self.append_general_log(f"[{ts}] ⚠️ Colisión detectada")
+
+
+        
 # -------------------- Estados de Nodos Conectados ----------------------
     # def add_status(self, layout, label_text, indicator):
     #     h = QHBoxLayout()
@@ -884,5 +1102,32 @@ class EB_RobotGUI_bis(QWidget):
             }
             
         self.panel.sync_with_nodes(node_data)
+
+  
+    def start_video(self):
+        dest = int(self.dest_entry.text())
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitud iniciar vídeo")
+        self.set_selected_type(26, self.grups["Cámara/Radar (25–30)"][26])
+        self.send_cmd("1") 
+
+    def take_photo(self):
+        dest = int(self.dest_entry.text())
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Comando enviado para tomar foto")
+        self.set_selected_type(25, self.grups["Cámara/Radar (25–30)"][25])
+        self.send_cmd("1") 
+
+    def show_pending(self):
+        self.refresh_pending()
+        self.pending_list_widget.show()
+    
+    def refresh_pending(self):
+        self.pending_list_widget.clear()
+        if self.loranode is None:
+            return
+        try:
+            for p in self.loranode.list_pending():
+                self.pending_list_widget.addItem(QListWidgetItem(p))
+        except:
+            pass
 
 

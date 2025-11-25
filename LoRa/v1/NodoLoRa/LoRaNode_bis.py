@@ -15,7 +15,7 @@ from BBDDv1.database_SQLite import *
 from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
 from NodoLoRa.sx126x_bis import sx126x
 from parameters import *
-
+from Multimediav1.LoraCamSender import LoRaCamSender
 
 class LoRaNode:
     def __init__(self, ser_port, addr, freq=433, pw=0, rssi=True, 
@@ -40,10 +40,10 @@ class LoRaNode:
         self.response_queue = queue.Queue()
         
         self.sensores = None
-        self.sens_port = None
-        self.sens_baudrate = None
-        self.last_temp = None
-        self.last_hum = None
+        self.sens_port = sens_port
+        self.sens_baudrate = sens_baudrate
+        self.temp = None
+        self.hum = None
 
         self.radar_sock = None
         self.ip_sock = ip_sock
@@ -53,12 +53,33 @@ class LoRaNode:
             self.lock_nodes = threading.Lock()
             self.connected_nodes = {}
             self.node_timers = {}
+            self.temp_mes = None
+            self.hum_mes = None
 
         if platform.system() == "Linux":
             try:
-                from picamera2 import PiCamera2 # type: ignore
-                self.camera = PiCamera2()
+                from picamera2 import Picamera2, Preview # type: ignore
+                self.camera = Picamera2()
+                self.lora_cam_sender = LoRaCamSender(camera=self.camera)
+
                 self.stream = io.BytesIO()
+                self.recording = False
+                # carpetas
+                home_dir = os.path.expanduser("~")
+                self.photo_dir = os.path.join(home_dir, "photos")
+                self.video_dir = os.path.join(home_dir, "videos") 
+                self.pending_file = os.path.join(home_dir, "pending.json") 
+                
+                os.makedirs(self.photo_dir, exist_ok=True)
+                os.makedirs(self.video_dir, exist_ok=True)
+                if not os.path.exists(self.pending_file):
+                    with open(self.pending_file, "w") as f:
+                        json.dump([], f)
+
+                # Pending in-memory for speed
+                self._load_pending_list()
+                # variables auxiliares
+                self.pending_lock = threading.Lock()
             except Exception as e:
                 print(f"Error al conectarse a la cámara: {e}")
                 self.camera = None
@@ -67,11 +88,20 @@ class LoRaNode:
             self.camera = None
             self.stream = None
 
+
+
+
         self.on_alert = lambda alrt: print(f"⚠️ [ALERT] {alrt}")
         self.on_message = lambda msg: print(f"💬 [MESSAGE] {msg}")
         self.on_bytes = lambda data: print(f"📦 [BYTES] {data}")
-        self.on_position = lambda pos: print(f"{pos}")
-        self.on_sensor = lambda sensor: print(f"{sensor}")
+        self.on_position = lambda pos: print(f"[POSITION UPDATE] {pos}")
+        self.on_sensor = lambda sensor: print(f"[SENSOR UPDATE]{sensor}")
+        self.on_periodic_sensor = lambda temp, hum: print(f"[SENSOR PERIODIC UPDATE]{temp} ºC, {hum}%")
+        self.on_battery = lambda battery_level: print(f"🔋 [BATTERY UPDATE]: {battery_level}")
+        self.on_feedback = lambda feedback: print(f"[FEEDBACK UPDATE]: {feedback}")
+        self.on_imu = lambda imu: print(f"[IMU UPDATE]: {imu}")
+        self.on_photo = lambda photo: print(f"[RECEIVED PHOTO]")
+        self.on_collision = lambda: print(f"[OBJECT DETECTED]")
 
     # -------------------- MENSAJES --------------------
     def pack_message(self, addr_dest:int, msg_type: int, msg_id: int, message: str, relay_flag: int =0) -> bytes:
@@ -79,7 +109,7 @@ class LoRaNode:
         header = bytes([
             (addr_dest >> 8) & 0xFF, addr_dest & 0xFF,
             (self.addr >> 8) & 0xFF, self.addr & 0xFF,
-            (offset_freq & 0xFF),
+            (0x00),
             (relay_flag << 7) | (msg_type & 0x7F),
             msg_id & 0xFF
         ])
@@ -87,6 +117,20 @@ class LoRaNode:
         if len(header) + len(message.encode()) > 255:
             raise ValueError("⚠️ Message too long to pack in just a LoRa packet.")
         return header + message.encode()
+    
+    def pack_bytes(self, addr_dest:int, msg_type: int, msg_id: int, data: bytes, relay_flag: int = 0, part: int = 0) -> bytes:
+        offset_freq = self.freq - 410 # assuming base freq is 410MHz
+        header = bytes([
+            (addr_dest >> 8) & 0xFF, addr_dest & 0xFF,
+            (self.addr >> 8) & 0xFF, self.addr & 0xFF,
+            (0x01 if part == 0 else 0x02),
+            (relay_flag << 7) | (msg_type & 0x7F),
+            msg_id & 0xFF
+        ])
+        print(f"Bytes size: {len(data)} / Total size: {len(header) + len(data)} bytes")
+        if len(header) + len(data) > 255:
+            raise ValueError("⚠️ Data too long to pack in just a LoRa packet.")
+        return header + data
 
     def unpack_message(self, r_buff: bytes) -> tuple:
         if len(r_buff) < 7:
@@ -96,15 +140,19 @@ class LoRaNode:
         
         addr_dest = (r_buff[0] << 8) + r_buff[1]
         addr_sender = (r_buff[2] << 8) + r_buff[3]
-        freq = r_buff[4]
+        part = r_buff[4] & 0x02
+        is_b = r_buff[4] & 0x01
         msg_type = r_buff[5] & 0x7F
         relay_flag = r_buff[5] >> 7
         msg_id = r_buff[6]
-        message = r_buff[7:].decode(errors='ignore')
+        if is_b == 0:
+            message = r_buff[7:].decode(errors='ignore')
+        else:   
+            message = r_buff[7:] 
 
         print(f"Unpacked message: from {addr_sender} to {addr_dest}, type {msg_type}, id {msg_id}, relay {relay_flag}, msg: {message}")
         
-        return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message
+        return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message, part, is_b
 
     # -------------------- HILOS --------------------
     def periodic_status(self):
@@ -119,6 +167,22 @@ class LoRaNode:
         if self.is_base and addr_dest != 0xFFFF:
             self.add_pending(addr_dest, msg_id)
 
+    def send_bytes(self, addr_dest: int, msg_type: int, msg_id: int, data: bytes, relay_flag: int = 0, callback=None):
+        while len(data) > 240:
+            chunk = data[:240]
+            data = data[240:]
+            part = 1
+            packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, chunk, relay_flag, part)
+            self.node.send_bytes(packed_data)
+            time.sleep(0.1)  # pequeño retardo entre fragmentos
+        part = 0
+        packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag, part)
+        self.node.send_bytes(packed_data)
+        # packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag)
+        # self.node.send_bytes(packed_data)
+        # if self.is_base and addr_dest != 0xFFFF:
+        #     self.add_pending(addr_dest, msg_id)
+
     def receive_loop(self):
         while self.running:
             msg = self.node.receive_bytes()
@@ -129,7 +193,7 @@ class LoRaNode:
 
     def processing_loop(self, msg):
             try:
-                addr_sender, addr_dest, msg_type, msg_id, relay_flag, message = self.unpack_message(msg)
+                addr_sender, addr_dest, msg_type, msg_id, relay_flag, message, part, is_b = self.unpack_message(msg)
             except Exception as e:
                 print(f"Error unpacking message: {e}")
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error unpacking message")
@@ -151,8 +215,35 @@ class LoRaNode:
             try: 
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
                 if msg_type == 0:
-                    if msg_id == 63: #imu
+                    if msg_id == 20: # hacer lo que sea en la EB
+                        try:
+                            resp = procesar_paquete_lora(message)
+                            self.send_message(addr_sender, 0, 21, resp)
+                        except Exception as e:
+                            self.on_alert(f"Error sincronizando sensores LoRa: {e}")
+                    
+                    if msg_id == 30:
+                        try:
+                            photo = base64.b64decode(message)
+                            self.on_photo(photo)  
+                        except Exception as e:
+                            self.on_alert(f"Error decodificando foto: {e}")
+                    elif msg_id == 40: # sensores
+                        try:
+                            self.temp_hum(message)
+                        except Exception as e:
+                            self.on_alert(f"Error procesando sensores periódicos (ID 40): {e}")
+                    elif msg_id == 50: # colision
+                        self.on_collision()
+                    elif msg_id == 63: #imu
                         self.imu_pos(message)
+                    elif msg_type == 64: # beteria
+                        battery_level = message
+                        self.on_battery(battery_level)
+                    elif msg_type == 65: # feedback
+                        self.on_feedback(message)
+                    elif msg_type == 66: # imu
+                        self.on_imu(message)
                     elif msg_id == 69: 
                         if self.is_base:
                             # resp = procesar_paquete_lora(message)
@@ -177,6 +268,18 @@ class LoRaNode:
                         self.node_timers[addr_sender] = timer
                         print(self.node_timers)
                         timer.start()
+
+                    if msg_type == 4:
+                        if message.startswith("Temp:"):
+                            try:
+                                parts = message.split(",")
+                                temp_str = parts[0].split(":")[1].strip().replace("°C", "")
+                                hum_str = parts[1].split(":")[1].strip().replace("%", "")
+                                self.temp_mes = float(temp_str)
+                                self.hum_mes = float(hum_str)
+                                self.on_sensor(f"Sensor data from {addr_sender} - Temp: {self.temp_mes}°C, Hum: {self.hum_mes}%")
+                            except Exception as e:
+                                print(f"Error parsing sensor data: {e}")
 
                     self.remove_pending(addr_sender, msg_id)
                     return
@@ -205,6 +308,21 @@ class LoRaNode:
                         ...
 
                 elif 9 < msg_type < 20:  # Comandos hacia el robot
+                    # -------------------- feedback --------------------
+                    if msg_type == 10:
+                        if "0" in message:
+                            self.feeedback_running = False
+                        elif "1" in message:
+                            self.feeedback_running = True
+                            self.feedback_dest = addr_sender
+                            self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
+                            self.feedback_thread.start()
+                        elif "2" in message:
+                            resp = self.send_to_robot("{\"T\":130}")  
+                            self.send_message(addr_sender, 0, 65, resp)
+                        else:
+                            self.on_alert(f"⚠️ Comando de feedback desconocido: {message}") 
+
                     if msg_type == 13: # pedir o parar datos imu
                         if "1" in message:
                             print("llego el 1 para empezar")
@@ -219,20 +337,52 @@ class LoRaNode:
                         elif "0" in message:
                             self.stop_imu_flag = True
                             self.on_alert("🔴 IMU loop detenido por EB.")
+                        elif "2" in message:
+                            resp = self.send_to_robot("{\"T\":126}")  
+                            self.send_message(addr_sender, 0, 66, resp)
                         else:
                             self.on_alert(f"⚠️ Comando IMU desconocido: {message}") 
                     
                     if msg_type == 14:
                         if "1" in message:
                             self.auto_move_running = True
-                            self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
-                            self.mov_aut_thread.start()
+                            if not getattr(self, "mov_aut_thread", None) or not self.mov_aut_thread.is_alive():
+                                self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
+                                self.mov_aut_thread.start()
                         elif "0" in message:
-                            self.on_alert("Mmovimiento autónomo loop detenido por EB.")
+                            self.on_alert("Movimiento autónomo loop detenido por EB.")
                             self.auto_move_running = False
                         else: 
                             self.on_alert(f"⚠️ Comando movimiento autónomo desconocido: {message}") 
 
+                    if msg_type == 15:
+                        if "0" in message:
+                            self.battery_monitor_running = False
+                        elif "1" in message:
+                            self.battery_monitor_running = True
+                            self.battery_dest = addr_sender
+                            self.battery_monitor_thread = threading.Thread(target=self._battery_monitor_loop, daemon=True)
+                            self.battery_monitor_thread.start()
+                        elif "2" in message:
+                            resp = self.send_to_robot("{\"T\":130}")  
+                            # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
+                            battery = resp
+                            self.send_message(addr_sender, 0, 64, battery)
+                        else:
+                            self.on_alert(f"⚠️ Comando de monitorización de batería desconocido: {message}") 
+
+                    if msg_type == 16:
+                        if "1" in message:
+                            self.detect_collisions_running = True
+                            self.colision_dest = addr_dest
+                            if not getattr(self, "mov_aut_thread", None) or not self.mov_aut_thread.is_alive():
+                                self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
+                                self.mov_aut_thread.start()
+                        elif "0" in message:
+                            self.on_alert("Detacción de colisiones detenida por EB.")
+                            self.detect_collisions_running = False
+                        else: 
+                            self.on_alert(f"⚠️ Comando detección de colisiones desconocido: {message}") 
 
                     if self.robot.is_open and self.robot:
                         resp = self.send_to_robot(message)
@@ -253,7 +403,8 @@ class LoRaNode:
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
                     if msg_type == 22:  # Sincronizar sensores pendientes
                         # with get_db_session() as session:
-                        #     sincronizar_sensores_lora(self, session)
+                        #     message_send = sincronizar_sensores_lora(self, session)
+                        # self.send_message(addr_sender, 4, msg_id, message_send)
                         ...
                     if msg_type == 20:  # Encender led
                         self.control_led("ON")
@@ -263,10 +414,32 @@ class LoRaNode:
                         self.control_led("AUTO")
 
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
-                    if msg_type == 30:  # Tomar foto
-                            img_b64 = self.stream_recording()
-                            self.send_message(addr_sender, 4, msg_id, img_b64)
-                            print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
+                     # ---------------------- FOTO ----------------------
+                    if msg_type == 25:  # Tomar foto
+                        # img_b64 = self.take_picture_and_save()
+                        # ------ PROBAR ------
+                        self.take_picture_and_save_compressed(addr_sender) 
+                        # self.send_message(addr_sender, 4, msg_id, img_b64)
+                        print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
+
+                    # ---------------------- VIDEO ----------------------
+                    elif msg_type == 26:  # iniciar grabación
+                        video_bytes = self.start_video_recording()
+                        if video_bytes:
+                            self.on_alert(f"Vídeo comprimido listo ({len(video_bytes)} bytes).")
+                       
+                        # # ---------------------- INICIAR VIDEO ----------------------
+                        # if "1" in message:
+                        #     filename = self.start_video_recording()
+                        #     self.send_message(addr_sender, 4, msg_id, f"Video recording started: {filename}")
+                        #     print(f"[{time.strftime('%H:%M:%S')}] Grabación iniciada: {filename}")
+                        # elif "0" in message:
+                        #     # ---------------------- DETENER VIDEO ----------------------
+                        #     filename = self.stop_video_recording()
+                        #     self.send_message(addr_sender, 4, msg_id, f"Video recording stopped: {filename}")
+                        #     print(f"[{time.strftime('%H:%M:%S')}] Grabación detenida: {filename}")
+                        # else: 
+                        #     self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
 
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
@@ -329,8 +502,15 @@ class LoRaNode:
             self.robot_listener = threading.Thread(target=self.receive_from_robot)
             self.robot_listener.daemon = True
             self.robot_listener.start()
+            return True
         except serial.SerialException as e:
             print(f"Failed to connect to robot: {e}")
+            return False
+    
+    def sincro_robot(self):
+        with get_db_session() as session:
+            message_send = sincronizar_sensores_lora(self, session)
+        self.send_message(0xFFFF, 0, 20, message_send)
 
     def receive_from_robot(self):
         while self.robot:
@@ -370,76 +550,235 @@ class LoRaNode:
                 time.sleep(2)
         self.on_alert("IMU loop finalizado.")
     
-    # def _move_robot_loop(self): # Movimiento autonomo
-    #     while self.auto_move_running:
-    #         try:
-    #             commands = {
-    #                 "forward": {"T": 1, "L": 0.5, "R": 0.5},
-    #                 "backward": {"T": 1, "L": -0.5, "R": -0.5},
-    #                 "left": {"T": 1, "L": -0.3, "R": 0.3},
-    #                 "right": {"T": 1, "L": 0.3, "R": -0.3},
-    #                 "stop": {"T": 1, "L": 0, "R": 0},
-    #             }
-                
-    #             if self.colision == 1:
-    #                 cmd = commands["right"]
-    #             else:
-    #                 cmd = commands["forward"]
-                
-    #             self.send_to_robot(json.dumps(cmd))
-    #             time.sleep(3)
+    # def _move_robot_loop(self):
 
-    #         except Exception as e:
-    #             self.on_alert(f"Error en movimiento autonomo loop: {e}")
-    #             time.sleep(2)
+    #     UDP_IP = "0.0.0.0"
+    #     UDP_PORT = 5005
+
+    #     radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     radar_sock.bind((UDP_IP, UDP_PORT))
+    #     radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
+    #     radar_sock.setblocking(False)
+
+    #     print("🔄 Autonomía iniciada...")
+        
+    #     self.auto_move_running = True
+    #     last_cmd = None                     # para no enviar comandos repetidos
+    #     last_state = 0                      # último estado recibido del radar
+    #     self.robot.reset_input_buffer()
+
+    #     while self.auto_move_running :
+
+    #         # --- 1. Vaciar el buffer UDP ---
+    #         mensaje = None
+    #         while True:
+    #             try:
+    #                 data, _ = radar_sock.recvfrom(1024)
+    #                 mensaje = data.decode()
+    #             except BlockingIOError:
+    #                 break
+    #             except socket.timeout:
+    #                 break
+
+    #         # --- 2. Procesar último mensaje disponible ---
+    #         if mensaje is not None:
+    #             print(f"⚠️ Mensaje radar recibido: {mensaje}")
+    #             last_state = int(mensaje)   # 0 o 1
+
+    #         # --- 3. Lógica de control ---
+    #         if last_state == 1:
+    #             # Parar
+    #             cmd = {"T": 1, "L": 0, "R": 0}
+    #             print("⚠️ Colisión detectada → PARAR")
+    #             self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+
+    #             # Girar
+    #             time.sleep(0.5)
+    #             cmd = {"T": 1, "L": 0.1, "R": -0.1}
+    #             if cmd != last_cmd:
+    #                 print("⚠️ Colisión detectada → GIRAR")
+    #                 self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+    #                 time.sleep(1)
+    #                 last_cmd = cmd
+
+    #         else:
+    #             # Avanzar
+    #             cmd = {"T": 1, "L": 0.1, "R": 0.1}
+    #             print("✔️ Libre → AVANZAR")
+    #             self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+    #             last_cmd = cmd
+
+    #         time.sleep(0.15)  # control loop
+
+    #     radar_sock.close()
+    #     print("🛑 Autonomía detenida.")
+
 
     def _move_robot_loop(self):
 
-        UDP_IP = "0.0.0.0"#"192.168.1.10"
+        UDP_IP = "0.0.0.0"
         UDP_PORT = 5005
 
         radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         radar_sock.bind((UDP_IP, UDP_PORT))
-        # radar_sock.settimeout(0.5)
-
-        self.auto_move_running = True
-        self.colision = 0
+        radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
+        radar_sock.setblocking(False)
 
         print("🔄 Autonomía iniciada...")
+        
+        self.auto_move_running = True
+        last_cmd = None                     # para no enviar comandos repetidos
+        last_state = 0                      # último estado recibido del radar
+        self.robot.reset_input_buffer()
 
-        while self.auto_move_running:
+        while self.auto_move_running or self.detect_collisions_running:
 
-            # Leer radar
-            # self.colision = 0
-            # Decidir movimiento
-            if self.colision == 1:
-                cmd = {"T": 1, "L": 0, "R": 0} 
-                print("⚠️ Colisión detectada → PARAR")
-                # cmd = {"T": 1, "L": 0.3, "R": -0.3}   # girar para evitar
-                # print("⚠️ Colisión detectada → GIRAR")
-            else:
-                cmd = {"T": 1, "L": 0.5, "R": 0.5}   # avanzar recto
-                print("✔️ Libre → AVANZAR")
+            # --- 1. Vaciar el buffer UDP ---
+            mensaje = None
+            while True:
+                try:
+                    data, _ = radar_sock.recvfrom(1024)
+                    mensaje = data.decode()
+                except BlockingIOError:
+                    break
+                except socket.timeout:
+                    break
 
-            # Enviar al robot
-            self.send_to_robot(json.dumps(cmd))
-            try:
-                data, _ = radar_sock.recvfrom(1024)
-                mensaje = data.decode() #val = int.from_bytes(data, "little")
+            # --- 2. Procesar último mensaje disponible ---
+            if mensaje is not None:
                 print(f"⚠️ Mensaje radar recibido: {mensaje}")
+                last_state = int(mensaje)   # 0 o 1
 
-                if mensaje=="1":   #mensaje = "STOP_ROBOT":
-                    self.colision = 1 
-                else: 
-                    self.colision = 0                       
-                
-            except socket.timeout:
-                pass  # no llegó nada → mantener último valor
+            # --- 3. Lógica de control ---
+            if self.auto_move_running:
+                if last_state == 1:
+                    if self.detect_collisions_running:
+                        self.send_message(self.colision_dest, 0, 50, "1")
+                                            
+                    # Parar
+                    cmd = {"T": 1, "L": 0, "R": 0}
+                    print("⚠️ Colisión detectada → PARAR")
+                    self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
 
-            time.sleep(1)
+                    # Girar
+                    time.sleep(0.5)
+                    cmd = {"T": 1, "L": 0.1, "R": -0.1}
+                    if cmd != last_cmd:
+                        print("⚠️ Colisión detectada → GIRAR")
+                        self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+                        time.sleep(1)
+                        last_cmd = cmd
 
-        print("🛑 Autonomía detenida.")
+                else:
+                    # Avanzar
+                    cmd = {"T": 1, "L": 0.1, "R": 0.1}
+                    print("✔️ Libre → AVANZAR")
+                    self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
+                    last_cmd = cmd
+
+                time.sleep(0.15)  # control loop
+            
+            elif self.detect_collisions_running:
+                if last_state == 1:
+                    self.send_message(self.colision_dest, 0, 50, "1")
+                    
+
         radar_sock.close()
+        print("🛑 Autonomía detenida.")
+            
+    def _battery_monitor_loop(self):
+        """
+        Envía periódicamente la lectura de batería al nodo solicitante mientras self.battery_monitor_running sea True.
+        """
+        while getattr(self, "battery_monitor_running", False) and self.running:
+            if self.robot and self.robot.is_open:
+                try:
+                    resp = self.send_to_robot("{\"T\":130}")  
+                    # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
+                    data = json.loads(resp)
+                    battery = data.get("v", 0) 
+                    self.send_message(self.battery_dest, 0, 64, battery)
+                except Exception as e:
+                    self.on_alert(f"Error leyendo batería: {e}")
+            time.sleep(60)
+    
+    def _feedback_loop(self):
+        """
+        Envía periódicamente la lectura de feedback al nodo solicitante.
+        """
+        while getattr(self, "feeedback_running", False) and self.running:
+            if self.robot and self.robot.is_open:
+                try:
+                    resp = self.send_to_robot("{\"T\":130}")  
+                    self.send_message(self.feedback_dest, 0, 65, resp)
+                except Exception as e:
+                    self.on_alert(f"Error leyendo feedback: {e}")
+            time.sleep(5)
+
+
+
+    # def _move_robot_loop(self):
+
+    #     UDP_IP = "0.0.0.0"#"192.168.1.10"
+    #     UDP_PORT = 5005
+
+    #     radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #     radar_sock.bind((UDP_IP, UDP_PORT))
+    #     radar_sock.settimeout(0.05)
+    #     # radar_sock.setblocking(False)
+
+    #     self.auto_move_running = True
+    #     self.colision = 0
+
+    #     print("🔄 Autonomía iniciada...")
+
+    #     while self.auto_move_running:
+
+    #         # Leer radar
+    #         # self.colision = 0
+    #         # Decidir movimiento
+    #         # if self.colision == 1:
+    #         #     cmd = {"T": 1, "L": 0, "R": 0} 
+    #         #     print("⚠️ Colisión detectada → PARAR")
+    #         #     time.sleep(1)
+    #         #     cmd = {"T": 1, "L": 0.1, "R": -0.1}   # girar para evitar
+    #         #     print("⚠️ Colisión detectada → GIRAR")
+    #         # else:
+    #         #     cmd = {"T": 1, "L": 0.1, "R": 0.1}   # avanzar recto
+    #         #     print("✔️ Libre → AVANZAR")
+
+    #         # # Enviar al robot
+    #         # self.send_to_robot(json.dumps(cmd))
+    #         try:
+    #             data, _ = radar_sock.recvfrom(1024)
+    #             mensaje = data.decode() #val = int.from_bytes(data, "little")
+    #             print(f"⚠️ Mensaje radar recibido: {mensaje}")
+
+    #             if mensaje=="1":   #mensaje = "STOP_ROBOT":
+    #                 self.colision = 1 
+    #                 cmd = {"T": 1, "L": 0, "R": 0} 
+    #                 print("⚠️ Colisión detectada → PARAR")
+    #                 self.send_to_robot(json.dumps(cmd))
+    #                 time.sleep(1)
+    #                 cmd = {"T": 1, "L": 0.1, "R": -0.1}   # girar para evitar
+    #                 print("⚠️ Colisión detectada → GIRAR") 
+    #                 self.send_to_robot(json.dumps(cmd))
+    #             else: 
+    #                 self.colision = 0                       
+                
+    #         except socket.timeout:
+    #             if self.colision == 0:
+    #                 cmd = {"T": 1, "L": 0.1, "R": 0.1}   # avanzar recto
+    #                 print("✔️ Libre → AVANZAR")
+                    
+    #                 self.send_to_robot(json.dumps(cmd))
+
+            
+
+    #         #time.sleep(1)
+
+    #     print("🛑 Autonomía detenida.")
+    #     radar_sock.close()
 
 
     # ------------------------------ IMU ------------------------------
@@ -508,22 +847,152 @@ class LoRaNode:
         if abs(self.roll) > ROLLOVER_THRESHOLD or abs(self.pitch) > ROLLOVER_THRESHOLD:
             self.on_alert(f"⚠️ ¡Posible vuelco detectado! Roll: {self.roll:.1f}°, Pitch: {self.pitch:.1f}°")
 
-                     
-    # -------------------- VÍDEO --------------------
-    def stream_recording(self):
-        if self.camera is not None:
-            self.stream.seek(0)
-            self.stream.truncate()
-            self.camera.capture(self.stream, format='jpeg')
+    # ---------- SENSOR PERIODICO ----------
+    def temp_hum(self, sensordata):
+        # El formato del mensaje es:
+        # "Temp: 23.5°C, Hum: 58.0%"
+        parts = sensordata.replace("°C", "").replace("%", "").replace("Temp:", "").replace("Hum:", "")
+        temp_str, hum_str = parts.split(",")
+        temp = float(temp_str.strip())
+        hum = float(hum_str.strip())
+        self.on_periodic_sensor(temp,hum)
 
-            # Convertir a Base64
-            img_b64 = base64.b64encode(self.stream.getvalue()).decode('utf-8')
-            self.stream.truncate(0)
+    # # -------------------- VÍDEO --------------------
+    # def take_picture(self):
+    #     if self.camera is not None:
+    #         self.stream.seek(0)
+    #         self.stream.truncate()
+    #         self.camera.capture(self.stream, format='jpeg')
 
-            return img_b64
+    #         # Convertir a Base64
+    #         img_b64 = base64.b64encode(self.stream.getvalue()).decode('utf-8')
+    #         self.stream.truncate(0)
+
+    #         return img_b64
+    #     else:
+    #         return None
+    
+
+    # ---------- pending list ----------
+    def _load_pending_list(self):
+        try:
+            with open(self.pending_file, "r") as f:
+                self.pending = json.load(f)
+        except Exception:
+            self.pending = []
+
+    def _save_pending_list(self):
+        with open(self.pending_file, "w") as f:
+            json.dump(self.pending, f, indent=2)
+
+    def _mark_pending(self, filepath):
+        with self.pending_lock:
+            if filepath not in self.pending:
+                self.pending.append(filepath)
+                self._save_pending_list()
+                self.on_alert(f"Archivo marcado como pendiente: {filepath}")
+
+    def clear_pending(self, filepath):
+        with self.pending_lock:
+            if filepath in self.pending:
+                self.pending.remove(filepath)
+                self._save_pending_list()
+                self.on_alert(f"Archivo enviado/limpiado: {filepath}")
+
+    # -------------------- FOTO --------------------
+    def take_picture_and_save(self, quality_jpeg=80, max_lora_bytes=18000):
+        """
+        Toma una foto con Picamera2, la guarda en fotos/ y devuelve:
+        (filename_on_disk, b64_string_if_small_or_None)
+        Si la imagen es > max_lora_bytes se devuelve None como b64 y queda en pending.
+        """
+        if self.camera is None:
+            self.on_alert("Cámara no disponible para foto.")
+            return None, None
+
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(self.photo_dir, f"photo_{timestamp}.jpg")
+
+            # Captura a archivo (más robusto que capturar en stream en algunas versiones)
+            # Usamos capture_file para guardar directamente
+            try:
+                # picamera2 API: capture_file
+                self.camera.start()
+            except Exception:
+                # start puede fallar si ya está arrancada; ignorar
+                pass
+
+            # capturar directamente en archivo
+            try:
+                self.camera.capture_file(filename, format="jpeg")
+            except TypeError:
+                # en algunas versiones capture_file acepta objecto, intentamos con IO
+                buf = io.BytesIO()
+                self.camera.capture_file(buf, format="jpeg")
+                with open(filename, "wb") as f:
+                    f.write(buf.getvalue())
+
+            # Leer bytes
+            with open(filename, "rb") as f:
+                data = f.read()
+
+            # Si el tamaño es pequeño, devolver base64 listo para enviar por LoRa
+            if len(data) <= max_lora_bytes:
+                b64 = base64.b64encode(data).decode("utf-8")
+                self.on_alert(f"Foto tomada y codificada (size {len(data)} bytes).")
+                return filename, b64
+            else:
+                # Guardar como pendiente para envio por WiFi
+                self._mark_pending(filename)
+                self.on_alert(f"Foto tomada (size {len(data)} bytes) — marcada pendiente (demasiado grande para LoRa).")
+                return filename, None
+
+        except Exception as e:
+            self.on_alert(f"Error tomando foto: {e}")
+            return None, None
+    
+    # ------ PROBAR ------
+    def take_picture_and_save_compressed(self, photo_dest, max_lora_bytes=18000, quality=15):
+        """
+        Captura imagen usando capture_recording_optimized de LoRaCamSender.
+        """
+        img_bytes = self.lora_cam_sender.capture_recording_optimized()
+        if img_bytes is not None:
+            if len(img_bytes) <= 18000:  # tamaño máximo LoRa
+                self.send_bytes(photo_dest, 0, 30, img_bytes)
+            else:
+                self.on_alert("⚠️ Imagen demasiado grande para LoRa, marcada como pendiente.")
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = os.path.join(self.photo_dir, f"photo_{timestamp}.jpg")
+                with open(filename, "wb") as f:
+                    f.write(img_bytes)
+                self._mark_pending(filename)
+                print(f"Foto guardada y marcada como pendiente: {filename}")
         else:
-            return None
-        
+            self.on_alert("⚠️ Error tomando foto.")
+    
+    # ---------- VIDEO ----------      
+    def start_video_recording(self):
+        """
+        Captura vídeo usando video_recording_optimized de LoRaCamSender.
+        """
+        self.video_bytes = self.lora_cam_sender.video_recording_optimized()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = os.path.join(self.video_dir, f"video_{timestamp}.h264")
+        with open(filename, "wb") as f:
+            f.write(self.video_bytes)
+        self._mark_pending(filename)
+        print(f"Vídeo guardado y marcado como pendiente: {filename}")
+        self.video_bytes = None
+
+
+    # ---------- UTILIDADES ----------
+    def list_pending(self):
+        """Devuelve lista actual de pendientes (ruta completa)."""
+        self._load_pending_list()
+        return list(self.pending)
+
     # -------------------- SENSORES --------------------
     def connect_sensors(self):
         try:
@@ -547,13 +1016,15 @@ class LoRaNode:
 
                     print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
+                    # self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
+
                     # with get_db_session() as session:
                     #     registrar_lectura(self.temp, self.hum, session)
 
             except Exception as e:
                 print(f"[SENSORS] Error leyendo ESP32: {e}")
             
-            time.sleep(120)
+            time.sleep(10) #cmabiar a 120 o lo que queramos
 
     def read_sensors_once(self):
         """Lee datos de temperatura y humedad del ESP32 conectado por serie una vez."""
@@ -603,29 +1074,31 @@ class LoRaNode:
     # -------------------- LED ------------------------
     def control_led(self, orden: str):
         # Envia una orden al ESP32 por serial
+        # try:
+        #     self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
+        #     time.sleep(2)
+        #     print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+        # except Exception as e:
+        #     print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
+        #     return
+        # while self.running:
         try:
-            self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
-            time.sleep(2)
-            print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+            if self.sensores and self.sensores.is_open:
+                self.sensores.write((orden + "\n").encode())
+                print(f"[LED] Orden enviada al ESP32: {orden}")
+            else:
+                print("[LED] ❌ Puerto de sensores no está abierto.")
         except Exception as e:
-            print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
-            return
-        while self.running:
-            try:
-                if self.sensores and self.sensores.is_open:
-                    self.sensores.write((orden + "\n").encode())
-                    print(f"[LED] Orden enviada al ESP32: {orden}")
-                else:
-                    print("[LED] ❌ Puerto de sensores no está abierto.")
-            except Exception as e:
-                print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
-    
+            print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
+
     # -------------------- EJECUCIÓN --------------------
     def run(self):
         receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
         # -------------------- ROBOT --------------------
         if self.robot_port and self.robot_baudrate:
-            self.connect_robot()
+            flag_robot = self.connect_robot()
+            if flag_robot:
+                ...
         # -------------------- RADAR --------------------
 
         # if (self.ip_sock is not None) and (self.port_sock is not None):
