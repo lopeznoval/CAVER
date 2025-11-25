@@ -1,13 +1,14 @@
 import os
 import threading
 import time
+from datetime import datetime
 import random
 from BBDDv1.database_SQLite import get_db_session, LecturaSensor, Video, crear_tablas
 
 def registrar_lectura(temp, hum, sess):
     """Inserta una nueva lectura de sensor en SQLite."""
     try:
-        nueva_lectura = LecturaSensor(robot_id=1,timestamp=0,temperatura=temp, humedad=hum,sincronizado=0)
+        nueva_lectura = LecturaSensor(robot_id=1,temperatura=temp, humedad=hum,sincronizado=0)
         sess.add(nueva_lectura)
         sess.commit()
         print(f"Datos de sensor registrados (SQLite): {temp:.2f}°C, {hum:.2f}%")
