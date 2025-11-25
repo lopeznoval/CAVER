@@ -27,6 +27,7 @@ def sincronizar_sensores_lora(lora, session):
     for lectura in lecturas_pendientes:
         payload = {
             "type": "sensor",
+            "ir": lectura.robot_id,
             "ts": lectura.timestamp.isoformat(),
             "temp": lectura.temperatura,
             "hum": lectura.humedad
