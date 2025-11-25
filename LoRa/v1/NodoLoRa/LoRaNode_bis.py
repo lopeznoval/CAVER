@@ -318,7 +318,7 @@ class LoRaNode:
                             self.feedback_thread = threading.Thread(target=self._feedback_loop, daemon=True)
                             self.feedback_thread.start()
                         elif "2" in message:
-                            resp = self.send_to_robot(json.dumps("{\"T\":130}"))  
+                            resp = self.send_to_robot("{\"T\":130}")  
                             self.send_message(addr_sender, 0, 65, resp)
                         else:
                             self.on_alert(f"⚠️ Comando de feedback desconocido: {message}") 
@@ -364,11 +364,14 @@ class LoRaNode:
                             self.battery_monitor_thread = threading.Thread(target=self._battery_monitor_loop, daemon=True)
                             self.battery_monitor_thread.start()
                         elif "2" in message:
-                            # resp = self.send_to_robot("{\"T\":130}")  
-                            resp = self.send_to_robot(json.dumps("{\"T\":130}"))  
+                            resp = self.send_to_robot("{\"T\":130}")  
+                            # resp = self.send_to_robot(json.dumps("{\"T\":130}"))  
                             print("[DEBUG RAW RESP]:", repr(resp))
                             data = json.loads(resp)
                             battery = data.get("v", 0)   # por si no existe, devuelve 0
+                            print("BATERIA")
+                            print(battery)
+                            print("BATERIA ")
                             # self.send_message(self.battery_dest, 0, 64, battery)
                             self.send_message(addr_sender, 0, 64, battery)
                         else:
@@ -696,7 +699,10 @@ class LoRaNode:
         while getattr(self, "battery_monitor_running", False) and self.running:
             if self.robot and self.robot.is_open:
                 try:
-                    resp = self.send_to_robot(json.dumps("{\"T\":130}"))  
+                    resp = self.send_to_robot("{\"T\":130}")
+                    print("BATERIA RESPPPPPPPPPPPPPPPPPPPP")
+                    print(resp)
+                    print("BATERIA RESPPPPPPPPPPPPPPPPPPPP")
                     # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
                     data = json.loads(resp)
                     battery = data.get("v", 0)
