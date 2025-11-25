@@ -629,7 +629,7 @@ class LoRaNode:
 
         print("🔄 Autonomía iniciada...")
         
-        self.auto_move_running = True
+        # self.auto_move_running = True
         last_cmd = None                     # para no enviar comandos repetidos
         last_state = 0                      # último estado recibido del radar
         self.robot.reset_input_buffer()
