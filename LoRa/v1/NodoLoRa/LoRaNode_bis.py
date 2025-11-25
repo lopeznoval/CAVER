@@ -377,7 +377,7 @@ class LoRaNode:
                             print(battery)
                             print("BATERIA ")
                             # self.send_message(self.battery_dest, 0, 64, battery)
-                            self.send_message(addr_sender, 0, 64, battery)
+                            self.send_message(addr_sender, 0, 64, str(battery))
                         else:
                             self.on_alert(f"⚠️ Comando de monitorización de batería desconocido: {message}") 
 
@@ -707,7 +707,7 @@ class LoRaNode:
                     print("BATERIA")
                     print(battery)
                     print("BATERIA")
-                    self.send_message(self.battery_dest, 0, 64, battery)
+                    self.send_message(self.battery_dest, 0, 64, str(battery))
                 except Exception as e:
                     self.on_alert(f"Error leyendo batería: {e}")
             time.sleep(60)
@@ -1007,7 +1007,7 @@ class LoRaNode:
     def connect_sensors(self):
         try:
             self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
-            time.sleep(2)
+            time.sleep(1)
             print("[SENSORS] Conectado al ESP32 en", self.sens_port)
             return True
         except Exception as e:
@@ -1108,7 +1108,7 @@ class LoRaNode:
         while self.running:
             try:
                 with get_db_session() as session:
-                    payload = sincronizar_sensores_lora(self, session)
+                    payload = sincronizar_sensores_lora(session)
                 self.send_message(0xFFFF, 0, 20, payload)
             except Exception as e:
                 self.on_alert(f"Error sincronizando BBDD: {e}")
@@ -1157,6 +1157,7 @@ class LoRaNode:
         time.sleep(0.2)
         if self.robot and self.robot.is_open:
             self.robot.close()
+            self.sensores.close()
         self.node.close()
 
 

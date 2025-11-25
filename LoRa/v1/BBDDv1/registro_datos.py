@@ -7,7 +7,7 @@ from BBDDv1.database_SQLite import get_db_session, LecturaSensor, Video, crear_t
 def registrar_lectura(temp, hum, sess):
     """Inserta una nueva lectura de sensor en SQLite."""
     try:
-        nueva_lectura = LecturaSensor(temperatura=temp, humedad=hum)
+        nueva_lectura = LecturaSensor(robot_id=1,timestamp=0,temperatura=temp, humedad=hum,sincronizado=0)
         sess.add(nueva_lectura)
         sess.commit()
         print(f"Datos de sensor registrados (SQLite): {temp:.2f}°C, {hum:.2f}%")
