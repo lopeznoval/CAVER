@@ -9,10 +9,10 @@ import base64
 import math
 import socket
 import serial
-from BBDDv1.lora_bridge_mongo import procesar_paquete_lora
+from BBDDv1.lora_bridge_mongo import connect_mongo, iniciar_escucha_lora, procesar_paquete_lora
 from BBDDv1.registro_datos import registrar_lectura
 from BBDDv1.database_SQLite import *
-from BBDDv1.sincronizar_robot import sincronizar_sensores_lora
+from BBDDv1.sincronizar_robot import actualizar_BBDD_robot, sincronizar_sensores_lora
 from NodoLoRa.sx126x_bis import sx126x
 from parameters import *
 from Multimediav1.LoraCamSender import LoRaCamSender
@@ -221,6 +221,10 @@ class LoRaNode:
                             self.send_message(addr_sender, 0, 21, resp)
                         except Exception as e:
                             self.on_alert(f"Error sincronizando sensores LoRa: {e}")
+                    if msg_id == 21: 
+                        with get_db_session() as session:
+                            actualizar_BBDD_robot(message, session)  
+                        print("BBDD robot actualizada tras ACK")
                     
                     if msg_id == 30:
                         try:
@@ -510,12 +514,7 @@ class LoRaNode:
             return True
         except serial.SerialException as e:
             print(f"Failed to connect to robot: {e}")
-            return False
-    
-    def sincro_robot(self):
-        with get_db_session() as session:
-            message_send = sincronizar_sensores_lora(self, session)
-        self.send_message(0xFFFF, 0, 20, message_send)
+            return False 
 
     def receive_from_robot(self):
         while self.robot:
@@ -526,7 +525,6 @@ class LoRaNode:
                     self.response_queue.put(data)  # Guarda cada respuesta
                 except Exception as e:
                     print(f"Error reading: {e}")
-
 
     def send_to_robot(self, command: str) -> str:
         """Envía un comando al robot y devuelve la respuesta."""
@@ -1010,9 +1008,10 @@ class LoRaNode:
             self.sensores = serial.Serial(self.sens_port, self.sens_baudrate, timeout=2)
             time.sleep(2)
             print("[SENSORS] Conectado al ESP32 en", self.sens_port)
+            return True
         except Exception as e:
             print(f"[SENSORS] ❌ Error abriendo puerto {self.sens_port}: {e}")
-            return
+            return False
         
     def read_sensors_loop(self):
         """Lee datos de temperatura y humedad del ESP32 conectado por serie."""
@@ -1029,13 +1028,13 @@ class LoRaNode:
 
                     # self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
 
-                    # with get_db_session() as session:
-                    #     registrar_lectura(self.temp, self.hum, session)
+                    with get_db_session() as session:
+                        registrar_lectura(self.temp, self.hum, session)
 
             except Exception as e:
                 print(f"[SENSORS] Error leyendo ESP32: {e}")
             
-            time.sleep(10) #cmabiar a 120 o lo que queramos
+            time.sleep(60) #cmabiar a 120 o lo que queramos
 
     def read_sensors_once(self):
         """Lee datos de temperatura y humedad del ESP32 conectado por serie una vez."""
@@ -1102,14 +1101,24 @@ class LoRaNode:
         except Exception as e:
             print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
 
+    # -------------------- BBDD --------------------
+    def sinc_BBDD_loop(self):
+        """Sincroniza datos pendientes con la BBDD en la base."""
+        while self.running:
+            try:
+                with get_db_session() as session:
+                    payload = sincronizar_sensores_lora(self, session)
+                self.send_message(0xFFFF, 0, 20, payload)
+            except Exception as e:
+                self.on_alert(f"Error sincronizando BBDD: {e}")
+            time.sleep(30)  # cada 30 segundos
+
     # -------------------- EJECUCIÓN --------------------
     def run(self):
-        receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()
+        receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()            
         # -------------------- ROBOT --------------------
         if self.robot_port and self.robot_baudrate:
             flag_robot = self.connect_robot()
-            if flag_robot:
-                ...
         # -------------------- RADAR --------------------
 
         # if (self.ip_sock is not None) and (self.port_sock is not None):
@@ -1119,9 +1128,11 @@ class LoRaNode:
             self.connect_sensors()
             sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True).start()
         # -------------------- BBDD --------------------
-        # if not self.is_base:
-        #     crear_tablas()
-        #     bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
+        if not self.is_base:
+            crear_tablas()
+            bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
+        else:
+            connect_mongo()
         # -------------------- INFO PERIODICA --------------------
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()

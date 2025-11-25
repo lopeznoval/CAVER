@@ -15,7 +15,7 @@ ACK_TIMEOUT_SEC = 5
 BS_API_URL = "http://192.168.1.100:8000" 
 
 # --- Lógica de Sincronización LoRa (Solo Sensores) ---
-def sincronizar_sensores_lora(lora, session):
+def sincronizar_sensores_lora(session):
     """Envía lecturas de sensores pendientes vía LoRa."""
     lecturas_pendientes = session.query(LecturaSensor).filter(LecturaSensor.sincronizado == False).all()
     
@@ -24,7 +24,7 @@ def sincronizar_sensores_lora(lora, session):
         return
     
     print(f"(LoRa) Iniciando envío de {len(lecturas_pendientes)} lecturas...")
-    packet_str = ""
+    payload_final = {"lecturas": []}
     for lectura in lecturas_pendientes:
         payload = {
             "type": "sensor",
@@ -33,33 +33,43 @@ def sincronizar_sensores_lora(lora, session):
             "temp": lectura.temperatura,
             "hum": lectura.humedad
         }
-        packet_str_p = json.dumps(payload)
-        packet_str = packet_str + "\n" + packet_str_p
+        payload_final["lecturas"].append(payload)
         
-    packet_bytes = (packet_str).encode('utf-8')
-    return packet_str
+    return json.dumps(payload_final)
         
         # try:
         #     lora.send_message(0xFFFF, 1, 0, packet_str)
         #     ack = lora.readline().decode('utf-8').strip()
-            
-        #     if ack == "ACK":
-        #         print("(LoRa) ACK recibido. Borrando lectura local.")
-        #         session.delete(lectura) # <-- CAMBIO: Borrar en lugar de marcar
-        #         session.commit()
-        #     elif ack == "NACK":
-        #         print("(LoRa) NACK recibido. El servidor no pudo guardar. Reintentando más tarde.")
-        #         session.rollback()
-        #         break
-        #     else:
-        #         print("(LoRa) Error: No se recibió ACK (timeout). Reintentando más tarde.")
-        #         session.rollback()
-        #         break
-        #     time.sleep(1) # Pausa entre envíos
-        # except Exception as e:
-        #     print(f"(LoRa) Error de comunicación serial: {e}")
-        #     session.rollback()
-        #     break
+
+def actualizar_BBDD_robot(ack, session, lectura):
+    """Actualiza la base de datos local según el ACK recibido."""
+    try:
+        lecturas_pendientes = session.query(LecturaSensor).filter(LecturaSensor.sincronizado == False).all()
+    
+        if not lecturas_pendientes:
+            print("(LoRa) No hay nuevas lecturas de sensores para sincronizar.")
+            return
+
+        print(f"(LoRa) Iniciando envío de {len(lecturas_pendientes)} lecturas...")
+        payload_final = {"lecturas": []}
+        for lectura in lecturas_pendientes:
+            if ack == "ACK":
+                print("(LoRa) ACK recibido. Borrando lectura local.")
+                session.delete(lectura) # <-- CAMBIO: Borrar en lugar de marcar
+                session.commit()
+            elif ack == "NACK":
+                print("(LoRa) NACK recibido. El servidor no pudo guardar. Reintentando más tarde.")
+                session.rollback()
+                return
+            else:
+                print("(LoRa) Error: No se recibió ACK (timeout). Reintentando más tarde.")
+                session.rollback()
+                return
+            time.sleep(0.5) # Pausa entre envíos
+    except Exception as e:
+        print(f"(LoRa) Error de comunicación serial: {e}")
+        session.rollback()
+        return
 
 # --- Lógica de Sincronización Wi-Fi (Solo Videos) ---
 
