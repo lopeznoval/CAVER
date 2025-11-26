@@ -10,7 +10,8 @@ import base64
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QMenu, QSlider,
     QTextEdit, QLineEdit, QComboBox, QMessageBox, QGridLayout, QGroupBox, QFrame, QTabWidget, 
-    QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem
+    QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem, QProgressBar,
+    QTableWidget, QTableWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray
 from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage, QPixmap
@@ -20,6 +21,8 @@ from NodoLoRa.LoRaNode_bis import LoRaNode
 
 from io import BytesIO
 from PIL import Image
+
+from datetime import datetime
 
 
 class EB_RobotGUI_bis(QWidget):
@@ -66,6 +69,11 @@ class EB_RobotGUI_bis(QWidget):
         self.hum_history = []
         self.time_history = []
         self.start_time = time.time()
+
+        # bateria
+        self.battery_history = []
+        self.battery_time = []
+        self.battery_start_time = time.time()
 
 
         if loranode is None:
@@ -140,12 +148,37 @@ class EB_RobotGUI_bis(QWidget):
         self.btn_imu = QPushButton("IMU Data")
         self.btn_imu.clicked.connect(self.get_imu_now)
                
-        self.imu_output = QTextEdit()
-        self.imu_output.setReadOnly(True)
-        self.imu_output.setFixedHeight(120)
+        # Tabla IMU estilo log
+        self.imu_table = QTableWidget()
+        self.imu_table.setColumnCount(13)
+        self.imu_table.setHorizontalHeaderLabels([
+            "T", "r", "p",
+            "ax", "ay", "az",
+            "gx", "gy", "gz",
+            "mx", "my", "mz",
+            "temp"
+        ])
+        self.imu_table.verticalHeader().setVisible(False)
+        self.imu_table.setRowCount(0)
+        self.imu_table.setFixedHeight(200)
+        self.imu_table.setAlternatingRowColors(True)
+
+        self.imu_table.setStyleSheet("""
+            QHeaderView::section {
+                background-color: #2b2b2b;   /* Fondo oscuro */
+                color: white;                /* Texto blanco */
+                padding: 4px;
+                border: 1px solid #444;
+            }
+            QTableWidget {
+                background-color: #3a3a3a;
+                gridline-color: #555;
+                color: white;
+            }
+        """)
 
         cmd_layout.addWidget(self.btn_imu, 0, 0, 1, 3)
-        cmd_layout.addWidget(self.imu_output, 1, 0, 1, 3) 
+        cmd_layout.addWidget(self.imu_table, 1, 0, 1, 3) 
 
         self.btn_feedback = QPushButton("Chassis Feedback")
         self.btn_start_feedback = QPushButton("Start Periodic Feedback")
@@ -172,14 +205,33 @@ class EB_RobotGUI_bis(QWidget):
         self.btn_start_battery.clicked.connect(self.start_battery_monitor)
         self.btn_stop_battery.clicked.connect(self.stop_battery_monitor)
         self.btn_get_battery.clicked.connect(self.get_battery_now)
-        self.battery_output = QTextEdit()
-        self.battery_output.setReadOnly(True)
-        self.battery_output.setFixedHeight(120)
+        # self.battery_output = QTextEdit()
+        # self.battery_output.setReadOnly(True)
+        # self.battery_output.setFixedHeight(120)
         
+        # Gráfico de batería
+        import pyqtgraph as pg
+        self.battery_plot = pg.PlotWidget()
+        self.battery_plot.setBackground(QColor("#2e2e2e"))
+        self.battery_plot.setTitle("Nivel de batería")
+        self.battery_plot.setLabel('left', 'Batería (%)')
+        self.battery_plot.setLabel('bottom', 'Hora')
+        self.battery_curve = self.battery_plot.plot([], [], pen=pg.mkPen(color='blue', width=2))
+
+        # Barra de progreso de batería
+        self.battery_progress = QProgressBar()
+        self.battery_progress.setMinimum(0)
+        self.battery_progress.setMaximum(12)
+        self.battery_progress.setValue(0)
+        self.battery_progress.setFormat("%p%")  # Mostrar porcentaje
+        self.battery_progress.setTextVisible(True)
+
         cmd_layout.addWidget(self.btn_get_battery, 4, 0)
         cmd_layout.addWidget(self.btn_start_battery, 4, 1)
         cmd_layout.addWidget(self.btn_stop_battery, 4, 2)
-        cmd_layout.addWidget(self.battery_output, 5, 0, 1, 3)
+        # cmd_layout.addWidget(self.battery_output, 5, 0, 1, 3)
+        cmd_layout.addWidget(self.battery_plot, 5, 0, 1, 3)
+        cmd_layout.addWidget(self.battery_progress, 6, 0, 1, 3)
 
         tab_cmd.setLayout(cmd_layout)
         tabs.addTab(tab_cmd, "⚙️")
@@ -1070,14 +1122,62 @@ class EB_RobotGUI_bis(QWidget):
         self._update_sensor_graphs(temperatura, humedad)
 
         
-
-
 # ---------- bateria ----------
     def _on_battery_data(self, level):
         """Muestra la cadena de feedback tal cual en el panel de batería"""
-        ts = time.strftime('%H:%M:%S')
-        self.battery_output.append(f"[{ts}] Nivel de batería: {level}")
-        self.battery_output.ensureCursorVisible()
+
+        V_min = 9.0
+        V_max = 12.0
+
+        voltaje_actual = int(level)
+
+        # BATERIA CARTEL 
+        # ts = time.strftime('%H:%M:%S')
+        # self.battery_output.append(f"[{ts}] Nivel de batería: {level}")
+        # self.battery_output.ensureCursorVisible()
+        
+        # BARRA DE PROGRESO       
+        bateria = (voltaje_actual - V_min) / (V_max - V_min) * 100
+        bateria = max(0, min(100, bateria))
+        self.battery_progress.setValue(bateria)
+
+        if bateria > 60:
+            color = "green"
+        elif bateria > 30:
+            color = "yellow"
+        else:
+            color = "red"
+
+        self.battery_progress.setStyleSheet(f"""
+            QProgressBar {{
+                border: 1px solid #000;
+                border-radius: 5px;
+                text-align: center;
+            }}
+            QProgressBar::chunk {{
+                background-color: {color};
+            }}
+        """)
+
+        # GRAFICO
+        ts_graph = datetime.now()
+        
+        # Guardar historial
+        self.battery_time.append(ts_graph)
+        self.battery_history.append(bateria)
+
+        # Limitar puntos a 300
+        if len(self.battery_time) > 300:
+            self.battery_time.pop(0)
+            self.battery_history.pop(0)
+
+        # Actualizar gráfico
+        # self.battery_curve.setData(self.battery_time, self.battery_history)
+        self.battery_curve.setData([t.timestamp() for t in self.battery_time], self.battery_history)
+        
+        ax = self.battery_plot.getAxis('bottom')
+        ax.setTicks([[(t.timestamp(), t.strftime("%H:%M:%S")) for t in self.battery_time]])
+        
 
 # ---------- feedback ----------
     def _on_feedback_data(self, feedback_str):
@@ -1089,9 +1189,68 @@ class EB_RobotGUI_bis(QWidget):
 # ---------- imu ----------
     def _on_imu_data(self, imu_str):
         """Muestra la cadena de imu tal cual en el panel de imu"""
-        ts = time.strftime('%H:%M:%S')
-        self.imu_output.append(f"[{ts}] Imu info: {imu_str}")
-        self.imu_output.ensureCursorVisible()
+        try:
+            imu = json.loads(imu_str)
+        except Exception:
+            self.on_alert("❌ IMU envió un JSON inválido")
+            return
+        
+        ROLLOVER_THRESHOLD = 60  # grados
+        
+        # ------ ACTUALIZAR TABLA ------
+        row = self.imu_table.rowCount()
+        self.imu_table.insertRow(row)
+        
+        # Orden exacto de columnas
+        campos = [
+            "T", "r", "p",
+            "ax", "ay", "az",
+            "gx", "gy", "gz",
+            "mx", "my", "mz",
+            "temp"
+        ]
+
+        for col, key in enumerate(campos):
+            val = imu.get(key, "")
+
+            if isinstance(val, float):
+                val_str = f"{val:.3f}"
+            else:
+                val_str = str(val)
+
+            item = QTableWidgetItem(val_str)
+
+            # Fondo por defecto
+            item.setBackground(QColor("#3a3a3a"))
+            item.setForeground(QColor("#2e2e2e8d"))
+
+            # --- Colores especiales para roll/pitch ---
+            if key in ("r", "p"):
+                if abs(val) > ROLLOVER_THRESHOLD:
+                    item.setBackground(QColor("#a00000"))  # rojo
+                    item.setForeground(QColor("#2e2e2e8d"))
+                else:
+                    item.setBackground(QColor("#004000"))  # verde oscuro
+                    item.setForeground(QColor("#2e2e2e8d"))
+
+            self.imu_table.setItem(row, col, item)
+
+            # Auto scroll al final
+            self.imu_table.scrollToBottom()
+
+        # ------ DETECCIÓN DE VUELCO ------
+        roll = imu.get("r", 0)
+        pitch = imu.get("p", 0)
+
+        self.roll = roll
+        self.pitch = pitch
+
+        if abs(roll) > ROLLOVER_THRESHOLD or abs(pitch) > ROLLOVER_THRESHOLD:
+            self.on_alert(
+                f"⚠️ ¡Posible vuelco detectado!\n"
+                f"Roll: {roll:.1f}° | Pitch: {pitch:.1f}°"
+            )
+
 
 # --------- foto ----------
     def _on_photo_received(self, img_bytes):

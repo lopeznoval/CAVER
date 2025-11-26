@@ -331,7 +331,7 @@ class LoRaNode:
                         else:
                             self.on_alert(f"⚠️ Comando de feedback desconocido: {message}") 
 
-                    if msg_type == 13: # pedir o parar datos imu
+                    elif msg_type == 13: # pedir o parar datos imu
                         if "1" in message:
                             print("llego el 1 para empezar")
                             if getattr(self, "imu_thread", None) and self.imu_thread.is_alive():
@@ -351,7 +351,7 @@ class LoRaNode:
                         else:
                             self.on_alert(f"⚠️ Comando IMU desconocido: {message}") 
                     
-                    if msg_type == 14:
+                    elif msg_type == 14:
                         if "1" in message:
                             self.auto_move_running = True
                             if not getattr(self, "mov_aut_thread", None) or not self.mov_aut_thread.is_alive():
@@ -363,7 +363,7 @@ class LoRaNode:
                         else: 
                             self.on_alert(f"⚠️ Comando movimiento autónomo desconocido: {message}") 
 
-                    if msg_type == 15:
+                    elif msg_type == 15:
                         if "0" in message:
                             self.battery_monitor_running = False
                         elif "1" in message:
@@ -384,7 +384,7 @@ class LoRaNode:
                         else:
                             self.on_alert(f"⚠️ Comando de monitorización de batería desconocido: {message}") 
 
-                    if msg_type == 16:
+                    elif msg_type == 16:
                         if "1" in message:
                             self.detect_collisions_running = True
                             self.colision_dest = addr_sender
@@ -396,13 +396,14 @@ class LoRaNode:
                             self.detect_collisions_running = False
                         else: 
                             self.on_alert(f"⚠️ Comando detección de colisiones desconocido: {message}") 
-
-                    if self.robot.is_open and self.robot:
-                        resp = self.send_to_robot(message)
-                        self.send_message(addr_sender, 3, msg_id, resp)
                     else:
-                        self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
-                    
+
+                        if self.robot.is_open and self.robot:
+                            resp = self.send_to_robot(message)
+                            self.send_message(addr_sender, 3, msg_id, resp)
+                        else:
+                            self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
+                        
 
                 elif 19 < msg_type < 25:  # Comando para los sensores y BBDD
                     if msg_type == 21:  # Lectura temperatura y humedad
