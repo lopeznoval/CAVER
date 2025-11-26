@@ -1103,6 +1103,8 @@ class EB_RobotGUI_bis(QWidget):
         # ts = time.time() - self.start_time
         temperatura = self.loranode.temp_mes
         humedad = self.loranode.hum_mes
+        
+        self._update_sensor_graphs(temp, hum)
         # # Guardar datos
         # self.time_history.append(ts)
         # self.temp_history.append(temperatura)

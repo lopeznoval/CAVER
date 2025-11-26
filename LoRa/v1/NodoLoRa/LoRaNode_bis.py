@@ -409,6 +409,7 @@ class LoRaNode:
                     if msg_type == 21:  # Lectura temperatura y humedad
                         if self.on_sensor is None:
                             self.connect_sensors()
+                            self.sensor_dest = addr_sender
                             sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True)
                             sensor_th.start()
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
@@ -705,15 +706,8 @@ class LoRaNode:
             if self.robot and self.robot.is_open:
                 try:
                     resp = self.send_to_robot("{\"T\":130}")
-                    print("BATERIA RESPPPPPPPPPPPPPPPPPPPP")
-                    print(resp)
-                    print("BATERIA RESPPPPPPPPPPPPPPPPPPPP")
-                    # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
                     data = json.loads(resp)
                     battery = data.get("v", 0)
-                    print("BATERIA")
-                    print(battery)
-                    print("BATERIA")
                     self.send_message(self.battery_dest, 0, 64, str(battery))
                 except Exception as e:
                     self.on_alert(f"Error leyendo batería: {e}")
@@ -890,11 +884,21 @@ class LoRaNode:
     def temp_hum(self, sensordata):
         # El formato del mensaje es:
         # "Temp: 23.5°C, Hum: 58.0%"
-        parts = sensordata.replace("°C", "").replace("%", "").replace("Temp:", "").replace("Hum:", "")
-        temp_str, hum_str = parts.split(",")
-        temp = float(temp_str.strip())
-        hum = float(hum_str.strip())
-        self.on_periodic_sensor(temp,hum)
+        # parts = sensordata.replace("°C", "").replace("%", "").replace("Temp:", "").replace("Hum:", "")
+        # temp_str, hum_str = parts.split(",")
+        # temp = float(temp_str.strip())
+        # hum = float(hum_str.strip())
+        # self.on_periodic_sensor(temp,hum)
+
+        try:
+            temp_str, hum_str = sensordata.split(",")
+            temp = float(temp_str.strip())
+            hum = float(hum_str.strip())
+            self.on_periodic_sensor(temp, hum)
+        except Exception as e:
+            self.on_alert(f"Error procesando datos de sensores en temp_hum: {e}")
+
+
 
     # # -------------------- VÍDEO --------------------
     # def take_picture(self):
@@ -1057,7 +1061,13 @@ class LoRaNode:
                     print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
                     # self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
-
+                    if hasattr(self, "sensor_dest"):
+                        temp_str = parts[1].split(':')[1].replace('°C', '')
+                        hum_str = parts[0].split(':')[1].replace('%', '')
+                        self.send_message(self.sensor_dest, 0, 40, f"{temp_str},{hum_str}")
+                    else:
+                        print("⚠️ sensor_dest no existe, no se envía mensaje")
+                        
                     with get_db_session() as session:
                         registrar_lectura(self.temp, self.hum, session)
 
