@@ -817,13 +817,20 @@ class LoRaNode:
                 return
 
         # --- Inicializar variables persistentes ---
+        if not hasattr(self, "_last_imu_t"):
+            self._last_imu_t = time.time()  
         if not hasattr(self, "vx"): 
             self.vx, self.vy, self.vz = 0.0, 0.0, 0.0
         if not hasattr(self, "x"): 
             self.x, self.y, self.z = 0.0, 0.0, 0.0
         if not hasattr(self, "roll"): 
             self.roll, self.pitch = 0.0, 0.0
-                
+
+        # === dt ===
+        now = time.time()
+        dt = now - self._last_imu_t
+        self._last_imu_t = now
+                    
         # === Lecturas crudas ===
         ax = imudata.get("ax", 0)
         ay = imudata.get("ay", 0)
