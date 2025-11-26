@@ -46,6 +46,8 @@ class EB_RobotGUI_bis(QWidget):
             self.loranode.on_imu = self._on_imu_data
             self.loranode.on_photo = self._on_photo_received
             self.loranode.on_collision = self._on_collision_detected
+            self.loranode.on_overturn = self._on_overturn_data
+
 
 # -------------------- IMU inicio --------------------
 
@@ -232,9 +234,9 @@ class EB_RobotGUI_bis(QWidget):
         buttons_imu_layout = QHBoxLayout()
 
         # Checkbox para enviar posición por LoRa
-        self.send_position_checkbox = QCheckBox("📡 Enviar posición al EB")
-        self.send_position_checkbox.setChecked(True)
-        pos_layout.addWidget(self.send_position_checkbox)
+        # self.send_position_checkbox = QCheckBox("📡 Enviar posición al EB")
+        # self.send_position_checkbox.setChecked(True)
+        # pos_layout.addWidget(self.send_position_checkbox)
 
         self.btn_start_imu = QPushButton("▶️ Comenzar a trazar posición")
         self.btn_start_imu.clicked.connect(self._start_imu)
@@ -261,7 +263,50 @@ class EB_RobotGUI_bis(QWidget):
 
         self.path_curve = self.plot_widget.plot([], [], pen=pg.mkPen(color='r', width=2))
 
-        pos_layout.addWidget(self.plot_widget)
+        pos_layout.addWidget(self.plot_widget, stretch=4)  
+
+        # Panel tipo cuadrado para estado y ángulos
+        self.roll_pitch_panel = QFrame()
+        self.roll_pitch_panel.setFrameShape(QFrame.Shape.StyledPanel)
+        self.roll_pitch_panel.setStyleSheet("""
+            background-color: None;       /* fondo oscuro como los logs */
+            border: 1px solid #555;       /* borde sutil */
+            border-radius: 6px;
+        """)
+
+        # Layout vertical dentro del panel
+        panel_layout = QVBoxLayout()
+        panel_layout.setContentsMargins(6, 6, 6, 6)
+        panel_layout.setSpacing(4)
+
+        # Label para estado del robot
+        self.overturn_label = QLabel("Estado del robot: estable")
+        self.overturn_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.overturn_label.setStyleSheet("""
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        """)
+
+        # Label para roll y pitch
+        self.roll_pitch_label = QLabel("Roll: 0.0°, Pitch: 0.0°")
+        self.roll_pitch_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.roll_pitch_label.setStyleSheet("""
+            
+            color: white;
+            font-weight: bold;
+            font-size: 14px;
+        """)
+
+        # Añadir labels al layout
+        panel_layout.addWidget(self.overturn_label, stretch=1)
+        panel_layout.addWidget(self.roll_pitch_label, stretch=2)
+
+        self.roll_pitch_panel.setLayout(panel_layout)
+
+        # Añadir panel al layout del tab
+        pos_layout.addWidget(self.roll_pitch_panel)
+
 
         tab_position.setLayout(pos_layout)
         tabs.addTab(tab_position, "📍")
@@ -1072,6 +1117,55 @@ class EB_RobotGUI_bis(QWidget):
         ts = time.strftime('%H:%M:%S')
         self.collision_log.append(f"[{ts}] ⚠️ Colisión detectada")
         self.collision_log.ensureCursorVisible()
+
+    def _on_overturn_data(self, data):
+        """Actualiza el indicador de vuelco en la GUI y el resumen de roll/pitch."""
+        try:
+            roll = data.get("roll", 0)
+            pitch = data.get("pitch", 0)
+            stable = data.get("stable", True)
+
+            # Mantener el overturn_label rojo/verde
+            if stable:
+                self.overturn_label.setText("Estado del robot: estable")
+                self.overturn_label.setStyleSheet("""
+                    background-color: #1e3d1e;
+                    color: #aaffaa;
+                    padding: 6px;
+                    border-radius: 5px;
+                    font-size: 14px;
+                """)
+            else:
+                self.overturn_label.setText(
+                    f"⚠️ ¡POSIBLE VUELCO!  Roll: {roll:.1f}° | Pitch: {pitch:.1f}°"
+                )
+                self.overturn_label.setStyleSheet("""
+                    background-color: #5a0000;
+                    color: #ffcccc;
+                    padding: 6px;
+                    border-radius: 5px;
+                    font-size: 14px;
+                """)
+
+            # Actualizar roll_pitch_label siempre
+            estado = "Estable ✅" if stable else "Vuelco ⚠️"
+            color = "lightgreen" if stable else "lightcoral"
+
+            self.roll_pitch_label.setText(
+                f"Roll: {roll:.1f}°, Pitch: {pitch:.1f}° - Estado: {estado}"
+            )
+            self.roll_pitch_label.setStyleSheet(f"""
+                background-color: {color};
+                border: 1px solid gray;
+                border-radius: 8px;
+                font-weight: bold;
+                padding: 4px;
+            """)
+
+        except Exception as e:
+            self.append_general_log(f"Error en overturn GUI: {e}")
+
+    
 
 
         

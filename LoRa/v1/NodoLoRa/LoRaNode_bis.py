@@ -104,6 +104,7 @@ class LoRaNode:
         self.on_imu = lambda imu: print(f"[IMU UPDATE]: {imu}")
         self.on_photo = lambda photo: print(f"[RECEIVED PHOTO]")
         self.on_collision = lambda: print(f"[OBJECT DETECTED]")
+        self.on_overturn = lambda vuelco: print(f"[OVERTURN] : {vuelco}")
 
     # -------------------- MENSAJES --------------------
     def pack_message(self, addr_dest:int, msg_type: int, msg_id: int, message: str, relay_flag: int =0) -> bytes:
@@ -868,6 +869,21 @@ class LoRaNode:
         ROLLOVER_THRESHOLD = 60  # grados, ajustar según necesidad
         if abs(self.roll) > ROLLOVER_THRESHOLD or abs(self.pitch) > ROLLOVER_THRESHOLD:
             self.on_alert(f"⚠️ ¡Posible vuelco detectado! Roll: {self.roll:.1f}°, Pitch: {self.pitch:.1f}°")
+            # notificar a quien esté escuchando
+            self.on_overturn({
+                "roll": self.roll,
+                "pitch": self.pitch,
+                "stable": False,
+                "timestamp": time.time()
+            })
+        else:
+            # por si quieres notificar que volvió a estar estable
+            self.on_overturn({
+                "roll": self.roll,
+                "pitch": self.pitch,
+                "stable": True,
+                "timestamp": time.time()
+            })
 
     # ---------- SENSOR PERIODICO ----------
     def temp_hum(self, sensordata):
