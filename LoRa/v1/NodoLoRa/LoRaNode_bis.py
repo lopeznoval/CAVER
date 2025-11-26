@@ -9,6 +9,7 @@ import base64
 import math
 import socket
 import serial
+from PIL import Image
 from BBDDv1.lora_bridge_mongo import connect_mongo, procesar_paquete_lora
 from BBDDv1.registro_datos import registrar_lectura
 from BBDDv1.database_SQLite import *
@@ -53,6 +54,7 @@ class LoRaNode:
             self.lock_nodes = threading.Lock()
             self.connected_nodes = {}
             self.node_timers = {}
+            self.photo = None
             self.temp_mes = None
             self.hum_mes = None
 
@@ -114,7 +116,7 @@ class LoRaNode:
             msg_id & 0xFF
         ])
         print(f"Message size: {len(message.encode())} / Total size: {len(header) + len(message.encode())} bytes")
-        if len(header) + len(message.encode()) > 255:
+        if len(header) + len(message.encode()) > 242:
             raise ValueError("⚠️ Message too long to pack in just a LoRa packet.")
         return header + message.encode()
     
@@ -128,7 +130,7 @@ class LoRaNode:
             msg_id & 0xFF
         ])
         print(f"Bytes size: {len(data)} / Total size: {len(header) + len(data)} bytes")
-        if len(header) + len(data) > 255:
+        if len(header) + len(data) > 242:
             raise ValueError("⚠️ Data too long to pack in just a LoRa packet.")
         return header + data
 
@@ -168,13 +170,13 @@ class LoRaNode:
             self.add_pending(addr_dest, msg_id)
 
     def send_bytes(self, addr_dest: int, msg_type: int, msg_id: int, data: bytes, relay_flag: int = 0, callback=None):
-        while len(data) > 240:
-            chunk = data[:240]
-            data = data[240:]
+        while len(data) > 230:
+            chunk = data[:230]
+            data = data[230:]
             part = 1
             packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, chunk, relay_flag, part)
             self.node.send_bytes(packed_data)
-            time.sleep(0.1)  # pequeño retardo entre fragmentos
+            time.sleep(0.5)  # pequeño retardo entre fragmentos
         part = 0
         packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag, part)
         self.node.send_bytes(packed_data)
@@ -228,8 +230,16 @@ class LoRaNode:
                     
                     if msg_id == 30:
                         try:
-                            photo = base64.b64decode(message)
-                            self.on_photo(photo)  
+                            if part == 1:
+                                if self.photo is None:
+                                    self.photo = bytearray()
+                                self.photo.extend(message)
+                            if part == 0 and self.photo is not None:
+                                self.photo.extend(message)
+                                img = Image.open(io.BytesIO(bytes(self.photo)))
+                                self.on_photo(img)
+                                self.photo = None  
+
                         except Exception as e:
                             self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error decodificando foto: {e}")
                     elif msg_id == 40: # sensores
@@ -422,8 +432,10 @@ class LoRaNode:
                     if msg_type == 25:  # Tomar foto
                         # img_b64 = self.take_picture_and_save()
                         # ------ PROBAR ------
-                        self.take_picture_and_save_compressed(addr_sender) 
-                        # self.send_message(addr_sender, 4, msg_id, img_b64)
+                        resp = self.take_picture_and_save_compressed(addr_sender)
+                        self.send_message(addr_sender, 1, msg_id, "ACK Foto recibida y en proceso de envío.")
+                        if resp is not None:
+                            self.send_bytes(addr_sender, 0, msg_id, resp)
                         print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
                     # ---------------------- VIDEO ----------------------
@@ -958,7 +970,7 @@ class LoRaNode:
         img_bytes = self.lora_cam_sender.capture_recording_optimized()
         if img_bytes is not None:
             if len(img_bytes) <= 18000:  # tamaño máximo LoRa
-                self.send_bytes(photo_dest, 0, 30, img_bytes)
+                return img_bytes
             else:
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Imagen demasiado grande para LoRa, marcada como pendiente.")
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -967,6 +979,7 @@ class LoRaNode:
                     f.write(img_bytes)
                 self._mark_pending(filename)
                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada y marcada como pendiente: {filename}")
+                return None
         else:
             self.on_alert("⚠️ Error tomando foto.")
     
