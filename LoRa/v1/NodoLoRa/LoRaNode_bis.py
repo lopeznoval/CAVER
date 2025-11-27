@@ -406,6 +406,7 @@ class LoRaNode:
 
                 elif 19 < msg_type < 25:  # Comando para los sensores y BBDD
                     if msg_type == 21:  # Lectura temperatura y humedad
+                        self.sensor_dest = addr_sender
                         if self.on_sensor is None:
                             self.connect_sensors()
                             self.sensor_dest = addr_sender
