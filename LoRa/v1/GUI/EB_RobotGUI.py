@@ -1143,8 +1143,7 @@ class EB_RobotGUI_bis(QWidget):
         # BARRA DE PROGRESO       
         bateria = (voltaje_actual - V_min) / (V_max - V_min) * 100
         bateria = max(0, min(100, bateria))
-        print("Battery level received:", bateria)
-        self.battery_progress.setValue(bateria)
+        self.battery_progress.setValue(int(bateria))
 
         if bateria > 60:
             color = "green"
