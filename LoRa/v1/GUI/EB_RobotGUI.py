@@ -406,6 +406,7 @@ class EB_RobotGUI_bis(QWidget):
         self.temp_plot.setBackground('black')
         self.temp_plot.setTitle("Temperatura en el tiempo")
         self.temp_plot.setLabel('left', '°C')
+        self.temp_plot.getAxis('bottom').setLabel("Hora")
 
         self.temp_curve = self.temp_plot.plot([], [], pen='red', width=3)
         sensors_layout.addWidget(self.temp_plot)
@@ -417,6 +418,7 @@ class EB_RobotGUI_bis(QWidget):
         self.hum_plot.setBackground('black')
         self.hum_plot.setTitle("Humedad en el tiempo")
         self.hum_plot.setLabel('left', '%')
+        self.temp_plot.getAxis('bottom').setLabel("Hora")
 
         self.hum_curve = self.hum_plot.plot([], [], pen='cyan', width=3)
         sensors_layout.addWidget(self.hum_plot)
