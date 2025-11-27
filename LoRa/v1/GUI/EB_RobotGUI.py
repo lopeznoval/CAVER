@@ -221,7 +221,7 @@ class EB_RobotGUI_bis(QWidget):
         # Barra de progreso de batería
         self.battery_progress = QProgressBar()
         self.battery_progress.setMinimum(0)
-        self.battery_progress.setMaximum(12)
+        self.battery_progress.setMaximum(100)
         self.battery_progress.setValue(0)
         self.battery_progress.setFormat("%p%")  # Mostrar porcentaje
         self.battery_progress.setTextVisible(True)
@@ -418,7 +418,7 @@ class EB_RobotGUI_bis(QWidget):
         self.hum_plot.setBackground('black')
         self.hum_plot.setTitle("Humedad en el tiempo")
         self.hum_plot.setLabel('left', '%')
-        self.temp_plot.getAxis('bottom').setLabel("Hora")
+        self.hum_plot.getAxis('bottom').setLabel("Hora")
 
         self.hum_curve = self.hum_plot.plot([], [], pen='cyan', width=3)
         sensors_layout.addWidget(self.hum_plot)
@@ -847,14 +847,14 @@ class EB_RobotGUI_bis(QWidget):
         self.selected_type = 15
         self.append_general_log("🛰️ Enviando comando: Comenzar Battery Monitor")
         self.send_cmd("1")
-        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🔋 Monitorización de batería iniciada.\n")
+        # self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🔋 Monitorización de batería iniciada.\n")
 
     def stop_battery_monitor(self):
         """Enviar mensaje LoRa al robot para detener monitorización continua"""
         self.selected_type = 15
         self.append_general_log("🛰️ Enviando comando: Detener  Battery Monitor")
         self.send_cmd("0")
-        self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🛑 Monitorización de batería detenida.\n")
+        # self.battery_output.append(f"[{time.strftime('%H:%M:%S')}] 🛑 Monitorización de batería detenida.\n")
 
     def get_battery_now(self):
         """Enviar mensaje LoRa al robot para obtener batería bajo demanda"""
@@ -1131,12 +1131,10 @@ class EB_RobotGUI_bis(QWidget):
 # ---------- bateria ----------
     def _on_battery_data(self, level):
         """Muestra la cadena de feedback tal cual en el panel de batería"""
-
         V_min = 9.0
         V_max = 12.0
 
-        voltaje_actual = int(level)
-
+        voltaje_actual = float(level)
         # BATERIA CARTEL 
         # ts = time.strftime('%H:%M:%S')
         # self.battery_output.append(f"[{ts}] Nivel de batería: {level}")
@@ -1145,6 +1143,7 @@ class EB_RobotGUI_bis(QWidget):
         # BARRA DE PROGRESO       
         bateria = (voltaje_actual - V_min) / (V_max - V_min) * 100
         bateria = max(0, min(100, bateria))
+        print("Battery level received:", bateria)
         self.battery_progress.setValue(bateria)
 
         if bateria > 60:
@@ -1217,6 +1216,7 @@ class EB_RobotGUI_bis(QWidget):
         ]
 
         for col, key in enumerate(campos):
+            
             val = imu.get(key, "")
 
             if isinstance(val, float):
@@ -1228,16 +1228,16 @@ class EB_RobotGUI_bis(QWidget):
 
             # Fondo por defecto
             item.setBackground(QColor("#3a3a3a"))
-            item.setForeground(QColor("#2e2e2e8d"))
+            item.setForeground(QColor("#ffffffff"))
 
             # --- Colores especiales para roll/pitch ---
             if key in ("r", "p"):
                 if abs(val) > ROLLOVER_THRESHOLD:
                     item.setBackground(QColor("#a00000"))  # rojo
-                    item.setForeground(QColor("#2e2e2e8d"))
+                    item.setForeground(QColor("#ffffffff"))
                 else:
                     item.setBackground(QColor("#004000"))  # verde oscuro
-                    item.setForeground(QColor("#2e2e2e8d"))
+                    item.setForeground(QColor("#ffffffff"))
 
             self.imu_table.setItem(row, col, item)
 
