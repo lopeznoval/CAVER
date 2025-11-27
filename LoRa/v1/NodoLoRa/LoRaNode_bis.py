@@ -103,6 +103,7 @@ class LoRaNode:
         self.on_imu = lambda imu: print(f"[IMU UPDATE]: {imu}")
         self.on_photo = lambda photo: print(f"[RECEIVED PHOTO]")
         self.on_collision = lambda: print(f"[OBJECT DETECTED]")
+        self.on_overturn = lambda vuelco: print(f"[OVERTURN] : {vuelco}")
 
     # -------------------- MENSAJES --------------------
     def pack_message(self, addr_dest:int, msg_type: int, msg_id: int, message: str, relay_flag: int =0) -> bytes:
@@ -329,7 +330,7 @@ class LoRaNode:
                         else:
                             self.on_alert(f"⚠️ Comando de feedback desconocido: {message}") 
 
-                    if msg_type == 13: # pedir o parar datos imu
+                    elif msg_type == 13: # pedir o parar datos imu
                         if "1" in message:
                             print("llego el 1 para empezar")
                             if getattr(self, "imu_thread", None) and self.imu_thread.is_alive():
@@ -349,7 +350,7 @@ class LoRaNode:
                         else:
                             self.on_alert(f"⚠️ Comando IMU desconocido: {message}") 
                     
-                    if msg_type == 14:
+                    elif msg_type == 14:
                         if "1" in message:
                             self.auto_move_running = True
                             if not getattr(self, "mov_aut_thread", None) or not self.mov_aut_thread.is_alive():
@@ -361,7 +362,7 @@ class LoRaNode:
                         else: 
                             self.on_alert(f"⚠️ Comando movimiento autónomo desconocido: {message}") 
 
-                    if msg_type == 15:
+                    elif msg_type == 15:
                         if "0" in message:
                             self.battery_monitor_running = False
                         elif "1" in message:
@@ -382,10 +383,10 @@ class LoRaNode:
                         else:
                             self.on_alert(f"⚠️ Comando de monitorización de batería desconocido: {message}") 
 
-                    if msg_type == 16:
+                    elif msg_type == 16:
                         if "1" in message:
                             self.detect_collisions_running = True
-                            self.colision_dest = addr_dest
+                            self.colision_dest = addr_sender
                             if not getattr(self, "mov_aut_thread", None) or not self.mov_aut_thread.is_alive():
                                 self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                                 self.mov_aut_thread.start()
@@ -394,18 +395,20 @@ class LoRaNode:
                             self.detect_collisions_running = False
                         else: 
                             self.on_alert(f"⚠️ Comando detección de colisiones desconocido: {message}") 
-
-                    if self.robot.is_open and self.robot:
-                        resp = self.send_to_robot(message)
-                        self.send_message(addr_sender, 3, msg_id, resp)
                     else:
-                        self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
-                    
+
+                        if self.robot.is_open and self.robot:
+                            resp = self.send_to_robot(message)
+                            self.send_message(addr_sender, 3, msg_id, resp)
+                        else:
+                            self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
+                        
 
                 elif 19 < msg_type < 25:  # Comando para los sensores y BBDD
                     if msg_type == 21:  # Lectura temperatura y humedad
                         if self.on_sensor is None:
                             self.connect_sensors()
+                            self.sensor_dest = addr_sender
                             sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True)
                             sensor_th.start()
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
@@ -684,9 +687,10 @@ class LoRaNode:
                 time.sleep(0.15)  # control loop
             
             elif self.detect_collisions_running:
-                print("🔄 Detección de colisiones iniciada...")
+                # print("🔄 Detección de colisiones iniciada...")
                 if last_state == 1:
                     self.send_message(self.colision_dest, 0, 50, "1")
+                time.sleep(0.15) 
                     
 
         radar_sock.close()
@@ -700,15 +704,8 @@ class LoRaNode:
             if self.robot and self.robot.is_open:
                 try:
                     resp = self.send_to_robot("{\"T\":130}")
-                    print("BATERIA RESPPPPPPPPPPPPPPPPPPPP")
-                    print(resp)
-                    print("BATERIA RESPPPPPPPPPPPPPPPPPPPP")
-                    # AQUI HAY QUE SACAR DE RESP EL DATO DE BATERIA QUE NO SE CUAL ES 
                     data = json.loads(resp)
                     battery = data.get("v", 0)
-                    print("BATERIA")
-                    print(battery)
-                    print("BATERIA")
                     self.send_message(self.battery_dest, 0, 64, str(battery))
                 except Exception as e:
                     self.on_alert(f"Error leyendo batería: {e}")
@@ -814,13 +811,20 @@ class LoRaNode:
                 return
 
         # --- Inicializar variables persistentes ---
+        if not hasattr(self, "_last_imu_t"):
+            self._last_imu_t = time.time()  
         if not hasattr(self, "vx"): 
             self.vx, self.vy, self.vz = 0.0, 0.0, 0.0
         if not hasattr(self, "x"): 
             self.x, self.y, self.z = 0.0, 0.0, 0.0
         if not hasattr(self, "roll"): 
             self.roll, self.pitch = 0.0, 0.0
-                
+
+        # === dt ===
+        now = time.time()
+        dt = now - self._last_imu_t
+        self._last_imu_t = now
+                    
         # === Lecturas crudas ===
         ax = imudata.get("ax", 0)
         ay = imudata.get("ay", 0)
@@ -858,16 +862,41 @@ class LoRaNode:
         ROLLOVER_THRESHOLD = 60  # grados, ajustar según necesidad
         if abs(self.roll) > ROLLOVER_THRESHOLD or abs(self.pitch) > ROLLOVER_THRESHOLD:
             self.on_alert(f"⚠️ ¡Posible vuelco detectado! Roll: {self.roll:.1f}°, Pitch: {self.pitch:.1f}°")
+            # notificar a quien esté escuchando
+            self.on_overturn({
+                "roll": self.roll,
+                "pitch": self.pitch,
+                "stable": False,
+                "timestamp": time.time()
+            })
+        else:
+            # por si quieres notificar que volvió a estar estable
+            self.on_overturn({
+                "roll": self.roll,
+                "pitch": self.pitch,
+                "stable": True,
+                "timestamp": time.time()
+            })
 
     # ---------- SENSOR PERIODICO ----------
     def temp_hum(self, sensordata):
         # El formato del mensaje es:
         # "Temp: 23.5°C, Hum: 58.0%"
-        parts = sensordata.replace("°C", "").replace("%", "").replace("Temp:", "").replace("Hum:", "")
-        temp_str, hum_str = parts.split(",")
-        temp = float(temp_str.strip())
-        hum = float(hum_str.strip())
-        self.on_periodic_sensor(temp,hum)
+        # parts = sensordata.replace("°C", "").replace("%", "").replace("Temp:", "").replace("Hum:", "")
+        # temp_str, hum_str = parts.split(",")
+        # temp = float(temp_str.strip())
+        # hum = float(hum_str.strip())
+        # self.on_periodic_sensor(temp,hum)
+
+        try:
+            temp_str, hum_str = sensordata.split(",")
+            temp = float(temp_str.strip())
+            hum = float(hum_str.strip())
+            self.on_periodic_sensor(temp, hum)
+        except Exception as e:
+            self.on_alert(f"Error procesando datos de sensores en temp_hum: {e}")
+
+
 
     # # -------------------- VÍDEO --------------------
     # def take_picture(self):
@@ -1030,7 +1059,13 @@ class LoRaNode:
                     print(f"[SENSORS] Temp={self.temp:.1f}°C | Hum={self.hum:.1f}%")
 
                     # self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
-
+                    if hasattr(self, "sensor_dest"):
+                        temp_str = parts[1].split(':')[1].replace('°C', '')
+                        hum_str = parts[0].split(':')[1].replace('%', '')
+                        self.send_message(self.sensor_dest, 0, 40, f"{temp_str},{hum_str}")
+                    else:
+                        print("⚠️ sensor_dest no existe, no se envía mensaje")
+                        
                     with get_db_session() as session:
                         registrar_lectura(self.temp, self.hum, session)
 
