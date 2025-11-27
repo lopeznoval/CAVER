@@ -398,23 +398,25 @@ class EB_RobotGUI_bis(QWidget):
 
         sensors_layout.addLayout(temp_hum_layout)
 
+        from pyqtgraph.graphicsItems.DateAxisItem import DateAxisItem
+       # ----------- GRÁFICA: Temperatura -----------
+        temp_axis = DateAxisItem(orientation='bottom')
 
-        # ----------- GRÁFICA: Temperatura -----------
-        self.temp_plot = PlotWidget()
+        self.temp_plot = PlotWidget(axisItems={'bottom': temp_axis})
         self.temp_plot.setBackground('black')
         self.temp_plot.setTitle("Temperatura en el tiempo")
         self.temp_plot.setLabel('left', '°C')
-        self.temp_plot.setLabel('bottom', 'Tiempo (s)')
 
         self.temp_curve = self.temp_plot.plot([], [], pen='red', width=3)
         sensors_layout.addWidget(self.temp_plot)
 
         # ----------- GRÁFICA: Humedad -----------
-        self.hum_plot = PlotWidget()
+        hum_axis = DateAxisItem(orientation='bottom')
+
+        self.hum_plot = PlotWidget(axisItems={'bottom': hum_axis})
         self.hum_plot.setBackground('black')
         self.hum_plot.setTitle("Humedad en el tiempo")
         self.hum_plot.setLabel('left', '%')
-        self.hum_plot.setLabel('bottom', 'Tiempo (s)')
 
         self.hum_curve = self.hum_plot.plot([], [], pen='cyan', width=3)
         sensors_layout.addWidget(self.hum_plot)
@@ -1392,9 +1394,10 @@ class EB_RobotGUI_bis(QWidget):
             pass
 
     def _update_sensor_graphs(self, temperatura: float, humedad: float):
-        ts = time.time() - self.start_time
+        # Tiempo real en UNIX timestamp
+        ts = time.time()
 
-        # Guardar datos en histórico
+        # Guardar datos
         self.time_history.append(ts)
         self.temp_history.append(temperatura)
         self.hum_history.append(humedad)
@@ -1405,9 +1408,33 @@ class EB_RobotGUI_bis(QWidget):
             self.temp_history.pop(0)
             self.hum_history.pop(0)
 
-        # Actualizar gráficos
+        # Actualizar curvas
         self.temp_curve.setData(self.time_history, self.temp_history)
         self.hum_curve.setData(self.time_history, self.hum_history)
+
+        # Mostrar solo los últimos 60 segundos
+        window = 60
+        if ts > self.time_history[0] + window:
+            self.temp_plot.setXRange(ts - window, ts)
+            self.hum_plot.setXRange(ts - window, ts)
+    
+    # def _update_sensor_graphs(self, temperatura: float, humedad: float):
+    #     ts = time.time() - self.start_time
+
+    #     # Guardar datos en histórico
+    #     self.time_history.append(ts)
+    #     self.temp_history.append(temperatura)
+    #     self.hum_history.append(humedad)
+
+    #     # Limitar puntos a 300
+    #     if len(self.time_history) > 300:
+    #         self.time_history.pop(0)
+    #         self.temp_history.pop(0)
+    #         self.hum_history.pop(0)
+
+    #     # Actualizar gráficos
+    #     self.temp_curve.setData(self.time_history, self.temp_history)
+    #     self.hum_curve.setData(self.time_history, self.hum_history)
 
         # # Actualizar etiquetas
         # self.temp_label.setText(f"Temperatura: {temperatura:.1f} °C")
