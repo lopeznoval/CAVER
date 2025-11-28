@@ -1141,7 +1141,7 @@ class EB_RobotGUI_bis(QWidget):
     def _on_battery_data(self, level):
         """Muestra la cadena de feedback tal cual en el panel de batería"""
         V_min = 9.0
-        V_max = 12.0
+        V_max = 12.6
 
         voltaje_actual = float(level)
         # BATERIA CARTEL 
