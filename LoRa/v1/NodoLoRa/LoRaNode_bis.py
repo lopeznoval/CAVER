@@ -14,6 +14,10 @@ from BBDDv1.lora_bridge_mongo import connect_mongo, procesar_paquete_lora
 from BBDDv1.registro_datos import registrar_lectura
 from BBDDv1.database_SQLite import *
 from BBDDv1.sincronizar_robot import actualizar_BBDD_robot, sincronizar_sensores_lora
+from BBDDv2.db_SQLite import RobotDatabase
+from BBDDv2.NodeSyncManager import NodeSyncManager
+from BBDDv2.EBSyncManager import BaseStationSyncManager
+from BBDDv2.db_mongo import BaseStationDatabase
 from NodoLoRa.sx126x_bis import sx126x
 from parameters import *
 from Multimediav1.LoraCamSender import LoRaCamSender
@@ -218,15 +222,18 @@ class LoRaNode:
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
                 if msg_type == 0:
                     if msg_id == 20: # hacer lo que sea en la EB
-                        try:
-                            resp = procesar_paquete_lora(message)
-                            self.send_message(addr_sender, 0, 21, resp)
-                        except Exception as e:
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando sensores LoRa: {e}")
+                    #     try:
+                    #         resp = procesar_paquete_lora(message)
+                    #         self.send_message(addr_sender, 0, 21, resp)
+                    #     except Exception as e:
+                    #         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando sensores LoRa: {e}")
+                    # if msg_id == 21: 
+                    #     with get_db_session() as session:
+                    #         actualizar_BBDD_robot(message, session)  
+                    #     print(f"[{time.strftime('%H:%M:%S')}] BBDD robot actualizada tras ACK")
+                        self.process_packet_base(message)
                     if msg_id == 21: 
-                        with get_db_session() as session:
-                            actualizar_BBDD_robot(message, session)  
-                        print(f"[{time.strftime('%H:%M:%S')}] BBDD robot actualizada tras ACK")
+                        self.ack_BBDD_packet(message)
                     
                     if msg_id == 30:
                         try:
@@ -415,11 +422,6 @@ class LoRaNode:
                     if msg_type == 22:  # Realizar lectura mandada por la EB
                         self.read_sensors_once()
                         self.send_message(addr_sender, 4, msg_id, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
-                    if msg_type == 22:  # Sincronizar sensores pendientes
-                        # with get_db_session() as session:
-                        #     message_send = sincronizar_sensores_lora(self, session)
-                        # self.send_message(addr_sender, 4, msg_id, message_send)
-                        ...
                     if msg_type == 20:  # Encender led
                         self.control_led("ON")
                     if msg_type == 23:  # Apagar led
@@ -1030,8 +1032,10 @@ class LoRaNode:
 
                     # self.send_message(self.sensor_dest, 0, 40, f"Temp: {self.temp:.1f}°C, Hum: {self.hum:.1f}%")
 
-                    with get_db_session() as session:
-                        registrar_lectura(self.temp, self.hum, session)
+                    # with get_db_session() as session:
+                    #     registrar_lectura(self.temp, self.hum, session)
+
+                    self.db.insert_sensor(temp=self.temp, hum=self.hum)
 
             except Exception as e:
                 print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Error leyendo ESP32: {e}")
@@ -1115,6 +1119,22 @@ class LoRaNode:
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando BBDD: {e}")
             time.sleep(30)  # cada 30 segundos
 
+    def sync_BBDD_loop(self):
+        """Sincroniza datos pendientes con la BBDD local."""
+        packets = self.sync.prepare_packets()
+        for pkt in packets:
+            json_string = pkt.to_json()  # Este string es lo que envías por LoRa
+            self.send_message(0xFFFF, 0, 20, json_string)
+
+    def process_packet_base(self, json):
+        """Procesa un paquete de BBDD recibido desde un nodo."""
+        print(json)
+        self.sync_base.process_packet(json)
+
+    def ack_BBDD_packet(self, json):
+        """Marca un paquete de BBDD como recibido."""
+        self.sync.handle_ack(json)
+
     # -------------------- EJECUCIÓN --------------------
     def run(self):
         receive_th = threading.Thread(target=self.receive_loop, daemon=True).start()            
@@ -1131,10 +1151,15 @@ class LoRaNode:
             sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True).start()
         # -------------------- BBDD --------------------
         if not self.is_base:
-            crear_tablas()
-            bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
+            # crear_tablas()
+            # bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
+            self.db = RobotDatabase("datos/robot_data.db")
+            self.sync = NodeSyncManager(self.db)
+            bbdd_th = threading.Thread(target=self.sync_BBDD_loop, daemon=True).start()
         else:
-            connect_mongo()
+            # connect_mongo()
+            self.db_base = BaseStationDatabase()
+            self.sync_base = BaseStationSyncManager()
         # -------------------- INFO PERIODICA --------------------
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()
