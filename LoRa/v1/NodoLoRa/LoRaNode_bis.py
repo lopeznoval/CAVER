@@ -820,8 +820,8 @@ class LoRaNode:
         """
         Calcula posición y orientación estimada a partir de ax, ay, az, gx, gy, gz.
         """        
-        dt = 0.05  # periodo 50 ms
-        alpha = 0.98  # peso del giroscopio
+        # dt = 0.05  # periodo 50 ms
+        # alpha = 0.98  # peso del giroscopio
 
         # --- Decodificar JSON ---
         if isinstance(imudata, str):
@@ -847,6 +847,8 @@ class LoRaNode:
         self._last_imu_t = now
                     
         # === Lecturas crudas ===
+        roll = imudata.get("r", 0)
+        pitch = imudata.get("p", 0)
         ax = imudata.get("ax", 0)
         ay = imudata.get("ay", 0)
         az = imudata.get("az", 0)
@@ -859,10 +861,10 @@ class LoRaNode:
         pitch_acc = math.degrees(math.atan2(-ax, math.sqrt(ay**2 + az**2)))
 
         # Filtro complementario
-        if not hasattr(self, "roll"):
-            self.roll, self.pitch = 0.0, 0.0
-        self.roll = alpha * (self.roll + gx * dt * 180 / math.pi) + (1 - alpha) * roll_acc
-        self.pitch = alpha * (self.pitch + gy * dt * 180 / math.pi) + (1 - alpha) * pitch_acc
+        # if not hasattr(self, "roll"):
+        #     self.roll, self.pitch = 0.0, 0.0
+        # self.roll = alpha * (self.roll + gx * dt * 180 / math.pi) + (1 - alpha) * roll_acc
+        # self.pitch = alpha * (self.pitch + gy * dt * 180 / math.pi) + (1 - alpha) * pitch_acc
 
         # === Compensar gravedad en eje principal (asumimos eje Y vertical) ===
         ay_corrected = ay + 9.81 if abs(ay) > abs(ax) and abs(ay) > abs(az) else ay
@@ -877,24 +879,24 @@ class LoRaNode:
         self.z += self.vz * dt
 
         position = {"x": self.x, "y": self.y, "z": self.z}
-        self.on_position(position)
+        # self.on_position(position)
 
         # --- Detectar vuelco ---
         ROLLOVER_THRESHOLD = 60  # grados, ajustar según necesidad
-        if abs(self.roll) > ROLLOVER_THRESHOLD or abs(self.pitch) > ROLLOVER_THRESHOLD:
-            self.on_alert(f"⚠️ ¡Posible vuelco detectado! Roll: {self.roll:.1f}°, Pitch: {self.pitch:.1f}°")
+        if abs(roll) > ROLLOVER_THRESHOLD or abs(pitch) > ROLLOVER_THRESHOLD:
+            self.on_alert(f"⚠️ ¡Posible vuelco detectado! Roll: {roll:.1f}°, Pitch: {pitch:.1f}°")
             # notificar a quien esté escuchando
             self.on_overturn({
-                "roll": self.roll,
-                "pitch": self.pitch,
+                "roll": roll,
+                "pitch": pitch,
                 "stable": False,
                 "timestamp": time.time()
             })
         else:
             # por si quieres notificar que volvió a estar estable
             self.on_overturn({
-                "roll": self.roll,
-                "pitch": self.pitch,
+                "roll": roll,
+                "pitch": pitch,
                 "stable": True,
                 "timestamp": time.time()
             })
