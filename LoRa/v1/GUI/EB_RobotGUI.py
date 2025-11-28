@@ -145,41 +145,6 @@ class EB_RobotGUI_bis(QWidget):
         tab_cmd = QWidget()
         cmd_layout = QGridLayout()
 
-        self.btn_imu = QPushButton("IMU Data")
-        self.btn_imu.clicked.connect(self.get_imu_now)
-               
-        # Tabla IMU estilo log
-        self.imu_table = QTableWidget()
-        self.imu_table.setColumnCount(13)
-        self.imu_table.setHorizontalHeaderLabels([
-            "T", "r", "p",
-            "ax", "ay", "az",
-            "gx", "gy", "gz",
-            "mx", "my", "mz",
-            "temp"
-        ])
-        self.imu_table.verticalHeader().setVisible(False)
-        self.imu_table.setRowCount(0)
-        self.imu_table.setFixedHeight(200)
-        self.imu_table.setAlternatingRowColors(True)
-
-        self.imu_table.setStyleSheet("""
-            QHeaderView::section {
-                background-color: #2b2b2b;   /* Fondo oscuro */
-                color: white;                /* Texto blanco */
-                padding: 4px;
-                border: 1px solid #444;
-            }
-            QTableWidget {
-                background-color: #3a3a3a;
-                gridline-color: #555;
-                color: white;
-            }
-        """)
-
-        cmd_layout.addWidget(self.btn_imu, 0, 0, 1, 3)
-        cmd_layout.addWidget(self.imu_table, 1, 0, 1, 3) 
-
         self.btn_feedback = QPushButton("Chassis Feedback")
         self.btn_start_feedback = QPushButton("Start Periodic Feedback")
         self.btn_stop_feedback = QPushButton("Stop Periodic Feedback")
@@ -190,12 +155,12 @@ class EB_RobotGUI_bis(QWidget):
         
         self.feedback_output = QTextEdit()
         self.feedback_output.setReadOnly(True)
-        self.feedback_output.setFixedHeight(120)
+        # self.feedback_output.setFixedHeight(120)
 
         cmd_layout.addWidget(self.btn_feedback, 2, 0)
         cmd_layout.addWidget(self.btn_start_feedback, 2, 1)
         cmd_layout.addWidget(self.btn_stop_feedback, 2, 2)
-        cmd_layout.addWidget(self.feedback_output, 3, 0, 1, 3) 
+        cmd_layout.addWidget(self.feedback_output, 3, 0, 2, 3) 
 
         # --- bateria ---
         self.btn_start_battery = QPushButton("Start Battery Monitor")
@@ -205,9 +170,6 @@ class EB_RobotGUI_bis(QWidget):
         self.btn_start_battery.clicked.connect(self.start_battery_monitor)
         self.btn_stop_battery.clicked.connect(self.stop_battery_monitor)
         self.btn_get_battery.clicked.connect(self.get_battery_now)
-        # self.battery_output = QTextEdit()
-        # self.battery_output.setReadOnly(True)
-        # self.battery_output.setFixedHeight(120)
         
         # Gráfico de batería
         import pyqtgraph as pg
@@ -226,13 +188,13 @@ class EB_RobotGUI_bis(QWidget):
         self.battery_progress.setFormat("%p%")  # Mostrar porcentaje
         self.battery_progress.setTextVisible(True)
 
-        cmd_layout.addWidget(self.btn_get_battery, 4, 0)
-        cmd_layout.addWidget(self.btn_start_battery, 4, 1)
-        cmd_layout.addWidget(self.btn_stop_battery, 4, 2)
+        cmd_layout.addWidget(self.btn_get_battery, 5, 0)
+        cmd_layout.addWidget(self.btn_start_battery, 5, 1)
+        cmd_layout.addWidget(self.btn_stop_battery, 5, 2)
         # cmd_layout.addWidget(self.battery_output, 5, 0, 1, 3)
-        cmd_layout.addWidget(self.battery_plot, 5, 0, 1, 3)
-        cmd_layout.addWidget(self.battery_progress, 6, 0, 1, 3)
-
+        cmd_layout.addWidget(self.battery_plot, 6, 0, 2, 3)
+        cmd_layout.addWidget(self.battery_progress, 8, 0, 1, 3)
+        
         tab_cmd.setLayout(cmd_layout)
         tabs.addTab(tab_cmd, "⚙️")
 
@@ -290,32 +252,32 @@ class EB_RobotGUI_bis(QWidget):
         # self.send_position_checkbox.setChecked(True)
         # pos_layout.addWidget(self.send_position_checkbox)
 
-        self.btn_start_imu = QPushButton("▶️ Comenzar a trazar posición")
-        self.btn_start_imu.clicked.connect(self._start_imu)
-        buttons_imu_layout.addWidget(self.btn_start_imu)
-        self.btn_stop_imu = QPushButton("⏹️ Parar trazado de posición")
-        self.btn_stop_imu.clicked.connect(self._stop_imu)
-        buttons_imu_layout.addWidget(self.btn_stop_imu)
-        pos_layout.addLayout(buttons_imu_layout)
+        # self.btn_start_imu = QPushButton("▶️ Comenzar a trazar posición")
+        # self.btn_start_imu.clicked.connect(self._start_imu)
+        # buttons_imu_layout.addWidget(self.btn_start_imu)
+        # self.btn_stop_imu = QPushButton("⏹️ Parar trazado de posición")
+        # self.btn_stop_imu.clicked.connect(self._stop_imu)
+        # buttons_imu_layout.addWidget(self.btn_stop_imu)
+        # pos_layout.addLayout(buttons_imu_layout)
 
 
-        # Botón para resetear posición
-        self.btn_reset_position = QPushButton("🔄 Reset posición")
-        self.btn_reset_position.clicked.connect(self.reset_position)
-        pos_layout.addWidget(self.btn_reset_position)
+        # # Botón para resetear posición
+        # self.btn_reset_position = QPushButton("🔄 Reset posición")
+        # self.btn_reset_position.clicked.connect(self.reset_position)
+        # pos_layout.addWidget(self.btn_reset_position)
 
-        # --- Plot de trayectoria (usando pyqtgraph) ---
-        import pyqtgraph as pg
-        self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setBackground('w')
-        self.plot_widget.setTitle("Trayectoria estimada del robot", color='b', size='12pt')
-        self.plot_widget.setLabel('left', 'Z (m)')
-        self.plot_widget.setLabel('bottom', 'X (m)')
-        self.plot_widget.showGrid(x=True, y=True)
+        # # --- Plot de trayectoria (usando pyqtgraph) ---
+        # import pyqtgraph as pg
+        # self.plot_widget = pg.PlotWidget()
+        # self.plot_widget.setBackground('w')
+        # self.plot_widget.setTitle("Trayectoria estimada del robot", color='b', size='12pt')
+        # self.plot_widget.setLabel('left', 'Z (m)')
+        # self.plot_widget.setLabel('bottom', 'X (m)')
+        # self.plot_widget.showGrid(x=True, y=True)
 
-        self.path_curve = self.plot_widget.plot([], [], pen=pg.mkPen(color='r', width=2))
+        # self.path_curve = self.plot_widget.plot([], [], pen=pg.mkPen(color='r', width=2))
 
-        pos_layout.addWidget(self.plot_widget, stretch=4)  
+        # pos_layout.addWidget(self.plot_widget, stretch=4)  
 
         # Panel tipo cuadrado para estado y ángulos
         self.roll_pitch_panel = QFrame()
@@ -326,10 +288,57 @@ class EB_RobotGUI_bis(QWidget):
             border-radius: 6px;
         """)
 
-        # Layout vertical dentro del panel
+        # Layout interno del panel (IMPORTANTE)
         panel_layout = QVBoxLayout()
-        panel_layout.setContentsMargins(6, 6, 6, 6)
-        panel_layout.setSpacing(4)
+        self.roll_pitch_panel.setLayout(panel_layout)
+
+        # # Layout vertical dentro del panel
+        # panel_layout = QVBoxLayout()
+        # panel_layout.setContentsMargins(6, 6, 6, 6)
+        # panel_layout.setSpacing(4)
+
+        self.btn_start_imu = QPushButton("▶️ Comenzar detección de vuelco continua")
+        self.btn_start_imu.clicked.connect(self._start_imu)
+        buttons_imu_layout.addWidget(self.btn_start_imu)
+        self.btn_stop_imu = QPushButton("▶️ Detener detección de vuelco continua")
+        self.btn_stop_imu.clicked.connect(self._stop_imu)
+        buttons_imu_layout.addWidget(self.btn_stop_imu)
+        pos_layout.addLayout(buttons_imu_layout)
+
+        self.btn_imu = QPushButton("IMU Data")
+        self.btn_imu.clicked.connect(self.get_imu_now)
+        pos_layout.addWidget(self.btn_imu)
+               
+        # Tabla IMU estilo log
+        self.imu_table = QTableWidget()
+        self.imu_table.setColumnCount(13)
+        self.imu_table.setHorizontalHeaderLabels([
+            "T", "r", "p",
+            "ax", "ay", "az",
+            "gx", "gy", "gz",
+            "mx", "my", "mz",
+            "temp"
+        ])
+        self.imu_table.verticalHeader().setVisible(False)
+        self.imu_table.setRowCount(0)
+        self.imu_table.setFixedHeight(200)
+        self.imu_table.setAlternatingRowColors(True)
+
+        self.imu_table.setStyleSheet("""
+            QHeaderView::section {
+                background-color: #2b2b2b;   /* Fondo oscuro */
+                color: white;                /* Texto blanco */
+                padding: 4px;
+                border: 1px solid #444;
+            }
+            QTableWidget {
+                background-color: #3a3a3a;
+                gridline-color: #555;
+                color: white;
+            }
+        """)
+
+        pos_layout.addWidget(self.imu_table) 
 
         # Label para estado del robot
         self.overturn_label = QLabel("Estado del robot: estable")
@@ -351,8 +360,8 @@ class EB_RobotGUI_bis(QWidget):
         """)
 
         # Añadir labels al layout
-        panel_layout.addWidget(self.overturn_label, stretch=1)
-        panel_layout.addWidget(self.roll_pitch_label, stretch=2)
+        panel_layout.addWidget(self.overturn_label)
+        panel_layout.addWidget(self.roll_pitch_label)
 
         self.roll_pitch_panel.setLayout(panel_layout)
 
@@ -363,10 +372,10 @@ class EB_RobotGUI_bis(QWidget):
         tab_position.setLayout(pos_layout)
         tabs.addTab(tab_position, "📍")
 
-        # Timer para actualizar el gráfico cada 100 ms
-        self.plot_timer = QTimer()
-        self.plot_timer.timeout.connect(self.update_position_plot)
-        self.plot_timer.start(100)
+        # # Timer para actualizar el gráfico cada 100 ms
+        # self.plot_timer = QTimer()
+        # self.plot_timer.timeout.connect(self.update_position_plot)
+        # self.plot_timer.start(100)
         
         # ----------------------- TAB 6: Tomar datos de los sensores -----------------------
         tab_sensors = QWidget()
@@ -1255,6 +1264,46 @@ class EB_RobotGUI_bis(QWidget):
                 f"⚠️ ¡Posible vuelco detectado!\n"
                 f"Roll: {roll:.1f}° | Pitch: {pitch:.1f}°"
             )
+           
+            self.overturn_label.setText(
+                f"⚠️ ¡POSIBLE VUELCO!  Roll: {roll:.1f}° | Pitch: {pitch:.1f}°"
+            )
+            self.overturn_label.setStyleSheet("""
+                background-color: #5a0000;
+                color: #ffcccc;
+                padding: 6px;
+                border-radius: 5px;
+                font-size: 14px;
+            """)
+            
+            stable = False
+        else:
+            stable = True
+            self.overturn_label.setText("Estado del robot: estable")
+            self.overturn_label.setStyleSheet("""
+                background-color: #1e3d1e;
+                color: #aaffaa;
+                padding: 6px;
+                border-radius: 5px;
+                font-size: 14px;
+            """)
+
+        # Actualizar roll_pitch_label siempre
+        estado = "Estable ✅" if stable else "Vuelco ⚠️"
+        color = "lightgreen" if stable else "lightcoral"
+
+        self.roll_pitch_label.setText(
+            f"Roll: {roll:.1f}°, Pitch: {pitch:.1f}° - Estado: {estado}"
+        )
+        self.roll_pitch_label.setStyleSheet(f"""
+            background-color: {color};
+            border: 1px solid gray;
+            border-radius: 8px;
+            font-weight: bold;
+            padding: 4px;
+        """)
+        
+        
 
 
 # --------- foto ----------
