@@ -1,17 +1,16 @@
 import json
 from datetime import datetime
-from db_mongo import BaseStationDatabase
 import os
 
 class BaseStationSyncManager:
-    def __init__(self, media_folder="media", db: BaseStationDatabase = None):
+    def __init__(self, media_folder="media", db=None):
         """
         media_folder: carpeta local donde se guardan fotos/videos
         db: instancia de BaseStationDatabase
         """
         self.media_folder = media_folder
         os.makedirs(media_folder, exist_ok=True)
-        self.db = db or BaseStationDatabase()
+        self.db = db
 
     def process_packet(self, packet_json: str):
         """

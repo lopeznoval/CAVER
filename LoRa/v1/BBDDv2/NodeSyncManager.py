@@ -1,7 +1,6 @@
 import json
 from re import S
 import uuid
-from db_SQLite import RobotDatabase
 
 class SyncPacket:
     def __init__(self, entries):
@@ -23,7 +22,7 @@ class SyncPacket:
 
 
 class NodeSyncManager:
-    def __init__(self, db: RobotDatabase, max_bytes=240) -> list[SyncPacket]:
+    def __init__(self, db, max_bytes=240) -> list[SyncPacket]:
         """
         db: instancia de RobotDatabase
         max_bytes: tamaño máximo del paquete en bytes
