@@ -1,5 +1,6 @@
 # LoRaNode organizado
 import io
+import sys
 import json
 import queue
 import time
@@ -122,8 +123,9 @@ class LoRaNode:
             msg_id & 0xFF
         ])
         print(f"Message size: {len(message.encode())} / Total size: {len(header) + len(message.encode())} bytes")
-        if len(header) + len(message.encode()) > 242:
-            raise ValueError("⚠️ Message too long to pack in just a LoRa packet.")
+        # if len(header) + len(message.encode()) > 242:
+        #     print("⚠️ Message too long to pack in just a LoRa packet.")
+        #     return
         return header + message.encode()
     
     def pack_bytes(self, addr_dest:int, msg_type: int, msg_id: int, data: bytes, relay_flag: int = 0, part: int = 0) -> bytes:
@@ -137,7 +139,8 @@ class LoRaNode:
         ])
         print(f"Bytes size: {len(data)} / Total size: {len(header) + len(data)} bytes")
         if len(header) + len(data) > 242:
-            raise ValueError("⚠️ Data too long to pack in just a LoRa packet.")
+            print("⚠️ Data too long to pack in just a LoRa packet.")
+            return
         return header + data
 
     def unpack_message(self, r_buff: bytes) -> tuple:
@@ -171,6 +174,8 @@ class LoRaNode:
 
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
+        if data is None:
+            return
         self.node.send_bytes(data)
         if self.is_base and addr_dest != 0xFFFF:
             self.add_pending(addr_dest, msg_id)
@@ -181,6 +186,8 @@ class LoRaNode:
             data = data[230:]
             part = 1
             packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, chunk, relay_flag, part)
+            if packed_data is None:
+                return
             self.node.send_bytes(packed_data)
             time.sleep(0.5)  # pequeño retardo entre fragmentos
         part = 0
@@ -1170,10 +1177,14 @@ class LoRaNode:
 
     def sync_BBDD_loop(self):
         """Sincroniza datos pendientes con la BBDD local."""
-        packets = self.sync.prepare_packets()
-        for pkt in packets:
-            json_string = pkt.to_json()  # Este string es lo que envías por LoRa
-            self.send_message(0xFFFF, 0, 20, json_string)
+        while self.running:
+            print(f"[{time.strftime('%H:%M:%S')}] Iniiciando sincronización.")
+            packets = self.sync.prepare_packets()
+            for pkt in packets:
+                json_string = pkt.to_json()  # Este string es lo que envías por LoRa
+                print(f"[{time.strftime('%H:%M:%S')}] Enviando: {json_string}")
+                self.send_message(0xFFFF, 0, 20, json_string)
+            time.sleep(12)
 
     def process_packet_base(self, json):
         """Procesa un paquete de BBDD recibido desde un nodo."""
@@ -1202,7 +1213,13 @@ class LoRaNode:
         if not self.is_base:
             # crear_tablas()
             # bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
-            self.db = RobotDatabase("datos/robot_data.db")
+            data_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "datos")
+            os.makedirs(data_dir, exist_ok=True)
+            db_path = os.path.join(data_dir, "robot_data.db")
+            if os.path.exists(db_path):
+                os.remove(db_path)
+            print("Creando BBDD.")
+            self.db = RobotDatabase(db_path)
             self.sync = NodeSyncManager(self.db)
             bbdd_th = threading.Thread(target=self.sync_BBDD_loop, daemon=True).start()
         else:
