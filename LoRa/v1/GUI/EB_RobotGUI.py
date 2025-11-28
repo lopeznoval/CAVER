@@ -1114,8 +1114,8 @@ class EB_RobotGUI_bis(QWidget):
     def _on_sensor_periodic_data(self, temp, hum):
         """Actualiza solo los gráficos en tiempo real."""
         # ts = time.time() - self.start_time
-        temperatura = self.loranode.temp_mes
-        humedad = self.loranode.hum_mes
+        # temperatura = self.loranode.temp_mes
+        # humedad = self.loranode.hum_mes
         
         self._update_sensor_graphs(temp, hum)
         # # Guardar datos
@@ -1134,7 +1134,7 @@ class EB_RobotGUI_bis(QWidget):
         # self.hum_curve.setData(self.time_history, self.hum_history)
         
         # Solo actualizar gráficos
-        self._update_sensor_graphs(temperatura, humedad)
+        # self._update_sensor_graphs(temperatura, humedad)
 
         
 # ---------- bateria ----------

@@ -6,13 +6,13 @@ import requests
 from sqlalchemy.orm import sessionmaker
 from BBDDv1.database_SQLite import get_db_session, LecturaSensor, Video
 
-# --- Configuración de Conexiones ---
-SERIAL_PORT = "/dev/ttyUSB0" 
-BAUD_RATE = 9600
-ACK_TIMEOUT_SEC = 5
+# # --- Configuración de Conexiones ---
+# SERIAL_PORT = "/dev/ttyUSB0" 
+# BAUD_RATE = 9600
+# ACK_TIMEOUT_SEC = 5
 
-# IMPORTANTE: IP de la Estación Base en la red Wi-Fi
-BS_API_URL = "http://192.168.1.100:8000" 
+# # IMPORTANTE: IP de la Estación Base en la red Wi-Fi
+# BS_API_URL = "http://192.168.1.100:8000" 
 
 # --- Lógica de Sincronización LoRa (Solo Sensores) ---
 def sincronizar_sensores_lora(session):
@@ -133,25 +133,25 @@ def sincronizar_videos_wifi(session, base_url):
             break
 
 # --- Ejecución Principal ---
-def bucle_sincro():
-    print("--- Iniciando ciclo de sincronización dual ---")
-    session = get_db_session()
+# def bucle_sincro():
+#     print("--- Iniciando ciclo de sincronización dual ---")
+#     session = get_db_session()
     
-    # 1. Sincronizar Sensores (LoRa)
-    try:
-        with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=ACK_TIMEOUT_SEC) as ser:
-            print(f"(LoRa) Conectado a {SERIAL_PORT}")
-            time.sleep(2)
-            sincronizar_sensores_lora(ser, session)
-    except serial.SerialException as e:
-        print(f"(LoRa) No se pudo conectar al puerto {SERIAL_PORT}. Saltando sincronización de sensores.")
-        print(f"  Error: {e}")
+#     # 1. Sincronizar Sensores (LoRa)
+#     try:
+#         with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=ACK_TIMEOUT_SEC) as ser:
+#             print(f"(LoRa) Conectado a {SERIAL_PORT}")
+#             time.sleep(2)
+#             sincronizar_sensores_lora(ser, session)
+#     except serial.SerialException as e:
+#         print(f"(LoRa) No se pudo conectar al puerto {SERIAL_PORT}. Saltando sincronización de sensores.")
+#         print(f"  Error: {e}")
 
-    # 2. Sincronizar Videos (Wi-Fi)
-    if check_wifi_connection(BS_API_URL):
-        sincronizar_videos_wifi(session, BS_API_URL)
-    else:
-        print("(Wi-Fi) Red no disponible. Saltando sincronización de videos.")
+#     # 2. Sincronizar Videos (Wi-Fi)
+#     if check_wifi_connection(BS_API_URL):
+#         sincronizar_videos_wifi(session, BS_API_URL)
+#     else:
+#         print("(Wi-Fi) Red no disponible. Saltando sincronización de videos.")
 
-    session.close()
-    print("--- Ciclo de sincronización finalizado ---")
+#     session.close()
+#     print("--- Ciclo de sincronización finalizado ---")

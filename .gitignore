@@ -8,6 +8,7 @@ LoRa/v1/__pycache__/*
 LoRa/v1/parameters.py
 LoRa/v1/main_bis.py
 LoRa/v1/main_bis_2.py
+LoRa/v1/datos/*
 
 # (Opcional) Ignorar entornos virtuales
 venv/
