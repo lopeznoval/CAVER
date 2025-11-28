@@ -6,8 +6,8 @@ import time
 from pymongo import MongoClient
 
 # --- Configuración ---
-SERIAL_PORT = "/dev/ttyS0" 
-BAUD_RATE = 9600
+# SERIAL_PORT = "/dev/ttyS0" 
+# BAUD_RATE = 9600
 
 # Conectar a MongoDB (¡Así de simple!)
 # Si la DB o la colección no existen, se crearán al usarlas.
@@ -64,29 +64,29 @@ def procesar_paquete_lora(json_str):      #cambiar para que se reciban todos los
         print(f"Error procesando paquete: {e}")
         return b"NACK\n"
 
-def iniciar_escucha_lora():
-    """Bucle principal que escucha datos del módulo LoRa."""
-    print("Iniciando puente LoRa <-> API...")
-    while True:
-        try:
-            # Conectar al puerto serie
-            with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=None) as ser:
-                print(f"Escuchando en {SERIAL_PORT}...")
-                while True:
-                    linea_bytes = ser.readline()
-                    if not linea_bytes:
-                        continue
+# def iniciar_escucha_lora():
+#     """Bucle principal que escucha datos del módulo LoRa."""
+#     print("Iniciando puente LoRa <-> API...")
+#     while True:
+#         try:
+#             # Conectar al puerto serie
+#             with serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=None) as ser:
+#                 print(f"Escuchando en {SERIAL_PORT}...")
+#                 while True:
+#                     linea_bytes = ser.readline()
+#                     if not linea_bytes:
+#                         continue
                         
-                    linea_str = linea_bytes.decode('utf-8').strip()
+#                     linea_str = linea_bytes.decode('utf-8').strip()
                     
-                    if linea_str:
-                        print(f"Paquete LoRa recibido: {linea_str}")
-                        procesar_paquete_lora(linea_str)
+#                     if linea_str:
+#                         print(f"Paquete LoRa recibido: {linea_str}")
+#                         procesar_paquete_lora(linea_str)
                         
-        except serial.SerialException as e:
-            print(f"Error de conexión en {SERIAL_PORT}: {e}")
-            print("Reintentando en 10 segundos...")
-            time.sleep(10)
-        except KeyboardInterrupt:
-            print("Cerrando puente LoRa.")
-            break
+#         except serial.SerialException as e:
+#             print(f"Error de conexión en {SERIAL_PORT}: {e}")
+#             print("Reintentando en 10 segundos...")
+#             time.sleep(10)
+#         except KeyboardInterrupt:
+#             print("Cerrando puente LoRa.")
+#             break
