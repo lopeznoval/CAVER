@@ -123,9 +123,9 @@ class LoRaNode:
             msg_id & 0xFF
         ])
         print(f"Message size: {len(message.encode())} / Total size: {len(header) + len(message.encode())} bytes")
-        # if len(header) + len(message.encode()) > 242:
-        #     print("⚠️ Message too long to pack in just a LoRa packet.")
-        #     return
+        if len(header) + len(message.encode()) > 242:
+            print("⚠️ Message too long to pack in just a LoRa packet.")
+            return
         return header + message.encode()
     
     def pack_bytes(self, addr_dest:int, msg_type: int, msg_id: int, data: bytes, relay_flag: int = 0, part: int = 0) -> bytes:
@@ -240,7 +240,8 @@ class LoRaNode:
                     #     with get_db_session() as session:
                     #         actualizar_BBDD_robot(message, session)  
                     #     print(f"[{time.strftime('%H:%M:%S')}] BBDD robot actualizada tras ACK")
-                        self.process_packet_base(message)
+                        ack = self.process_packet_base(message)
+                        self.send_message(addr_sender, 0, 21, ack)
                     if msg_id == 21: 
                         self.ack_BBDD_packet(message)
                     
@@ -1191,11 +1192,65 @@ class LoRaNode:
     def process_packet_base(self, json):
         """Procesa un paquete de BBDD recibido desde un nodo."""
         print(json)
-        self.sync_base.process_packet(json)
+        return self.sync_base.process_packet(json)
 
     def ack_BBDD_packet(self, json):
         """Marca un paquete de BBDD como recibido."""
         self.sync.handle_ack(json)
+
+    # -------------------- WiFi --------------------
+    def listen_robot(self, host="0.0.0.0", port=6000, save_path="./"):
+        """
+        Hilo que escucha comandos enviados por el robot.
+        Maneja fotos y vídeos enviados por TCP.
+        """
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((host, port))
+        s.listen(5)
+        print(f"Estación base escuchando en {host}:{port}...")
+
+        while self.running:
+            conn, addr = s.accept()
+            print(f"Conexión desde {addr}")
+            try:
+                # Primero leemos el header: tipo de dato (PHOTO / VIDEO)
+                header = conn.recv(10).decode().strip()  # suponiendo header <=10 chars
+                print(f"📩 Tipo de dato recibido: {header}")
+
+                # Luego leemos el tamaño (4 bytes)
+                size_bytes = conn.recv(4)
+                size = int.from_bytes(size_bytes, byteorder="big")
+                print(f"📦 Tamaño de datos: {size} bytes")
+
+                # Recibimos los datos completos
+                data = b""
+                while len(data) < size:
+                    packet = conn.recv(4096)
+                    if not packet:
+                        break
+                    data += packet
+
+                # Guardamos según tipo
+                if header == "PHOTO":
+                    filename = save_path + "foto_recibida.jpg"
+                    with open(filename, "wb") as f:
+                        f.write(data)
+                    print(f"📸 Foto guardada en {filename}")
+
+                elif header == "VIDEO":
+                    filename = save_path + "video_recibido.h264"
+                    with open(filename, "wb") as f:
+                        f.write(data)
+                    print(f"🎥 Vídeo guardado en {filename}")
+
+                else:
+                    print("⚠️ Tipo de dato desconocido")
+
+            except Exception as e:
+                print(f"❌ Error recibiendo datos: {e}")
+            finally:
+                conn.close()
+        s.close()
 
     # -------------------- EJECUCIÓN --------------------
     def run(self):
@@ -1220,14 +1275,20 @@ class LoRaNode:
             db_path = os.path.join(data_dir, "robot_data.db")
             if os.path.exists(db_path):
                 os.remove(db_path)
-            print("Creando BBDD.")
+            print("Creando BBDD SQLite.")
             self.db = RobotDatabase(db_path)
             self.sync = NodeSyncManager(self.db)
             bbdd_th = threading.Thread(target=self.sync_BBDD_loop, daemon=True).start()
         else:
             # connect_mongo()
+            print("Conectando a MongoDB.")
             self.db_base = BaseStationDatabase()
             self.sync_base = BaseStationSyncManager()
+        # -------------------- MuMULTIMEDIA --------------------
+        if self.is_base:
+            wifi_th = threading.Thread(target=self.listen_robot, daemon=True).start()
+        else:
+            self.lora_cam = LoRaCamSender()
         # -------------------- INFO PERIODICA --------------------
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()

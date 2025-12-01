@@ -1,8 +1,6 @@
 import io
 import time
 import platform
-
-
 import io
 import time
 import platform
@@ -82,6 +80,32 @@ class LoRaCamSender:
             print("⚠️ Simulación vídeo.")
             return b'\x00\x00\x00\x18ftyp' + b'B' * 4092
 
+    def send_photo_file_wifi(self, host: str, port: int):
+        """
+        Captura una foto comprimida y la envía por TCP (fiable).
+        Devuelve True si se envió con éxito.
+        """
+        print("📸 Capturando foto comprimida antes del envío...")
+
+        photo_bytes = self.capture_recording_optimized()
+
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect((host, port))
+            print(f"📡 Enviando {len(photo_bytes)} bytes de foto a {host}:{port}...")
+
+            s.send(b"PHOTO     ")  # 10 bytes
+            s.send(len(photo_bytes).to_bytes(4, byteorder='big'))
+            s.sendall(photo_bytes)
+            s.close()
+
+            print("✅ Foto enviada por TCP con éxito.")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error enviando la foto: {e}")
+            return False
+
     def send_video_file_wifi(self, host: str, port: int):
         """
         Captura un vídeo de 3s comprimido y lo envía por TCP (fiable).
@@ -96,10 +120,8 @@ class LoRaCamSender:
             s.connect((host, port))
             print(f"📡 Enviando {len(video_bytes)} bytes de vídeo a {host}:{port}...")
 
-            # Primero enviamos el tamaño del video (4 bytes)
+            s.send(b"VIDEO     ")  # 10 bytes
             s.send(len(video_bytes).to_bytes(4, byteorder='big'))
-
-            # Enviamos el vídeo
             s.sendall(video_bytes)
             s.close()
 
