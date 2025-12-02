@@ -420,12 +420,12 @@ class LoRaNode:
                         else: 
                             self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando detección de colisiones desconocido: {message}") 
 
-                        if self.robot.is_open and self.robot:
-                            resp = self.send_to_robot(message)
-                            self.send_message(addr_sender, 3, msg_id, resp)
-                        else:
-                            self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
-                        
+                    if self.robot.is_open and self.robot:
+                        resp = self.send_to_robot(message)
+                        self.send_message(addr_sender, 3, msg_id, resp)
+                    else:
+                        self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
+                    
 
                 elif 19 < msg_type < 25:  # Comando para los sensores y BBDD
                     if msg_type == 21:  # Lectura temperatura y humedad
@@ -475,6 +475,41 @@ class LoRaNode:
                         #     print(f"[{time.strftime('%H:%M:%S')}] Grabación detenida: {filename}")
                         # else: 
                         #     self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
+
+                    elif msg_type == 27:
+                        try:
+                            host_eb, port_eb = message.split(":")
+                            img_bytes, path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
+
+                            if self.lora_cam_sender.send_photo_file_wifi(host_eb, port_eb, img_bytes):
+                                self.db.insert_media(path=path, es_video=False, sinc=True)
+                                print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
+                                print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
+                            else:
+                                self.db.insert_media(path=path, es_video=False)
+                                print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite.")
+                        except Exception as e:
+                            print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
+
+
+                    elif msg_type == 28: 
+                        try:
+                            data = json.loads(message)
+                            host_eb = data.get("host", "192.168.1.1")
+                            port_eb = data.get("port", 6000)
+                            duration = data.get("duracion", 3)
+
+                            img_bytes, path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration)
+
+                            if self.lora_cam_sender.send_video_file_wifi(host_eb, port_eb, img_bytes):
+                                self.db.insert_media(path=path, es_video=False, sinc=True)
+                                print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
+                                print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
+                            else:
+                                self.db.insert_media(path=path, es_video=False)
+                                print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite.")
+                        except Exception as e:
+                            print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
 
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
@@ -922,7 +957,7 @@ class LoRaNode:
 
 
 
-    # # -------------------- VÍDEO --------------------
+    # # -------------------- WIFI --------------------
     # def take_picture(self):
     #     if self.camera is not None:
     #         self.stream.seek(0)
@@ -1094,7 +1129,7 @@ class LoRaNode:
                     # with get_db_session() as session:
                     #     registrar_lectura(self.temp, self.hum, session)
 
-                    self.db.insert_sensor(temp=self.temp, hum=self.hum)
+                    self.db.insert_sensor(id=self.addr, temp=self.temp, hum=self.hum)
 
             except Exception as e:
                 print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Error leyendo ESP32: {e}")
@@ -1283,12 +1318,10 @@ class LoRaNode:
             # connect_mongo()
             print("Conectando a MongoDB.")
             self.db_base = BaseStationDatabase()
-            self.sync_base = BaseStationSyncManager()
+            self.sync_base = BaseStationSyncManager(db=self.db_base)
         # -------------------- MuMULTIMEDIA --------------------
         if self.is_base:
             wifi_th = threading.Thread(target=self.listen_robot, daemon=True).start()
-        else:
-            self.lora_cam = LoRaCamSender()
         # -------------------- INFO PERIODICA --------------------
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()

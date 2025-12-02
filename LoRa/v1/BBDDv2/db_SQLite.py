@@ -90,10 +90,10 @@ class RobotDatabase:
         s.close()
         return mov.id
 
-    def insert_media(self, path, es_video=False, generar_checksum=True, timestamp=None) -> int:
+    def insert_media(self, path, es_video=False, generar_checksum=True, sinc=False, timestamp=None) -> int:
         """Inserta un registro de media y devuelve su ID"""
         s = self.new_session()
-        media = Media(path=path, es_video=es_video, timestamp=timestamp or datetime.now())
+        media = Media(path=path, es_video=es_video, sinc=sinc, timestamp=timestamp or datetime.now())
         if generar_checksum:
             media.generar_checksum()
         s.add(media)

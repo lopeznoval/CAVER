@@ -57,12 +57,15 @@ class sx126x:
         Recibe bytes desde el puerto serie hasta encontrar END_CHAR.
         Devuelve None si no hay datos.
         """
-        if self.ser.in_waiting > 0:
-            time.sleep(0.5)  # Wait for complete message
-            r_buff = self.ser.read(self.ser.in_waiting)
+        try:
+            if self.ser.in_waiting > 0:
+                time.sleep(0.5)  # Wait for complete message
+                r_buff = self.ser.read(self.ser.in_waiting)
 
-            return r_buff
-
+                return r_buff
+        except Exception as e:
+            print(f"Error receiving bytes: {e}")
+            return None
 
     def close(self):
         self.ser.close()
