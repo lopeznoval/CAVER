@@ -548,15 +548,15 @@ class EB_RobotGUI_bis(QWidget):
         tab_radar_layout.addWidget(collision_group)
 
         # Botones de control (opcional, si quieres activar/desactivar detección)
-        btn_collision_layout = QHBoxLayout()
-        self.btn_start_collision = QPushButton("▶️ Activar Detección")
-        self.btn_stop_collision = QPushButton("⏹️ Detener Detección")
-        btn_collision_layout.addWidget(self.btn_start_collision)
-        btn_collision_layout.addWidget(self.btn_stop_collision)
-        collision_layout.addLayout(btn_collision_layout)
+        # btn_collision_layout = QHBoxLayout()
+        # self.btn_start_collision = QPushButton("▶️ Activar Detección")
+        # self.btn_stop_collision = QPushButton("⏹️ Detener Detección")
+        # btn_collision_layout.addWidget(self.btn_start_collision)
+        # btn_collision_layout.addWidget(self.btn_stop_collision)
+        # collision_layout.addLayout(btn_collision_layout)
 
-        self.btn_start_collision.clicked.connect(self.start_collision_detection)
-        self.btn_stop_collision.clicked.connect(self.stop_collision_detection)
+        # self.btn_start_collision.clicked.connect(self.start_collision_detection)
+        # self.btn_stop_collision.clicked.connect(self.stop_collision_detection)
 
         # Añadir la TAB 8 al conjunto de tabs
         tabs.addTab(tab_radar, "Radar")
