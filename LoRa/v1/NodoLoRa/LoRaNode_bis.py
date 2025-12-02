@@ -1125,7 +1125,7 @@ class LoRaNode:
                     # with get_db_session() as session:
                     #     registrar_lectura(self.temp, self.hum, session)
 
-                    self.db.insert_sensor(id=self.addr, temp=self.temp, hum=self.hum)
+                    self.db.insert_sensor(temp=self.temp, hum=self.hum)
 
             except Exception as e:
                 print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Error leyendo ESP32: {e}")
