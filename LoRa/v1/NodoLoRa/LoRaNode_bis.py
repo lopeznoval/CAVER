@@ -377,12 +377,15 @@ class LoRaNode:
                     elif msg_type == 14:
                         if "1" in message:
                             self.auto_move_running = True
+                            self.detect_collisions_running = True
+                            self.colision_dest = addr_sender
                             if not getattr(self, "mov_aut_thread", None) or not self.mov_aut_thread.is_alive():
                                 self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                                 self.mov_aut_thread.start()
                         elif "0" in message:
                             print(f"[{time.strftime('%H:%M:%S')}] Movimiento autónomo loop detenido por EB.")
                             self.auto_move_running = False
+                            self.detect_collisions_running = False
                         else: 
                             print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando movimiento autónomo desconocido: {message}") 
 
@@ -660,7 +663,7 @@ class LoRaNode:
         last_state = 0                      # último estado recibido del radar
         self.robot.reset_input_buffer()
 
-        while self.auto_move_running or self.detect_collisions_running:
+        while self.auto_move_running: #or self.detect_collisions_running:
 
             # --- 1. Vaciar el buffer UDP ---
             mensaje = None
@@ -682,9 +685,8 @@ class LoRaNode:
             if self.auto_move_running:
                 print("🔄 Autonomía iniciada...")
                 if last_state == 1:
-                    if self.detect_collisions_running:
-                        self.send_message(self.colision_dest, 0, 50, "1")
-                                            
+                    self.send_message(self.colision_dest, 0, 50, "1")
+                                                                
                     # Parar
                     cmd = {"T": 1, "L": 0, "R": 0}
                     print("[{time.strftime('%H:%M:%S')}] ⚠️ Colisión detectada → PARAR")
@@ -707,13 +709,7 @@ class LoRaNode:
                     last_cmd = cmd
 
                 time.sleep(0.15)  # control loop
-            
-            elif self.detect_collisions_running:
-                # print("🔄 Detección de colisiones iniciada...")
-                if last_state == 1:
-                    self.send_message(self.colision_dest, 0, 50, "1")
-                time.sleep(0.15) 
-                    
+                                
 
         radar_sock.close()
         print(f"[{time.strftime('%H:%M:%S')}]🛑 Autonomía detenida.")
