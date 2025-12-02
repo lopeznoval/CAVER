@@ -381,10 +381,10 @@ class LoRaNode:
                                 self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                                 self.mov_aut_thread.start()
                         elif "0" in message:
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Movimiento autónomo loop detenido por EB.")
+                            print(f"[{time.strftime('%H:%M:%S')}] Movimiento autónomo loop detenido por EB.")
                             self.auto_move_running = False
                         else: 
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando movimiento autónomo desconocido: {message}") 
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando movimiento autónomo desconocido: {message}") 
 
                     elif msg_type == 15:
                         if "0" in message:
@@ -415,16 +415,16 @@ class LoRaNode:
                                 self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                                 self.mov_aut_thread.start()
                         elif "0" in message:
-                            self.on_alert("Detacción de colisiones detenida por EB.")
+                            print("Detacción de colisiones detenida por EB.")
                             self.detect_collisions_running = False
                         else: 
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando detección de colisiones desconocido: {message}") 
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando detección de colisiones desconocido: {message}") 
 
-                        if self.robot.is_open and self.robot:
-                            resp = self.send_to_robot(message)
-                            self.send_message(addr_sender, 3, msg_id, resp)
-                        else:
-                            self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
+                    if self.robot.is_open and self.robot:
+                        resp = self.send_to_robot(message)
+                        self.send_message(addr_sender, 3, msg_id, resp)
+                    else:
+                        self.send_message(addr_sender, 3, msg_id, "Error: CAVER is not defined in this node.")
                         
 
                 elif 19 < msg_type < 25:  # Comando para los sensores y BBDD
@@ -1094,7 +1094,7 @@ class LoRaNode:
                     # with get_db_session() as session:
                     #     registrar_lectura(self.temp, self.hum, session)
 
-                    self.db.insert_sensor(temp=self.temp, hum=self.hum)
+                    # self.db.insert_sensor(temp=self.temp, hum=self.hum)
 
             except Exception as e:
                 print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Error leyendo ESP32: {e}")
