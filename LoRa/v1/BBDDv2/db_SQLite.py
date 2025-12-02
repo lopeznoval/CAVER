@@ -61,7 +61,7 @@ class RobotDatabase:
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
         self.engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
         Base.metadata.create_all(self.engine)
-        self.Session = sessionmaker(bind=self.engine)
+        self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
 
     # ---------------------------
     # SESIÓN

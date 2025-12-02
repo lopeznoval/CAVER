@@ -1125,7 +1125,7 @@ class LoRaNode:
                     # with get_db_session() as session:
                     #     registrar_lectura(self.temp, self.hum, session)
 
-                    # self.db.insert_sensor(temp=self.temp, hum=self.hum)
+                    self.db.insert_sensor(temp=self.temp, hum=self.hum)
 
             except Exception as e:
                 print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Error leyendo ESP32: {e}")
@@ -1218,7 +1218,8 @@ class LoRaNode:
                 json_string = pkt.to_json()  # Este string es lo que envías por LoRa
                 print(f"[{time.strftime('%H:%M:%S')}] Enviando: {json_string}")
                 self.send_message(0xFFFF, 0, 20, json_string)
-            time.sleep(12)
+                time.sleep(0.7)
+            time.sleep(10)
 
     def process_packet_base(self, json):
         """Procesa un paquete de BBDD recibido desde un nodo."""
