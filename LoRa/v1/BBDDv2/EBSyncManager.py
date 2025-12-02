@@ -12,7 +12,7 @@ class BaseStationSyncManager:
         os.makedirs(media_folder, exist_ok=True)
         self.db = db
 
-    def process_packet(self, packet_json: str):
+    def process_packet(self, packet_json: str, r_id: int) -> dict:
         """
         Procesa un paquete JSON recibido desde un robot.
         packet_json: string JSON con formato:

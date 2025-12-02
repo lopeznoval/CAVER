@@ -22,13 +22,14 @@ class SyncPacket:
 
 
 class NodeSyncManager:
-    def __init__(self, db, max_bytes=240) -> list[SyncPacket]:
+    def __init__(self, db, max_bytes=240, r_id=0) -> list[SyncPacket]:
         """
         db: instancia de RobotDatabase
         max_bytes: tamaño máximo del paquete en bytes
         """
         self.db = db
         self.max_bytes = max_bytes
+        self.robot_id = r_id
 
     # ---------------------------
     # Preparar paquetes JSON
@@ -43,6 +44,7 @@ class NodeSyncManager:
         current_entries = []
 
         for entry in unsynced:
+            entry["data"]["robot_id"] = self.robot_id
             current_entries.append(entry)
             packet_size = len(json.dumps(current_entries).encode('utf-8'))
             if packet_size > self.max_bytes:
