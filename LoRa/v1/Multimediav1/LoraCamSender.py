@@ -14,6 +14,7 @@ class LoRaCamSender:
     if platform.system() == "Linux":
         from picamera2 import Picamera2, Preview  # type: ignore
         from picamera2.encoders import H264Encoder # type: ignore
+        from picamera2.outputs import FileOutput # type: ignore
 
         def __init__(self, camera: Picamera2 = None):
             self.camera = camera
@@ -68,32 +69,29 @@ class LoRaCamSender:
     def video_recording_optimized(self, video_dir, duration=3):
         if self.camera is not None:
             # Reset stream
-            self.stream.seek(0)
-            self.stream.truncate()
 
             filename = f"video_{int(time.time())}.mp4"
             full_path = os.path.join(video_dir, filename)
             h264_path = full_path.replace(".mp4", ".h264")
 
-            # Configurar la cámara para vídeo
             self.camera.configure(self.camera.create_video_configuration(
                 main={"size": (320, 240)}
             ))
-            self.camera.start_recording("h264", h264_path)
+
+            from picamera2.encoders import H264Encoder # type: ignore
+            from picamera2.outputs import FileOutput, FfmpegOutput # type: ignore
+
+            encoder = H264Encoder()
+            output = FfmpegOutput(full_path)
+
+            self.camera.start_recording(
+                encoder=encoder,
+                output=output
+            )
             time.sleep(duration)
             self.camera.stop_recording()
-            subprocess.run([
-                "ffmpeg", "-y", "-i", h264_path, "-c", "copy", full_path
-            ])
+
             print(f"🎥 Vídeo grabado durante {duration} segundos.")
-
-            # Obtener bytes del vídeo
-            # video_bytes = self.stream.getvalue()
-
-            # with open(full_path, "wb") as f:
-            #     f.write(video_bytes)
-            # self.stream.seek(0)
-            # self.stream.truncate()
             print(f"💾 Vídeo guardado en: {full_path}")
 
             return full_path
@@ -144,7 +142,7 @@ class LoRaCamSender:
         Devuelve True si se envió con éxito.
         """
         print("🎥 Grabando vídeo comprimido antes del envío...")
-
+        print(type(port))
         if not os.path.exists(video_path):
             video_path = self.video_recording_optimized()
 
