@@ -471,7 +471,7 @@ class LoRaNode:
                         # else: 
                         #     self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
 
-                    if msg_type == 26: # Tomar foto y enviar vía WiFi
+                    if msg_type == 25: # Tomar foto y enviar vía WiFi
                         try:
                             host_eb, port_eb = message.split(":")
                             img_bytes, path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
@@ -487,7 +487,7 @@ class LoRaNode:
                             print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
 
 
-                    elif msg_type == 27: # Grabar video y enviar vía WiFi 
+                    elif msg_type == 26: # Grabar video y enviar vía WiFi 
                         try:
                             data = json.loads(message)
                             duration = data.get("duration", 3)
