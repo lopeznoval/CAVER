@@ -1243,9 +1243,11 @@ class LoRaNode:
                 # Primero leemos el header: tipo de dato (PHOTO / VIDEO)
                 header = conn.recv(10).decode().strip()  # suponiendo header <=10 chars
                 print(f"📩 Tipo de dato recibido: {header}")
-
+                #Leemos el nombre
+                name_len = int.from_bytes(conn.recv(2), 'big')
+                filename = conn.recv(name_len).decode("utf-8")
                 # Luego leemos el tamaño (4 bytes)
-                size_bytes = conn.recv(4)
+                size_bytes = conn.recv(8)
                 size = int.from_bytes(size_bytes, byteorder="big")
                 print(f"📦 Tamaño de datos: {size} bytes")
 
@@ -1259,16 +1261,16 @@ class LoRaNode:
 
                 # Guardamos según tipo
                 if header == "PHOTO":
-                    filename = save_path + "foto_recibida.jpg"
-                    with open(filename, "wb") as f:
+                    filename_ = save_path + filename
+                    with open(filename_, "wb") as f:
                         f.write(data)
-                    print(f"📸 Foto guardada en {filename}")
+                    print(f"📸 Foto guardada en {filename_}")
 
                 elif header == "VIDEO":
-                    filename = save_path + "video_recibido.h264"
-                    with open(filename, "wb") as f:
+                    filename_ = save_path + filename
+                    with open(filename_, "wb") as f:
                         f.write(data)
-                    print(f"🎥 Vídeo guardado en {filename}")
+                    print(f"🎥 Vídeo guardado en {filename_}")
 
                 else:
                     print("⚠️ Tipo de dato desconocido")

@@ -109,64 +109,73 @@ class LoRaCamSender:
 
 
     def send_photo_file_wifi(self, host: str, port: int, photo_path: str):
-        """
-        Captura una foto comprimida y la envía por TCP (fiable).
-        Devuelve True si se envió con éxito.
-        """
         print("📸 Capturando foto comprimida antes del envío...")
 
         if not os.path.exists(photo_path):
             photo_path = self.capture_recording_optimized()
 
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((host, port))
-            print(f"📡 Enviando {os.path.getsize(photo_path)} bytes de foto a {host}:{port}...")
-            with open(photo_path, "rb") as f:
-                photo_bytes = f.read()
-                s.send(b"PHOTO     ")  # 10 bytes
-                s.send(len(photo_bytes).to_bytes(4, byteorder='big'))
-                s.sendall(photo_bytes)
-                s.close()
+            filename = os.path.basename(photo_path)
+            name_bytes = filename.encode("utf-8")
 
-            print("✅ Foto enviada por TCP con éxito.")
-            return True
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((host, port))
+                file_size = os.path.getsize(photo_path)
+
+                print(f"📡 Enviando foto {filename} ({file_size} bytes) a {host}:{port}...")
+
+                # --- PROTOCOLO ---
+                s.send(b"PHOTO     ")  # 10 bytes
+                s.send(len(name_bytes).to_bytes(2, 'big'))  # longitud nombre
+                s.send(name_bytes)                          # nombre
+                s.send(file_size.to_bytes(8, 'big'))        # tamaño
+
+                # contenido
+                with open(photo_path, "rb") as f:
+                    s.sendall(f.read())
+
+                print("✅ Foto enviada por TCP con éxito.")
+                return True
 
         except Exception as e:
             print(f"❌ Error enviando la foto: {e}")
             return False
 
+
     def send_video_file_wifi(self, host: str, port: int, video_path: str):
-        """
-        Captura un vídeo de 3s comprimido y lo envía por TCP (fiable).
-        Devuelve True si se envió con éxito.
-        """
         print("🎥 Grabando vídeo comprimido antes del envío...")
-        print(type(port))
+
         if not os.path.exists(video_path):
             video_path = self.video_recording_optimized()
 
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((host, port))
-            video_bytes = os.path.getsize(video_path)
-            print(f"📡 Enviando {video_bytes} bytes de vídeo a {host}:{port}...")
-            s.send(b"VIDEO     ")  # 10 bytes
-            s.send(video_bytes.to_bytes(8, byteorder='big'))
-            with open(video_path, "rb") as f:
-                while True:
-                    chunk = f.read(4096)
-                    if not chunk:
-                        break
-                    s.sendall(chunk)
-            s.close()
+            filename = os.path.basename(video_path)
+            name_bytes = filename.encode("utf-8")
+            file_size = os.path.getsize(video_path)
 
-            print("✅ Vídeo enviado por TCP con éxito.")
-            return True
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((host, port))
+
+                print(f"📡 Enviando vídeo {filename} ({file_size} bytes) a {host}:{port}...")
+
+                # --- PROTOCOLO ---
+                s.send(b"VIDEO     ")                      # 10 bytes
+                s.send(len(name_bytes).to_bytes(2, 'big'))  # longitud nombre
+                s.send(name_bytes)                          # nombre archivo
+                s.send(file_size.to_bytes(8, 'big'))        # tamaño
+
+                # enviar contenido en chunks
+                with open(video_path, "rb") as f:
+                    while (chunk := f.read(4096)):
+                        s.sendall(chunk)
+
+                print("✅ Vídeo enviado por TCP con éxito.")
+                return True
 
         except Exception as e:
             print(f"❌ Error enviando el vídeo: {e}")
             return False
+
 
     def start_h264_streaming(self, host: str, port: int):
         """
