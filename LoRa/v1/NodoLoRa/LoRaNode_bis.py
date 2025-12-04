@@ -502,7 +502,7 @@ class LoRaNode:
                                 self.db.insert_media(path=path, es_video=False)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite.")
                         except Exception as e:
-                            print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
+                            print(f"[{time.strftime('%H:%M:%S')}] Error enviando video vía WiFi: {e}")
 
                     elif msg_type == 28:  # host:port para enviar foto vía WiFi
                         self.host_eb, self.port_eb = message.split(":")

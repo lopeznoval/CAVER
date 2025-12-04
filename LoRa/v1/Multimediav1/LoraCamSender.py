@@ -8,6 +8,7 @@ import platform
 import socket
 import cv2
 import numpy as np
+import subprocess
 
 class LoRaCamSender:
     if platform.system() == "Linux":
@@ -72,16 +73,18 @@ class LoRaCamSender:
 
             filename = f"video_{int(time.time())}.mp4"
             full_path = os.path.join(video_dir, filename)
+            h264_path = full_path.replace(".mp4", ".h264")
 
             # Configurar la cámara para vídeo
             self.camera.configure(self.camera.create_video_configuration(
                 main={"size": (320, 240)}
             ))
-            self.camera.start_recording()
-
-            self.camera.start_recording()
+            self.camera.start_recording("h264", h264_path)
             time.sleep(duration)
             self.camera.stop_recording()
+            subprocess.run([
+                "ffmpeg", "-y", "-i", h264_path, "-c", "copy", full_path
+            ])
             print(f"🎥 Vídeo grabado durante {duration} segundos.")
 
             # Obtener bytes del vídeo
@@ -135,7 +138,7 @@ class LoRaCamSender:
             print(f"❌ Error enviando la foto: {e}")
             return False
 
-    def send_video_file_wifi(self, host: str, port: int, video_path):
+    def send_video_file_wifi(self, host: str, port: int, video_path: str):
         """
         Captura un vídeo de 3s comprimido y lo envía por TCP (fiable).
         Devuelve True si se envió con éxito.
