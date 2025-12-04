@@ -1231,6 +1231,9 @@ class LoRaNode:
         Hilo que escucha comandos enviados por el robot.
         Maneja fotos y vídeos enviados por TCP.
         """
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+            
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((host, port))
         s.listen(5)
