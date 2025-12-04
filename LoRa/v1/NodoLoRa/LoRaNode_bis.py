@@ -1226,7 +1226,7 @@ class LoRaNode:
         self.sync.handle_ack(json)
 
     # -------------------- WiFi --------------------
-    def listen_robot(self, host="0.0.0.0", port=6000, save_path="./multi/"):
+    def listen_robot(self, host="0.0.0.0", port=6000, save_path=os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/")):
         """
         Hilo que escucha comandos enviados por el robot.
         Maneja fotos y vídeos enviados por TCP.
