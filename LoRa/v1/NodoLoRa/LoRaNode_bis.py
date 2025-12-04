@@ -473,7 +473,6 @@ class LoRaNode:
 
                     if msg_type == 25: # Tomar foto y enviar vía WiFi
                         try:
-                            host_eb, port_eb = message.split(":")
                             path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
 
                             if self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path):
