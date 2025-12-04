@@ -476,7 +476,7 @@ class LoRaNode:
                             host_eb, port_eb = message.split(":")
                             path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
 
-                            if self.lora_cam_sender.send_photo_file_wifi(host_eb, port_eb, path):
+                            if self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path):
                                 self.db.insert_media(path=path, es_video=False, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
@@ -495,7 +495,7 @@ class LoRaNode:
 
                             path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration)
 
-                            if self.lora_cam_sender.send_video_file_wifi(host_eb, port_eb, path):
+                            if self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path):
                                 self.db.insert_media(path=path, es_video=True, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Video enviado vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Video guardado en SQLite y sincronizada.")
