@@ -17,6 +17,7 @@ class LoRaCamSender:
         def __init__(self, camera: Picamera2 = None):
             self.camera = camera
             self.stream = io.BytesIO()
+            print("📷 Cámara inicializada.")
 
             if self.camera is None:
                 print("⚠️ No hay cámara disponible. Modo simulación activado.")
@@ -45,15 +46,16 @@ class LoRaCamSender:
 
             img_bytes = self.stream.getvalue()
             self.camera.stop()
+            print(f"📷 Foto capturada, tamaño: {len(img_bytes)} bytes")
 
             filename = f"img_{int(time.time())}.jpg"
             full_path = os.path.join(photo_dir, filename)
             with open(full_path, "wb") as f:
                 f.write(img_bytes)
-
             # reset stream
             self.stream.seek(0)
             self.stream.truncate()
+            print(f"💾 Foto guardada en: {full_path}")
 
             # Devuelves los bytes y también la ruta
             return full_path
@@ -78,6 +80,8 @@ class LoRaCamSender:
             self.camera.start_recording(self.stream, format='h264')
             time.sleep(duration)
             self.camera.stop_recording()
+            self.camera.stop()
+            print(f"🎥 Vídeo grabado durante {duration} segundos.")
 
             # Obtener bytes del vídeo
             video_bytes = self.stream.getvalue()
@@ -89,6 +93,7 @@ class LoRaCamSender:
                 f.write(video_bytes)
             self.stream.seek(0)
             self.stream.truncate()
+            print(f"💾 Vídeo guardado en: {full_path}")
 
             return full_path
 

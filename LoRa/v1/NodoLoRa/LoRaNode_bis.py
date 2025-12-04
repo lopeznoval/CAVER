@@ -231,16 +231,8 @@ class LoRaNode:
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
                 if msg_type == 0:
                     if msg_id == 20: # hacer lo que sea en la EB
-                    #     try:
-                    #         resp = procesar_paquete_lora(message)
-                    #         self.send_message(addr_sender, 0, 21, resp)
-                    #     except Exception as e:
-                    #         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando sensores LoRa: {e}")
-                    # if msg_id == 21: 
-                    #     with get_db_session() as session:
-                    #         actualizar_BBDD_robot(message, session)  
-                    #     print(f"[{time.strftime('%H:%M:%S')}] BBDD robot actualizada tras ACK")
                         ack = self.process_packet_base(message)
+                        print(f"[{time.strftime('%H:%M:%S')}] Procesado paquete BBDD, enviando ACK: {ack}")
                         self.send_message(addr_sender, 0, 21, ack)
                     if msg_id == 21: 
                         self.ack_BBDD_packet(message)
@@ -479,7 +471,7 @@ class LoRaNode:
                         # else: 
                         #     self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
 
-                    if msg_type == 27: # Tomar foto y enviar vía WiFi
+                    if msg_type == 26: # Tomar foto y enviar vía WiFi
                         try:
                             host_eb, port_eb = message.split(":")
                             img_bytes, path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
@@ -495,7 +487,7 @@ class LoRaNode:
                             print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
 
 
-                    elif msg_type == 26: # Grabar video y enviar vía WiFi 
+                    elif msg_type == 27: # Grabar video y enviar vía WiFi 
                         try:
                             data = json.loads(message)
                             duration = data.get("duration", 3)
