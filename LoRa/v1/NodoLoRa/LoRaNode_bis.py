@@ -507,6 +507,7 @@ class LoRaNode:
 
                     elif msg_type == 28:  # host:port para enviar foto vía WiFi
                         self.host_eb, self.port_eb = message.split(":")
+                        self.port_eb = int(self.port_eb)
                         print(f"[{time.strftime('%H:%M:%S')}] Host EB para multimedia vía WiFi: {self.host_eb}:{self.port_eb}")
 
                 elif msg_type == 31:
