@@ -14,10 +14,11 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray
-from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage, QPixmap
+from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage, QPixmap, QIntValidator
 
 from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
 from NodoLoRa.LoRaNode_bis import LoRaNode
+from GUI.mediadialog import MediaDialog
 
 from io import BytesIO
 from PIL import Image
@@ -198,9 +199,29 @@ class EB_RobotGUI_bis(QWidget):
         tab_cmd.setLayout(cmd_layout)
         tabs.addTab(tab_cmd, "⚙️")
 
-        # ----------------------- TAB 4: Cámara -----------------------
+# ----------------------- TAB 4: Cámara -----------------------
         tab_video = QWidget()
         vlay = QVBoxLayout()
+
+        # --- Fila superior: IP, Puerto y Enviar ---
+        h_ip_port = QHBoxLayout()
+
+        self.input_ip = QLineEdit()
+        self.input_ip.setPlaceholderText("Dirección IP")
+        self.input_ip.setFixedWidth(150)
+        h_ip_port.addWidget(self.input_ip)
+
+        self.input_port = QLineEdit()
+        self.input_port.setPlaceholderText("Puerto")
+        self.input_port.setFixedWidth(100)
+        self.input_port.setValidator(QIntValidator())  # Solo números
+        h_ip_port.addWidget(self.input_port)
+
+        btn_send_ip_port = QPushButton("Enviar")
+        btn_send_ip_port.clicked.connect(self.send_ip_port)
+        h_ip_port.addWidget(btn_send_ip_port)
+
+        vlay.addLayout(h_ip_port)
 
         # --- Botones de control ---
         hbtn = QHBoxLayout()
@@ -221,7 +242,6 @@ class EB_RobotGUI_bis(QWidget):
         self.photo_label.setFixedSize(340, 240)
         self.photo_label.setStyleSheet("background-color: #000; border: 1px solid gray;")
         self.photo_label.setText("📷 Esperando foto...")
-
         vlay.addWidget(self.photo_label)
 
         # --- Archivos pendientes ---
@@ -239,6 +259,7 @@ class EB_RobotGUI_bis(QWidget):
         self.pending_timer = QTimer()
         self.pending_timer.timeout.connect(self.refresh_pending)
         self.pending_timer.start(3000)
+
 
 
     
@@ -624,9 +645,11 @@ class EB_RobotGUI_bis(QWidget):
             },
             "Cámara/Radar (25–30)": {
                 25: "Captura de imagen",
-                26: "Iniciar/Detener streaming",
-                27: "Detección de movimiento",
-                28: "Seguimiento de objetivo",
+                26: "Captura de vídeo",
+                27: "Iniciar/Detener streaming",
+                28: "Enviar IP y puerto",
+                # 27: "Detección de movimiento",
+                29: "Seguimiento de objetivo",
                 30: "Reset del módulo"
             },
             "Relay Flag (31)": {
@@ -1418,16 +1441,70 @@ class EB_RobotGUI_bis(QWidget):
 
   
     def start_video(self):
+        # --- Mostrar popup ---
+        dialog = MediaDialog(is_video=True, parent=self)
+        if not dialog.exec():   # Si pulsa cancelar -> no sigue
+            return
+
+        duration, quality = dialog.get_values()
+
+        # --- Lógica original ---
         dest = int(self.dest_entry.text())
-        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitud iniciar vídeo")
+        self.append_general_log(
+            f"[{time.strftime('%H:%M:%S')}] Solicitud iniciar vídeo "
+            f"({duration}s, calidad: {quality})"
+        )
         self.set_selected_type(26, self.grups["Cámara/Radar (25–30)"][26])
-        self.send_cmd("1") 
+
+        # Igual que antes, pero enviando los parámetros
+        data = {
+            "duration": duration,
+            "quality": quality
+        }
+        self.send_cmd(f"{json.dumps(data)}")
+
 
     def take_photo(self):
+        # --- Mostrar popup ---
+        dialog = MediaDialog(is_video=False, parent=self)
+        if not dialog.exec():   # Si pulsa cancelar -> no hace nada
+            return
+
+        _, quality = dialog.get_values()
+
+        # --- Lógica original ---
         dest = int(self.dest_entry.text())
-        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Comando enviado para tomar foto")
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitud tomar foto (calidad: {quality})")
         self.set_selected_type(25, self.grups["Cámara/Radar (25–30)"][25])
-        self.send_cmd("1") 
+
+        # Aquí envías el comando igual que antes pero añadiendo la calidad
+        data = {
+            "quality": quality
+        }
+        self.send_cmd(f"{json.dumps(data)}")
+ 
+
+    def send_ip_port(self):
+        ip = self.input_ip.text().strip()
+        port = self.input_port.text().strip()
+
+        if not ip or not port:
+            print(f"❌ Debes introducir IP y puerto.")
+            return
+
+        try:
+            port = int(port)
+        except:
+            print(f"❌ Puerto inválido (debe ser número).")
+            return
+
+        dest = int(self.dest_entry.text())
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Enivado IP y Puerto para cámara/radar: {ip}:{port}")
+        self.set_selected_type(28, self.grups["Cámara/Radar (25–30)"][28])
+        self.send_cmd(f"{ip}:{port}")
+        print(f"📡 Enviando datos IP={ip}, Puerto={port}")
+
+
 
     def show_pending(self):
         self.refresh_pending()

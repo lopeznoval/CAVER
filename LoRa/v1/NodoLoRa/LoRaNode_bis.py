@@ -451,20 +451,20 @@ class LoRaNode:
 
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                      # ---------------------- FOTO ----------------------
-                    if msg_type == 25:  # Tomar foto
-                        # img_b64 = self.take_picture_and_save()
-                        # ------ PROBAR ------
-                        resp = self.take_picture_and_save_compressed(addr_sender)
-                        self.send_message(addr_sender, 1, msg_id, "ACK Foto recibida y en proceso de envío.")
-                        if resp is not None:
-                            self.send_bytes(addr_sender, 0, msg_id, resp)
-                        print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
+                    # if msg_type == 25:  # Tomar foto
+                    #     # img_b64 = self.take_picture_and_save()
+                    #     # ------ PROBAR ------
+                    #     resp = self.take_picture_and_save_compressed(addr_sender)
+                    #     self.send_message(addr_sender, 1, msg_id, "ACK Foto recibida y en proceso de envío.")
+                    #     if resp is not None:
+                    #         self.send_bytes(addr_sender, 0, msg_id, resp)
+                    #     print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
-                    # ---------------------- VIDEO ----------------------
-                    elif msg_type == 26:  # iniciar grabación
-                        video_bytes = self.start_video_recording()
-                        if video_bytes:
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Vídeo comprimido listo ({len(video_bytes)} bytes).")
+                    # # ---------------------- VIDEO ----------------------
+                    # elif msg_type == 26:  # iniciar grabación
+                    #     video_bytes = self.start_video_recording()
+                    #     if video_bytes:
+                    #         print(f"[{time.strftime('%H:%M:%S')}] Vídeo comprimido listo ({len(video_bytes)} bytes).")
                        
                         # # ---------------------- INICIAR VIDEO ----------------------
                         # if "1" in message:
@@ -479,7 +479,7 @@ class LoRaNode:
                         # else: 
                         #     self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
 
-                    elif msg_type == 27:
+                    if msg_type == 27: # Tomar foto y enviar vía WiFi
                         try:
                             host_eb, port_eb = message.split(":")
                             img_bytes, path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
@@ -495,12 +495,11 @@ class LoRaNode:
                             print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
 
 
-                    elif msg_type == 28: 
+                    elif msg_type == 26: # Grabar video y enviar vía WiFi 
                         try:
                             data = json.loads(message)
-                            host_eb = data.get("host", "192.168.1.1")
-                            port_eb = data.get("port", 6000)
-                            duration = data.get("duracion", 3)
+                            duration = data.get("duration", 3)
+                            quality = data.get("quality", "Baja")
 
                             img_bytes, path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration)
 
@@ -513,6 +512,10 @@ class LoRaNode:
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite.")
                         except Exception as e:
                             print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
+
+                    elif msg_type == 28:  # host:port para enviar foto vía WiFi
+                        self.host_eb, self.port_eb = message.split(":")
+                        print(f"[{time.strftime('%H:%M:%S')}] Host EB para multimedia vía WiFi: {self.host_eb}:{self.port_eb}")
 
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
