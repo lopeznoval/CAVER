@@ -474,9 +474,9 @@ class LoRaNode:
                     if msg_type == 25: # Tomar foto y enviar vía WiFi
                         try:
                             host_eb, port_eb = message.split(":")
-                            img_bytes, path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
+                            path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
 
-                            if self.lora_cam_sender.send_photo_file_wifi(host_eb, port_eb, img_bytes):
+                            if self.lora_cam_sender.send_photo_file_wifi(host_eb, port_eb, path):
                                 self.db.insert_media(path=path, es_video=False, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
@@ -493,12 +493,12 @@ class LoRaNode:
                             duration = data.get("duration", 3)
                             quality = data.get("quality", "Baja")
 
-                            img_bytes, path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration)
+                            path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration)
 
-                            if self.lora_cam_sender.send_video_file_wifi(host_eb, port_eb, img_bytes):
-                                self.db.insert_media(path=path, es_video=False, sinc=True)
-                                print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
-                                print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
+                            if self.lora_cam_sender.send_video_file_wifi(host_eb, port_eb, path):
+                                self.db.insert_media(path=path, es_video=True, sinc=True)
+                                print(f"[{time.strftime('%H:%M:%S')}] Video enviado vía WiFi a EB.")
+                                print(f"[{time.strftime('%H:%M:%S')}] Video guardado en SQLite y sincronizada.")
                             else:
                                 self.db.insert_media(path=path, es_video=False)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite.")
@@ -1226,7 +1226,7 @@ class LoRaNode:
         self.sync.handle_ack(json)
 
     # -------------------- WiFi --------------------
-    def listen_robot(self, host="0.0.0.0", port=6000, save_path="./"):
+    def listen_robot(self, host="0.0.0.0", port=6000, save_path="./multi/"):
         """
         Hilo que escucha comandos enviados por el robot.
         Maneja fotos y vídeos enviados por TCP.
