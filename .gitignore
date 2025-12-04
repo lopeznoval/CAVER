@@ -9,6 +9,7 @@ LoRa/v1/parameters.py
 LoRa/v1/main_bis.py
 LoRa/v1/main_bis_2.py
 LoRa/v1/datos/*
+LoRa/v1/multi_socket/*
 
 # (Opcional) Ignorar entornos virtuales
 venv/
