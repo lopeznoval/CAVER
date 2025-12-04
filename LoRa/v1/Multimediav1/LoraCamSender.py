@@ -70,29 +70,27 @@ class LoRaCamSender:
             self.stream.seek(0)
             self.stream.truncate()
 
+            filename = f"video_{int(time.time())}.mp4"
+            full_path = os.path.join(video_dir, filename)
+
             # Configurar la cámara para vídeo
             self.camera.configure(self.camera.create_video_configuration(
                 main={"size": (320, 240)}
             ))
-            self.camera.start()
+            self.camera.start_recording()
 
-            # Grabar vídeo (duración configurable)
-            self.camera.start_recording(self.stream, format='h264')
+            self.camera.start_recording()
             time.sleep(duration)
             self.camera.stop_recording()
-            self.camera.stop()
             print(f"🎥 Vídeo grabado durante {duration} segundos.")
 
             # Obtener bytes del vídeo
-            video_bytes = self.stream.getvalue()
+            # video_bytes = self.stream.getvalue()
 
-            filename = f"video_{int(time.time())}.h264"
-            full_path = os.path.join(video_dir, filename)
-
-            with open(full_path, "wb") as f:
-                f.write(video_bytes)
-            self.stream.seek(0)
-            self.stream.truncate()
+            # with open(full_path, "wb") as f:
+            #     f.write(video_bytes)
+            # self.stream.seek(0)
+            # self.stream.truncate()
             print(f"💾 Vídeo guardado en: {full_path}")
 
             return full_path
