@@ -72,7 +72,7 @@ class LoRaCamSender:
 
             # Configurar la cámara para vídeo
             self.camera.configure(self.camera.create_video_configuration(
-                main={"size": (320, 240), "format": "H264"}
+                main={"size": (320, 240)}
             ))
             self.camera.start()
 
