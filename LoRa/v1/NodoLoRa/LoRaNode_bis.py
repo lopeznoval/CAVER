@@ -1125,13 +1125,13 @@ class LoRaNode:
             count = 0
             for pkt in packets:
                 count += 1
-                if count > 2:
-                    break  # enviar máximo 2 paquetes por ciclo
+                if count > 1:
+                    break  # enviar máximo 1 paquetes por ciclo
                 json_string = pkt.to_json()  # Este string es lo que envías por LoRa
                 print(f"[{time.strftime('%H:%M:%S')}] Enviando: {json_string}")
                 self.send_message(0xFFFF, 0, 20, json_string)
                 time.sleep(1)
-            time.sleep(63)
+            time.sleep(40)
 
     def process_packet_base(self, json):
         """Procesa un paquete de BBDD recibido desde un nodo."""
