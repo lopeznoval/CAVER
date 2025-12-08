@@ -370,7 +370,6 @@ class RobotDatabase:
             record_id = entry["id"]
 
             if table_name == "sensores":
-                print(f"Marcando sensor ID {record_id} como sincronizado.")
                 s.query(SensorData).filter(SensorData.id == record_id).update({"sinc": True})
             elif table_name == "robot_movimiento":
                 s.query(RobotMovimiento).filter(RobotMovimiento.id == record_id).update({"sinc": True})

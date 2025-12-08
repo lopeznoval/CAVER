@@ -239,6 +239,8 @@ class LoRaNode:
                     if msg_id == 21: 
                         print(f"[{time.strftime('%H:%M:%S')}] Recibido ACK BBDD. Procesando...")
                         self.ack_BBDD_packet(message)
+                        print(f"[{time.strftime('%H:%M:%S')}] Borrando registros sincronizados...")
+                        self.db.delete_synced_entries()
                     
                     elif msg_id == 30:
                         try:
@@ -578,6 +580,8 @@ class LoRaNode:
         if self.running and self.robot and self.robot.is_open:
             self.robot.reset_input_buffer()
             self.robot.write((command + "\r\n").encode('utf-8'))
+            if json.loads(command).get("T") == 1:
+                self.db.insert_movimiento(L= json.loads(command).get("L"), R=json.loads(command).get("R"))
             print(f"[{time.strftime('%H:%M:%S')}] Enviando comando al robot.")  
             try:
                 response = self.response_queue.get(timeout=5)
@@ -599,70 +603,6 @@ class LoRaNode:
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error en IMU loop: {e}")
                 time.sleep(2)
         self.on_alert(f"[{time.strftime('%H:%M:%S')}] IMU loop finalizado.")
-    
-    # def _move_robot_loop(self):
-
-    #     UDP_IP = "0.0.0.0"
-    #     UDP_PORT = 5005
-
-    #     radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    #     radar_sock.bind((UDP_IP, UDP_PORT))
-    #     radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
-    #     radar_sock.setblocking(False)
-
-    #     print("🔄 Autonomía iniciada...")
-        
-    #     self.auto_move_running = True
-    #     last_cmd = None                     # para no enviar comandos repetidos
-    #     last_state = 0                      # último estado recibido del radar
-    #     self.robot.reset_input_buffer()
-
-    #     while self.auto_move_running :
-
-    #         # --- 1. Vaciar el buffer UDP ---
-    #         mensaje = None
-    #         while True:
-    #             try:
-    #                 data, _ = radar_sock.recvfrom(1024)
-    #                 mensaje = data.decode()
-    #             except BlockingIOError:
-    #                 break
-    #             except socket.timeout:
-    #                 break
-
-    #         # --- 2. Procesar último mensaje disponible ---
-    #         if mensaje is not None:
-    #             print(f"⚠️ Mensaje radar recibido: {mensaje}")
-    #             last_state = int(mensaje)   # 0 o 1
-
-    #         # --- 3. Lógica de control ---
-    #         if last_state == 1:
-    #             # Parar
-    #             cmd = {"T": 1, "L": 0, "R": 0}
-    #             print("⚠️ Colisión detectada → PARAR")
-    #             self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
-
-    #             # Girar
-    #             time.sleep(0.5)
-    #             cmd = {"T": 1, "L": 0.1, "R": -0.1}
-    #             if cmd != last_cmd:
-    #                 print("⚠️ Colisión detectada → GIRAR")
-    #                 self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
-    #                 time.sleep(1)
-    #                 last_cmd = cmd
-
-    #         else:
-    #             # Avanzar
-    #             cmd = {"T": 1, "L": 0.1, "R": 0.1}
-    #             print("✔️ Libre → AVANZAR")
-    #             self.robot.write((json.dumps(cmd) + "\r\n").encode('utf-8'))
-    #             last_cmd = cmd
-
-    #         time.sleep(0.15)  # control loop
-
-    #     radar_sock.close()
-    #     print("🛑 Autonomía detenida.")
-
 
     def _move_robot_loop(self):
 
@@ -760,72 +700,6 @@ class LoRaNode:
                 except Exception as e:
                     self.on_alert(f"Error leyendo feedback: {e}")
             time.sleep(5)
-
-
-
-    # def _move_robot_loop(self):
-
-    #     UDP_IP = "0.0.0.0"#"192.168.1.10"
-    #     UDP_PORT = 5005
-
-    #     radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    #     radar_sock.bind((UDP_IP, UDP_PORT))
-    #     radar_sock.settimeout(0.05)
-    #     # radar_sock.setblocking(False)
-
-    #     self.auto_move_running = True
-    #     self.colision = 0
-
-    #     print("🔄 Autonomía iniciada...")
-
-    #     while self.auto_move_running:
-
-    #         # Leer radar
-    #         # self.colision = 0
-    #         # Decidir movimiento
-    #         # if self.colision == 1:
-    #         #     cmd = {"T": 1, "L": 0, "R": 0} 
-    #         #     print("⚠️ Colisión detectada → PARAR")
-    #         #     time.sleep(1)
-    #         #     cmd = {"T": 1, "L": 0.1, "R": -0.1}   # girar para evitar
-    #         #     print("⚠️ Colisión detectada → GIRAR")
-    #         # else:
-    #         #     cmd = {"T": 1, "L": 0.1, "R": 0.1}   # avanzar recto
-    #         #     print("✔️ Libre → AVANZAR")
-
-    #         # # Enviar al robot
-    #         # self.send_to_robot(json.dumps(cmd))
-    #         try:
-    #             data, _ = radar_sock.recvfrom(1024)
-    #             mensaje = data.decode() #val = int.from_bytes(data, "little")
-    #             print(f"⚠️ Mensaje radar recibido: {mensaje}")
-
-    #             if mensaje=="1":   #mensaje = "STOP_ROBOT":
-    #                 self.colision = 1 
-    #                 cmd = {"T": 1, "L": 0, "R": 0} 
-    #                 print("⚠️ Colisión detectada → PARAR")
-    #                 self.send_to_robot(json.dumps(cmd))
-    #                 time.sleep(1)
-    #                 cmd = {"T": 1, "L": 0.1, "R": -0.1}   # girar para evitar
-    #                 print("⚠️ Colisión detectada → GIRAR") 
-    #                 self.send_to_robot(json.dumps(cmd))
-    #             else: 
-    #                 self.colision = 0                       
-                
-    #         except socket.timeout:
-    #             if self.colision == 0:
-    #                 cmd = {"T": 1, "L": 0.1, "R": 0.1}   # avanzar recto
-    #                 print("✔️ Libre → AVANZAR")
-                    
-    #                 self.send_to_robot(json.dumps(cmd))
-
-            
-
-    #         #time.sleep(1)
-
-    #     print("🛑 Autonomía detenida.")
-    #     radar_sock.close()
-
 
     # ------------------------------ IMU ------------------------------
     #  Se asume respuesta asi:

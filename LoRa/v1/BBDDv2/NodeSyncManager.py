@@ -142,7 +142,7 @@ class NodeSyncManager:
         print(f"Procesando ACK de sincronización de {ack_json}...")
         try:
             data = json.loads(ack_json)
-            entries = data.get("entries", [])
+            entries = data.get("saved", [])
             if entries:
                 self.db.mark_as_synced(entries)
         except Exception as e:
