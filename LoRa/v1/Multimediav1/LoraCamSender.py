@@ -1,5 +1,6 @@
 import io
 import os
+import struct
 import time
 import platform
 import io
@@ -195,63 +196,44 @@ class LoRaCamSender:
             print(f"❌ Error enviando el vídeo: {e}")
             return False
 
+    def _streaming_loop(self, host, port, width, height, fps):
+        import cv2, socket, struct
+        self.camera.configure(self.camera.create_preview_configuration(main={"size": (width, height)}))
+        self.camera.start()
+
+        # Crear socket TCP cliente
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((host, port))
+        print(f"📡 Conectado a {host}:{port}")
+
+        try:
+            while self.streaming_active:
+                # Capturar frame
+                frame = self.camera.capture_array()
+
+                # Codificar a JPEG
+                ret, buffer = cv2.imencode('.jpg', frame)
+                data = buffer.tobytes()
+
+                # Enviar tamaño del frame + datos
+                self.sock.sendall(struct.pack('>I', len(data)) + data)
+
+        except Exception as e:
+            print(f"❌ Error en streaming: {e}")
+        finally:
+            self.camera.stop()
+            self.sock.close()
+            print("🛑 Streaming detenido")
+
     def start_streaming(self, host: str, port: int = 5004, width=640, height=480, fps=20):
         if self.streaming_active:
             print("⚠️ Streaming ya activo")
             return
 
-        def streaming_loop():
-            try:
-                # Creamos socket UDP
-                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-                    s.connect((host, port))
-                    print(f"📡 Conectado a {host}:{port}")
-
-                    # Configuramos la cámara
-                    self.camera.configure(self.camera.create_video_configuration(
-                        main={"size": (width, height)},
-                    ))
-                    self.camera.start()
-
-                    from picamera2.encoders import H264Encoder # type: ignore
-                    from picamera2.outputs import FileOutput, FfmpegOutput # type: ignore
-
-                    # Configuramos encoder H264 y salida FFMPEG (MP4 fragmentado)
-                    encoder = H264Encoder()
-                    output = FfmpegOutput(
-                        "pipe:1",  # salida a stdout
-                        format="mp4",
-                        video_bitrate=2_000_000,
-                        fragment_size=1024*50  # fragmentos para streaming
-                    )
-
-                    # Función para enviar los fragmentos por TCP
-                    def send_fragment(buf):
-                        try:
-                            size = len(buf)
-                            s.sendall(size.to_bytes(4, 'big'))  # envío tamaño
-                            s.sendall(buf)  # envío datos
-                        except Exception as e:
-                            print(f"❌ Error enviando fragmento: {e}")
-
-                    self.streaming_active = True
-                    self.camera.start_recording(encoder, send_fragment)
-
-                    # Mantener el hilo vivo mientras streaming esté activo
-                    while self.streaming_active:
-                        time.sleep(0.1)
-
-                    # Detener cámara
-                    self.camera.stop_recording()
-                    self.camera.stop()
-                    print("✅ Streaming detenido y cámara liberada")
-
-            except Exception as e:
-                print(f"❌ Error en streaming: {e}")
-                self.streaming_active = False
-
-        # Lanzamos hilo
-        self.streaming_thread = threading.Thread(target=streaming_loop, daemon=True)
+        self.streaming_active = True
+        self.streaming_thread = threading.Thread(target=self._streaming_loop,
+                                                 args=(host, port, width, height, fps),
+                                                 daemon=True)
         self.streaming_thread.start()
         print("🎬 Streaming iniciado en hilo separado")
 

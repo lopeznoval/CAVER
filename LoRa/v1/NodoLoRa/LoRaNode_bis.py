@@ -496,11 +496,21 @@ class LoRaNode:
                             print("📥 Comando: detener streaming H.264")
                             ack = self.lora_cam_sender.stop_h264_streaming()
                             self.send_message(addr_sender, 4, msg_id, f"OK" if ack else "Error")
+
                     elif msg_type == 28:  # host:port para enviar foto vía WiFi
                         self.host_eb, self.port_eb = message.split(":")
                         self.port_eb = int(self.port_eb)
                         print(f"[{time.strftime('%H:%M:%S')}] Host EB para multimedia vía WiFi: {self.host_eb}:{self.port_eb}")
                         self.send_message(addr_sender, 4, msg_id, f"OK")
+
+                    elif msg_type == 29:  # imagen por LoRa
+                        try:
+                            self.send_message(addr_sender, 4, msg_id, "OK STARTING")
+                            path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir, resolution="Baja")
+                            with open(path, "rb") as f:
+                                self.send_bytes(addr_sender, 0, 30, f.read())
+                        except Exception as e:
+                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error decodificando imagen LoRa: {e}")
 
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
