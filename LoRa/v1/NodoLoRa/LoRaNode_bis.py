@@ -112,6 +112,7 @@ class LoRaNode:
         self.on_imu = lambda imu: print(f"[IMU UPDATE]: {imu}")
         self.on_photo = lambda photo: print(f"[RECEIVED PHOTO]")
         self.on_img = lambda img_path: print(f"[RECEIVED IMAGE PATH]: {img_path}")
+        self.on_video = lambda video_path: print(f"[RECEIVED VIDEO PATH]: {video_path}")
         self.on_collision = lambda: print(f"[OBJECT DETECTED]")
         self.on_overturn = lambda vuelco: print(f"[OVERTURN] : {vuelco}")
 
@@ -1067,6 +1068,7 @@ class LoRaNode:
                     with open(filename_, "wb") as f:
                         f.write(data)
                     print(f"🎥 Vídeo guardado en {filename_}")
+                    self.on_video(filename_)
 
                 else:
                     print("⚠️ Tipo de dato desconocido")

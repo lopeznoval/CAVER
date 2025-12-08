@@ -13,7 +13,9 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QListWidget, QCheckBox, QRadioButton, QButtonGroup, QListWidgetItem, QProgressBar,
     QTableWidget, QTableWidgetItem
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray
+from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize, QByteArray, QUrl
 from PyQt6.QtGui import QAction, QPainter, QColor, QFont, QImage, QPixmap, QIntValidator
 
 from GUI.aux_GUI import StatusIndicator, RobotStatusCard, RobotsPanel
@@ -50,6 +52,7 @@ class EB_RobotGUI_bis(QWidget):
             self.loranode.on_imu = self._on_imu_data
             self.loranode.on_photo = self._on_photo_received
             self.loranode.on_img = self._on_img_path
+            self.loranode.on_video = self._on_video_path
             self.loranode.on_collision = self._on_collision_detected
             self.loranode.on_overturn = self._on_overturn_data
 
@@ -200,7 +203,7 @@ class EB_RobotGUI_bis(QWidget):
         tab_cmd.setLayout(cmd_layout)
         tabs.addTab(tab_cmd, "⚙️")
 
-# ----------------------- TAB 4: Cámara -----------------------
+        # ----------------------- TAB 4: Cámara -----------------------
         tab_video = QWidget()
         vlay = QVBoxLayout()
 
@@ -244,6 +247,30 @@ class EB_RobotGUI_bis(QWidget):
         self.photo_label.setStyleSheet("background-color: #000; border: 1px solid gray;")
         self.photo_label.setText("📷 Esperando foto...")
         vlay.addWidget(self.photo_label)
+
+        # Widget de video
+        self.video_widget = QVideoWidget()
+        self.video_widget.setFixedSize(340, 240)
+        self.video_widget.setStyleSheet("background-color: #111; border: 1px solid gray;")
+        vlay.addWidget(self.video_widget)
+
+        # Reproductor
+        self.video_player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.video_player.setAudioOutput(self.audio_output)
+        self.video_player.setVideoOutput(self.video_widget)
+
+        # Botones de control
+        hbtn_video = QHBoxLayout()
+        btn_play = QPushButton("▶️ Play")
+        btn_pause = QPushButton("⏸️ Pause")
+        hbtn_video.addWidget(btn_play)
+        hbtn_video.addWidget(btn_pause)
+        vlay.addLayout(hbtn_video)
+
+        # Conectar botones
+        btn_play.clicked.connect(self.video_player.play)
+        btn_pause.clicked.connect(self.video_player.pause)
 
         # --- Archivos pendientes ---
         self.btn_view_pending = QPushButton("Ver archivos pendientes")
@@ -1036,6 +1063,13 @@ class EB_RobotGUI_bis(QWidget):
             )
         except Exception as e:
             self.append_general_log(f"Error mostrando imagen desde ruta: {e}")
+
+    def _on_video_path(self, path):
+        try:
+            self.video_player.setSource(QUrl.fromLocalFile(path))
+            self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 🎥 Vídeo recibido y reproduciéndose")
+        except Exception as e:
+            self.append_general_log(f"Error reproduciendo vídeo desde ruta: {e}")
 
 
     # -------------------- IMU inicio --------------------
