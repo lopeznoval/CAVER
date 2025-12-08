@@ -9,6 +9,7 @@ import socket
 import cv2
 import numpy as np
 import subprocess
+import threading
 
 class LoRaCamSender:
     if platform.system() == "Linux":
@@ -194,56 +195,75 @@ class LoRaCamSender:
             print(f"❌ Error enviando el vídeo: {e}")
             return False
 
+    def start_streaming(self, host: str, port: int = 5004, width=640, height=480, fps=20):
+        if self.streaming_active:
+            print("⚠️ Streaming ya activo")
+            return
 
-    def start_h264_streaming(self, host: str, port: int = 5004):
-        """
-        Inicializa el streaming H.264 y devuelve el encoder y socket
-        para poder detenerlo más tarde.
-        """
-        from picamera2.encoders import H264Encoder # type: ignore
-        from picamera2.outputs import GstOutput # type: ignore
+        def streaming_loop():
+            try:
+                # Creamos socket UDP
+                with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                    s.connect((host, port))
+                    print(f"📡 Conectado a {host}:{port}")
 
-        try:
-            encoder = H264Encoder(bitrate=2_000_000)
+                    # Configuramos la cámara
+                    self.camera.configure(self.camera.create_video_configuration(
+                        main={"size": (width, height)},
+                    ))
+                    self.camera.start()
 
-            pipeline = (
-                "appsrc ! h264parse ! rtph264pay config-interval=1 pt=96 "
-                "! udpsink host=192.168.1.50 port=5004"
-            )
+                    from picamera2.encoders import H264Encoder # type: ignore
+                    from picamera2.outputs import FileOutput, FfmpegOutput # type: ignore
 
-            output = GstOutput(pipeline)
+                    # Configuramos encoder H264 y salida FFMPEG (MP4 fragmentado)
+                    encoder = H264Encoder()
+                    output = FfmpegOutput(
+                        "pipe:1",  # salida a stdout
+                        format="mp4",
+                        video_bitrate=2_000_000,
+                        fragment_size=1024*50  # fragmentos para streaming
+                    )
 
-            self.camera.configure(self.camera.create_video_configuration(
-                main={"size": (640, 480)}
-            ))
+                    # Función para enviar los fragmentos por TCP
+                    def send_fragment(buf):
+                        try:
+                            size = len(buf)
+                            s.sendall(size.to_bytes(4, 'big'))  # envío tamaño
+                            s.sendall(buf)  # envío datos
+                        except Exception as e:
+                            print(f"❌ Error enviando fragmento: {e}")
 
-            self.camera.start_recording(encoder, output)
-            print(f"📡 Iniciando streaming H.264 a udp://{host}:{port}...")
+                    self.streaming_active = True
+                    self.camera.start_recording(encoder, send_fragment)
 
-            return True
-        except Exception as e:
-            print(f"❌ Error iniciando streaming H.264: {e}")
-            return False
+                    # Mantener el hilo vivo mientras streaming esté activo
+                    while self.streaming_active:
+                        time.sleep(0.1)
 
-    def stop_h264_streaming(self):
-        """
-        Para el streaming iniciado previamente.
-        """
-        try:
-            if hasattr(self, "camera") and self.camera is not None:
-                print("🛑 Deteniendo streaming H.264...")
-                self.camera.stop_recording()
-                self.camera.stop()
-                return True
-        except Exception as e:
-            print(f"❌ Error deteniendo streaming H.264: {e}")
-            return False
-        
-        # if hasattr(self, "sock") and self.sock is not None:
-        #     self.sock.close()
-        #     print("📡 Socket UDP cerrado.")
+                    # Detener cámara
+                    self.camera.stop_recording()
+                    self.camera.stop()
+                    print("✅ Streaming detenido y cámara liberada")
 
-        print("✅ Streaming H.264 detenido y cámara liberada.")
+            except Exception as e:
+                print(f"❌ Error en streaming: {e}")
+                self.streaming_active = False
+
+        # Lanzamos hilo
+        self.streaming_thread = threading.Thread(target=streaming_loop, daemon=True)
+        self.streaming_thread.start()
+        print("🎬 Streaming iniciado en hilo separado")
+
+    def stop_streaming(self):
+        if not self.streaming_active:
+            print("⚠️ No hay streaming activo")
+            return
+
+        self.streaming_active = False
+        if self.streaming_thread:
+            self.streaming_thread.join(timeout=2)
+        print("🛑 Streaming detenido")
 
         # Para la recepción en windows usar GSTREAMER:
         # https://gstreamer.freedesktop.org/download/
