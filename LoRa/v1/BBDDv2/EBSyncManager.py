@@ -73,7 +73,7 @@ class BaseStationSyncManager:
             ack["saved"].append({
                 "table": table,
                 "robot_id": robot_id,
-                "original_id": e.get("id"),
+                "id": e.get("id"),
                 "inserted_id": inserted_id
             })
 

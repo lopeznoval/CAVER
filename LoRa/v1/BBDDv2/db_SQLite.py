@@ -366,7 +366,7 @@ class RobotDatabase:
 
         for entry in packet_entries:
             table_name = entry["table"]
-            record_id = entry["original_id"]
+            record_id = entry["id"]
 
             if table_name == "sensores":
                 s.query(SensorData).filter(SensorData.id == record_id).update({"sinc": True})
