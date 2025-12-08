@@ -559,7 +559,7 @@ class EB_RobotGUI_bis(QWidget):
         # self.btn_stop_collision.clicked.connect(self.stop_collision_detection)
 
         # Añadir la TAB 8 al conjunto de tabs
-        tabs.addTab(tab_radar, "Radar")
+        tabs.addTab(tab_radar, "🚗")
 
 
         # ------------------ Añadir pestañas a la columna ------------------
