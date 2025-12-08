@@ -488,11 +488,11 @@ class LoRaNode:
                             print(f"[{time.strftime('%H:%M:%S')}] Error enviando video vía WiFi: {e}")
 
                     elif msg_type == 27:  # empezar/parar streaming vía WiFi
-                        if message == 1:
+                        if message == "1":
                             print("📥 Comando: iniciar streaming H.264")
                             ack = self.lora_cam_sender.start_h264_streaming(self.host_eb)
                             self.send_message(addr_sender, 4, msg_id, f"OK" if ack else "Error")
-                        elif message == 0:
+                        elif message == "0":
                             print("📥 Comando: detener streaming H.264")
                             ack = self.lora_cam_sender.stop_h264_streaming()
                             self.send_message(addr_sender, 4, msg_id, f"OK" if ack else "Error")
