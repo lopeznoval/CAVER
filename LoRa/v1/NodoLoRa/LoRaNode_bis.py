@@ -73,15 +73,17 @@ class LoRaNode:
                 self.recording = False
                 # carpetas
                 home_dir = os.path.expanduser("~")
-                self.photo_dir = os.path.join(home_dir, "photos")
-                self.video_dir = os.path.join(home_dir, "videos") 
-                self.pending_file = os.path.join(home_dir, "pending.json") 
+                # self.photo_dir = os.path.join(home_dir, "photos")
+                # self.video_dir = os.path.join(home_dir, "videos") 
+                # self.pending_file = os.path.join(home_dir, "pending.json") 
+                self.photo_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/photos")
+                self.video_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/videos")
                 
                 os.makedirs(self.photo_dir, exist_ok=True)
                 os.makedirs(self.video_dir, exist_ok=True)
-                if not os.path.exists(self.pending_file):
-                    with open(self.pending_file, "w") as f:
-                        json.dump([], f)
+                # if not os.path.exists(self.pending_file):
+                #     with open(self.pending_file, "w") as f:
+                #         json.dump([], f)
 
                 # Pending in-memory for speed
                 self._load_pending_list()
