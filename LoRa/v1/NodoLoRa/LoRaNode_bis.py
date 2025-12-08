@@ -683,10 +683,10 @@ class LoRaNode:
         UDP_IP = "0.0.0.0"
         UDP_PORT = 5005
 
-        radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        radar_sock.bind((UDP_IP, UDP_PORT))
-        radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
-        radar_sock.setblocking(False)
+        self.radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.radar_sock.bind((UDP_IP, UDP_PORT))
+        self.radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
+        self.radar_sock.setblocking(False)
 
         print(f"[{time.strftime('%H:%M:%S')}] 🔄 Autonomía iniciada...")
         
@@ -701,7 +701,7 @@ class LoRaNode:
             mensaje = None
             while True:
                 try:
-                    data, _ = radar_sock.recvfrom(1024)
+                    data, _ = self.radar_sock.recvfrom(1024)
                     mensaje = data.decode()
                 except BlockingIOError:
                     break
@@ -743,7 +743,8 @@ class LoRaNode:
                 time.sleep(0.15)  # control loop
                                 
 
-        radar_sock.close()
+        self.radar_sock.close()
+        self.radar_sock = None
         print(f"[{time.strftime('%H:%M:%S')}]🛑 Autonomía detenida.")
             
     def _battery_monitor_loop(self):
@@ -1127,7 +1128,7 @@ class LoRaNode:
             except Exception as e:
                 print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Error leyendo ESP32: {e}")
             
-            time.sleep(5) #cmabiar a 120 o lo que queramos
+            time.sleep(30) #cmabiar a 120 o lo que queramos
 
     def read_sensors_once(self):
         """Lee datos de temperatura y humedad del ESP32 conectado por serie una vez."""
@@ -1215,12 +1216,12 @@ class LoRaNode:
                 json_string = pkt.to_json()  # Este string es lo que envías por LoRa
                 print(f"[{time.strftime('%H:%M:%S')}] Enviando: {json_string}")
                 self.send_message(0xFFFF, 0, 20, json_string)
-                time.sleep(0.7)
-            time.sleep(10)
+                time.sleep(1)
+            time.sleep(63)
 
     def process_packet_base(self, json):
         """Procesa un paquete de BBDD recibido desde un nodo."""
-        print(json)
+        print(f"[{time.strftime('%H:%M:%S')}] Entradas de sincronización recibidas para BBDD. Procesando...")
         return self.sync_base.process_packet(json)
 
     def ack_BBDD_packet(self, json):

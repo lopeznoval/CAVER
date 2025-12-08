@@ -378,6 +378,18 @@ class RobotDatabase:
         s.commit()
         s.close()
 
+    def delete_synced_entries(self):
+        """Elimina todos los registros que ya están sincronizados (sinc = True)"""
+        s = self.new_session()
+        try:
+            s.query(SensorData).filter_by(sinc=True).delete()
+            s.query(RobotMovimiento).filter_by(sinc=True).delete()
+            s.query(Media).filter_by(sinc=True).delete()
+            s.commit()
+        finally:
+            s.close()
+
+
 
 # Ejemplo de uso:
 # db = RobotDatabase("datos/robot_data.db")
