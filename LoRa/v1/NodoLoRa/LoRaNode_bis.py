@@ -1,5 +1,6 @@
 # LoRaNode organizado
 import io
+from operator import is_
 import sys
 import json
 import queue
@@ -139,7 +140,7 @@ class LoRaNode:
         header = bytes([
             (addr_dest >> 8) & 0xFF, addr_dest & 0xFF,
             (self.addr >> 8) & 0xFF, self.addr & 0xFF,
-            (0x01 if part == 0 else 0x02),
+            (0x01 if part == 0 else 0x03),
             (relay_flag << 7) | (msg_type & 0x7F),
             msg_id & 0xFF
         ])
@@ -224,7 +225,10 @@ class LoRaNode:
                 print(f"Error unpacking message: {e}")
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error unpacking message")
                 return
-            print(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender}: {message}")
+            if is_b == 0:
+                print(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender}: {message}")
+            else:
+                print(f"[{time.strftime('%H:%M:%S')}] Received bytes from {addr_sender}: {len(message)} bytes")
             
             if addr_dest != self.addr and addr_dest != 0xFFFF:
                 if self.is_relay:
@@ -258,6 +262,7 @@ class LoRaNode:
                                     print(f"[{time.strftime('%H:%M:%S')}] Encadenando parte de foto...")
                                     self.photo = bytearray()
                                 self.photo.extend(message)
+                                return
                             if part == 0 and self.photo is not None:
                                 print(f"[{time.strftime('%H:%M:%S')}] Finalizando foto...")
                                 self.photo.extend(message)

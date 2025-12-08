@@ -283,7 +283,7 @@ class EB_RobotGUI_bis(QWidget):
         stop_str.clicked.connect(self.stop_streaming)
         
         # --- Imagen LoRa ---
-        self.lora_im = QPushButton("Ver archivos pendientes")
+        self.lora_im = QPushButton("Imagen LoRa")
         self.lora_im.clicked.connect(self.lora_img_cmd)
         vlay.addWidget(self.lora_im)
 
@@ -299,9 +299,9 @@ class EB_RobotGUI_bis(QWidget):
         tabs.addTab(tab_video, "📹")
 
         # --- Timer para refrescar lista automáticamente ---
-        self.pending_timer = QTimer()
-        self.pending_timer.timeout.connect(self.refresh_pending)
-        self.pending_timer.start(3000)
+        # self.pending_timer = QTimer()
+        # self.pending_timer.timeout.connect(self.refresh_pending)
+        # self.pending_timer.start(3000)
 
 
 
