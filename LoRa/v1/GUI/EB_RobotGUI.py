@@ -49,6 +49,7 @@ class EB_RobotGUI_bis(QWidget):
             self.loranode.on_feedback = self._on_feedback_data
             self.loranode.on_imu = self._on_imu_data
             self.loranode.on_photo = self._on_photo_received
+            self.loranode.on_img = self._on_img_path
             self.loranode.on_collision = self._on_collision_detected
             self.loranode.on_overturn = self._on_overturn_data
 
@@ -1022,6 +1023,20 @@ class EB_RobotGUI_bis(QWidget):
             self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 📸 Imagen recibida")
         except Exception as e:
             self.append_general_log(f"Error mostrando imagen: {e}")
+
+    def _on_img_path(self, path):
+        try:
+            pixmap = QPixmap(path)
+            self.photo_label.setPixmap(
+                pixmap.scaled(
+                    self.photo_label.width(),
+                    self.photo_label.height(),
+                    Qt.AspectRatioMode.KeepAspectRatio
+                )
+            )
+        except Exception as e:
+            self.append_general_log(f"Error mostrando imagen desde ruta: {e}")
+
 
     # -------------------- IMU inicio --------------------
     def _on_refresh_position (self, pos):
