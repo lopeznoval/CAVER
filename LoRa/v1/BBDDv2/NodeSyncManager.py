@@ -139,6 +139,7 @@ class NodeSyncManager:
         Ejemplo:
         '{"entries": [{"table": "sensores", "id": 1}, {"table": "media", "id": 3}]}'
         """
+        print(f"Procesando ACK de sincronización de {ack_json}...")
         try:
             data = json.loads(ack_json)
             entries = data.get("entries", [])

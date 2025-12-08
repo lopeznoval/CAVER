@@ -237,6 +237,7 @@ class LoRaNode:
                         print(f"[{time.strftime('%H:%M:%S')}] Procesado paquete BBDD, enviando ACK: {ack}")
                         self.send_message(addr_sender, 0, 21, ack)
                     if msg_id == 21: 
+                        print(f"[{time.strftime('%H:%M:%S')}] Recibido ACK BBDD. Procesando...")
                         self.ack_BBDD_packet(message)
                     
                     elif msg_id == 30:
