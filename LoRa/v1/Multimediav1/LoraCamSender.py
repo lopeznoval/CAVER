@@ -33,13 +33,22 @@ class LoRaCamSender:
     # -------------------------
     # MÉTODO YA EXISTENTE
     # -------------------------
-    def capture_recording_optimized(self, photo_dir):
+    def capture_recording_optimized(self, photo_dir, resolution="Baja"):
         if self.camera is not None:
             self.stream.seek(0)
             self.stream.truncate()
 
+            if resolution == "Baja":
+                res = (320, 240)
+            elif resolution == "Media":
+                res = (640, 480)
+            elif resolution == "Alta":  # Alta
+                res = (1280, 720)
+            else:
+                res = (1920, 1080)  # Default
+
             self.camera.configure(self.camera.create_still_configuration(
-                main={"size": (320, 240)}
+                main={"size": res}
             ))
             self.camera.start()
             time.sleep(0.1)
@@ -66,7 +75,7 @@ class LoRaCamSender:
             print("⚠️ Simulación imagen.")
             return b'\xFF\xD8' + b'A' * 2498
 
-    def video_recording_optimized(self, video_dir, duration=3):
+    def video_recording_optimized(self, video_dir, duration=3, resolution="Baja"):
         if self.camera is not None:
             # Reset stream
 
@@ -74,8 +83,17 @@ class LoRaCamSender:
             full_path = os.path.join(video_dir, filename)
             h264_path = full_path.replace(".mp4", ".h264")
 
+            if resolution == "Baja":
+                res = (320, 240)
+            elif resolution == "Media":
+                res = (640, 480)
+            elif resolution == "Alta":  # Alta
+                res = (1280, 720)
+            else:
+                res = (1920, 1080)  # Default
+
             self.camera.configure(self.camera.create_video_configuration(
-                main={"size": (320, 240)}
+                main={"size": res}
             ))
 
             from picamera2.encoders import H264Encoder # type: ignore
@@ -177,7 +195,7 @@ class LoRaCamSender:
             return False
 
 
-    def start_h264_streaming(self, host: str, port: int):
+    def start_h264_streaming(self, host: str, port: int = 5004):
         """
         Inicializa el streaming H.264 y devuelve el encoder y socket
         para poder detenerlo más tarde.
@@ -211,10 +229,15 @@ class LoRaCamSender:
         """
         Para el streaming iniciado previamente.
         """
-        if hasattr(self, "camera") and self.camera is not None:
-            print("🛑 Deteniendo streaming H.264...")
-            self.camera.stop_recording()
-            self.camera.stop()
+        try:
+            if hasattr(self, "camera") and self.camera is not None:
+                print("🛑 Deteniendo streaming H.264...")
+                self.camera.stop_recording()
+                self.camera.stop()
+                return True
+        except Exception as e:
+            print(f"❌ Error deteniendo streaming H.264: {e}")
+            return False
         
         # if hasattr(self, "sock") and self.sock is not None:
         #     self.sock.close()

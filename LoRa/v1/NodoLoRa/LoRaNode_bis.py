@@ -451,7 +451,9 @@ class LoRaNode:
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                     if msg_type == 25: # Tomar foto y enviar vía WiFi
                         try:
-                            path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
+                            data = json.loads(message)
+                            quality = data.get("quality", "Baja")
+                            path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir, resolution=quality)
 
                             if self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path):
                                 self.db.insert_media(path=path, es_video=False, sinc=True)
@@ -471,7 +473,7 @@ class LoRaNode:
                             duration = data.get("duration", 3)
                             quality = data.get("quality", "Baja")
 
-                            path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration)
+                            path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration, resolution=quality)
 
                             if self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path):
                                 self.db.insert_media(path=path, es_video=True, sinc=True)
@@ -486,20 +488,19 @@ class LoRaNode:
                             print(f"[{time.strftime('%H:%M:%S')}] Error enviando video vía WiFi: {e}")
 
                     elif msg_type == 27:  # empezar/parar streaming vía WiFi
-                        if message == "1":
-                            self.streaming_running = True
-                            self.stream_dest = addr_sender
-                            self.streaming_thread = threading.Thread(target=self._streaming_loop, daemon=True)
-                            self.streaming_thread.start()
-                            self.send_message(addr_sender, 4, msg_id, "Streaming started.")
-                        elif message == "0":
-                            self.streaming_running = False
-                            self.send_message(addr_sender, 4, msg_id, "Streaming stopped.")
-
+                        if message == 1:
+                            print("📥 Comando: iniciar streaming H.264")
+                            ack = self.lora_cam_sender.start_h264_streaming(self.host_eb)
+                            self.send_message(addr_sender, 4, msg_id, f"OK" if ack else "Error")
+                        elif message == 0:
+                            print("📥 Comando: detener streaming H.264")
+                            ack = self.lora_cam_sender.stop_h264_streaming()
+                            self.send_message(addr_sender, 4, msg_id, f"OK" if ack else "Error")
                     elif msg_type == 28:  # host:port para enviar foto vía WiFi
                         self.host_eb, self.port_eb = message.split(":")
                         self.port_eb = int(self.port_eb)
                         print(f"[{time.strftime('%H:%M:%S')}] Host EB para multimedia vía WiFi: {self.host_eb}:{self.port_eb}")
+                        self.send_message(addr_sender, 4, msg_id, f"OK")
 
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)

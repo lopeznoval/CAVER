@@ -272,6 +272,16 @@ class EB_RobotGUI_bis(QWidget):
         btn_play.clicked.connect(self.video_player.play)
         btn_pause.clicked.connect(self.video_player.pause)
 
+        # Botones de control streaming
+        hbtn_video = QHBoxLayout()
+        start_str = QPushButton("▶ Start Streaming")
+        stop_str = QPushButton("⏸Stop Streaming")
+        hbtn_video.addWidget(start_str)
+        hbtn_video.addWidget(stop_str)
+        vlay.addLayout(hbtn_video)
+        start_str.clicked.connect(self.start_streaming)
+        stop_str.clicked.connect(self.stop_streaming)
+
         # --- Archivos pendientes ---
         self.btn_view_pending = QPushButton("Ver archivos pendientes")
         self.btn_view_pending.clicked.connect(self.show_pending)
@@ -1070,6 +1080,18 @@ class EB_RobotGUI_bis(QWidget):
             self.append_general_log(f"[{time.strftime('%H:%M:%S')}] 🎥 Vídeo recibido y reproduciéndose")
         except Exception as e:
             self.append_general_log(f"Error reproduciendo vídeo desde ruta: {e}")
+
+    def start_streaming(self):
+        """Inicia la reproducción del streaming de vídeo."""
+        self.set_selected_type(27, self.grups["Cámara/Radar (25–30)"][27])
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Iniciando reproducción de streaming de vídeo")
+        self.send_cmd("1")
+
+    def stop_streaming(self):
+        """Detiene la reproducción del streaming de vídeo."""
+        self.set_selected_type(27, self.grups["Cámara/Radar (25–30)"][27])
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Deteniendo reproducción de streaming de vídeo")
+        self.send_cmd("0")
 
 
     # -------------------- IMU inicio --------------------
