@@ -168,15 +168,18 @@ class LoRaNode:
         else:   
             message = r_buff[7:] 
 
-        print(f"Unpacked message: from {addr_sender} to {addr_dest}, type {msg_type}, id {msg_id}, relay {relay_flag}, msg: {message}")
-        
+        if is_b == 0:
+            print(f"Unpacked message: from {addr_sender} to {addr_dest}, type {msg_type}, id {msg_id}, relay {relay_flag}, msg: {message}")
+        else:
+            print(f"Unpacked bytes: from {addr_sender} to {addr_dest}, type {msg_type}, id {msg_id}, relay {relay_flag}, part {part}, is_b {is_b}, bytes length: {len(message)}")
+
         return addr_sender, addr_dest, msg_type, msg_id, relay_flag, message, part, is_b
 
     # -------------------- HILOS --------------------
     def periodic_status(self):
         while self.running:
             self.send_message(0xFFFF, 5, 0, "", 0)
-            print(f"[{time.strftime('%H:%M:%S')}] PING enviado")
+            self.on_alert(f"[{time.strftime('%H:%M:%S')}] PING enviado")
             time.sleep(40) # intervalos de 40 segundos entre envío y envío
 
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
@@ -190,21 +193,23 @@ class LoRaNode:
         if self.is_base and addr_dest != 0xFFFF:
             self.add_pending(addr_dest, msg_id)
 
-    def send_bytes(self, addr_dest: int, msg_type: int, msg_id: int, data: bytes, relay_flag: int = 0, callback=None):
+    def send_bytes(self, addr_dest: int, msg_type: int, msg_id: int, path: str, relay_flag: int = 0, callback=None):
         self.stop_send = True
-        while len(data) > 230:
-            chunk = data[:230]
-            data = data[230:]
-            part = 1
-            packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, chunk, relay_flag, part)
-            if packed_data is None:
-                return
+        with open(path, "rb") as f:
+            data = f.read()
+            while len(data) > 200:
+                chunk = data[:200]
+                data = data[200:]
+                part = 1
+                packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, chunk, relay_flag, part)
+                if packed_data is None:
+                    return
+                self.node.send_bytes(packed_data)
+                time.sleep(1)  # pequeño retardo entre fragmentos
+            part = 0
+            packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag, part)
             self.node.send_bytes(packed_data)
-            time.sleep(1)  # pequeño retardo entre fragmentos
-        part = 0
-        packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag, part)
-        self.node.send_bytes(packed_data)
-        self.stop_send = False
+            self.stop_send = False
         # packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag)
         # self.node.send_bytes(packed_data)
         # if self.is_base and addr_dest != 0xFFFF:
@@ -240,7 +245,10 @@ class LoRaNode:
                     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Received message not for this node (dest: {addr_dest}), discarding.")
                 return            
             # -------------------- HANDLER DE TIPOS --------------------
-            self.on_message(f"[{time.strftime('%H:%M:%S')}] ✔️ Received from {addr_sender} to {addr_dest}: {message}.")
+            if is_b == 0:
+                self.on_message(f"[{time.strftime('%H:%M:%S')}] ✔️ Received from {addr_sender} to {addr_dest}: {message}.")
+            else:
+                self.on_message(f"[{time.strftime('%H:%M:%S')}] ✔️ Received bytes from {addr_sender} to {addr_dest}: {len(message)} bytes.")
             
             try: 
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
@@ -257,18 +265,23 @@ class LoRaNode:
                     
                     elif msg_id == 30:
                         try:
-                            if part == 1:
+                            if part == 2:
                                 if self.photo is None:
-                                    print(f"[{time.strftime('%H:%M:%S')}] Encadenando parte de foto...")
                                     self.photo = bytearray()
+                                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Encadenando parte de foto...")
                                 self.photo.extend(message)
                                 return
                             if part == 0 and self.photo is not None:
-                                print(f"[{time.strftime('%H:%M:%S')}] Finalizando foto...")
+                                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Finalizando foto...")
                                 self.photo.extend(message)
                                 img = Image.open(io.BytesIO(bytes(self.photo)))
-                                img.save(os.path.join(self.photo_dir, f"photo_from_{addr_sender}_{int(time.time())}.jpg"))
-                                self.on_photo(img)
+                                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Guardando foto...")
+                                save_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/")
+                                if not os.path.exists(save_path):
+                                    os.makedirs(save_path)
+                                img.save(os.path.join(save_path, f"photo_from_{addr_sender}_{int(time.time())}.jpg"))
+                                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto guardada.")
+                                #self.on_photo(img)
                                 self.photo = None  
 
                         except Exception as e:
@@ -520,10 +533,9 @@ class LoRaNode:
 
                     elif msg_type == 29:  # imagen por LoRa
                         try:
-                            self.send_message(addr_sender, 4, msg_id, "OK STARTING")
+                            #self.send_message(addr_sender, 4, msg_id, "OK STARTING")
                             path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir, resolution="Baja")
-                            with open(path, "rb") as f:
-                                self.send_bytes(addr_sender, 0, 30, f.read())
+                            self.send_bytes(addr_sender, 0, 30, path)
                         except Exception as e:
                             self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error decodificando imagen LoRa: {e}")
 
