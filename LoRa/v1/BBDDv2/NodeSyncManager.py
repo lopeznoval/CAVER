@@ -137,7 +137,7 @@ class NodeSyncManager:
         """
         ack_json: string JSON recibido que contiene la lista de registros confirmados
         Ejemplo:
-        '{"entries": [{"table": "sensores", "id": 1}, {"table": "media", "id": 3}]}'
+        '{"entries": [{"table": "sensores", "original_id": 1, "inserted_id": 10}, {"table": "media", "original_id": 3, "inserted_id": 5}]}'
         """
         print(f"Procesando ACK de sincronización de {ack_json}...")
         try:

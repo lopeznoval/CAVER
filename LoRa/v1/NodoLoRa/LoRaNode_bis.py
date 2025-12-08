@@ -1226,7 +1226,7 @@ class LoRaNode:
                 os.remove(db_path)
             print("Creando BBDD SQLite.")
             self.db = RobotDatabase(db_path)
-            self.sync = NodeSyncManager(self.db)
+            self.sync = NodeSyncManager(self.db, self.addr)
             bbdd_th = threading.Thread(target=self.sync_BBDD_sens_loop, daemon=True).start()
         else:
             # connect_mongo()
