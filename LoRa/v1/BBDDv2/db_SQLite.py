@@ -61,7 +61,7 @@ class RobotDatabase:
         os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
         self.engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
         Base.metadata.create_all(self.engine)
-        self.Session = sessionmaker(bind=self.engine)
+        self.Session = sessionmaker(bind=self.engine, expire_on_commit=False)
 
     # ---------------------------
     # SESIÓN
@@ -377,6 +377,18 @@ class RobotDatabase:
 
         s.commit()
         s.close()
+
+    def delete_synced_entries(self):
+        """Elimina todos los registros que ya están sincronizados (sinc = True)"""
+        s = self.new_session()
+        try:
+            s.query(SensorData).filter_by(sinc=True).delete()
+            s.query(RobotMovimiento).filter_by(sinc=True).delete()
+            s.query(Media).filter_by(sinc=True).delete()
+            s.commit()
+        finally:
+            s.close()
+
 
 
 # Ejemplo de uso:

@@ -73,15 +73,17 @@ class LoRaNode:
                 self.recording = False
                 # carpetas
                 home_dir = os.path.expanduser("~")
-                self.photo_dir = os.path.join(home_dir, "photos")
-                self.video_dir = os.path.join(home_dir, "videos") 
-                self.pending_file = os.path.join(home_dir, "pending.json") 
+                # self.photo_dir = os.path.join(home_dir, "photos")
+                # self.video_dir = os.path.join(home_dir, "videos") 
+                # self.pending_file = os.path.join(home_dir, "pending.json") 
+                self.photo_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/photos")
+                self.video_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/videos")
                 
                 os.makedirs(self.photo_dir, exist_ok=True)
                 os.makedirs(self.video_dir, exist_ok=True)
-                if not os.path.exists(self.pending_file):
-                    with open(self.pending_file, "w") as f:
-                        json.dump([], f)
+                # if not os.path.exists(self.pending_file):
+                #     with open(self.pending_file, "w") as f:
+                #         json.dump([], f)
 
                 # Pending in-memory for speed
                 self._load_pending_list()
@@ -231,18 +233,11 @@ class LoRaNode:
                 # Mensajes tipo 0 -son los enviados por el robot directamente-, por lo que aquí se describe la lógica de recepción de datos
                 if msg_type == 0:
                     if msg_id == 20: # hacer lo que sea en la EB
-                    #     try:
-                    #         resp = procesar_paquete_lora(message)
-                    #         self.send_message(addr_sender, 0, 21, resp)
-                    #     except Exception as e:
-                    #         self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando sensores LoRa: {e}")
-                    # if msg_id == 21: 
-                    #     with get_db_session() as session:
-                    #         actualizar_BBDD_robot(message, session)  
-                    #     print(f"[{time.strftime('%H:%M:%S')}] BBDD robot actualizada tras ACK")
                         ack = self.process_packet_base(message)
+                        print(f"[{time.strftime('%H:%M:%S')}] Procesado paquete BBDD, enviando ACK: {ack}")
                         self.send_message(addr_sender, 0, 21, ack)
                     if msg_id == 21: 
+                        print(f"[{time.strftime('%H:%M:%S')}] Recibido ACK BBDD. Procesando...")
                         self.ack_BBDD_packet(message)
                     
                     elif msg_id == 30:
@@ -383,11 +378,11 @@ class LoRaNode:
                                 self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                                 self.mov_aut_thread.start()
                         elif "0" in message:
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Movimiento autónomo loop detenido por EB.")
+                            print(f"[{time.strftime('%H:%M:%S')}] Movimiento autónomo loop detenido por EB.")
                             self.auto_move_running = False
                             self.detect_collisions_running = False
                         else: 
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando movimiento autónomo desconocido: {message}") 
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando movimiento autónomo desconocido: {message}") 
 
                     elif msg_type == 15:
                         if "0" in message:
@@ -418,10 +413,10 @@ class LoRaNode:
                                 self.mov_aut_thread = threading.Thread(target=self._move_robot_loop, daemon=True)
                                 self.mov_aut_thread.start()
                         elif "0" in message:
-                            self.on_alert("Detacción de colisiones detenida por EB.")
+                            print("Detacción de colisiones detenida por EB.")
                             self.detect_collisions_running = False
                         else: 
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando detección de colisiones desconocido: {message}") 
+                            print(f"[{time.strftime('%H:%M:%S')}] ⚠️ Comando detección de colisiones desconocido: {message}") 
 
                     if self.robot.is_open and self.robot:
                         resp = self.send_to_robot(message)
@@ -451,20 +446,20 @@ class LoRaNode:
 
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
                      # ---------------------- FOTO ----------------------
-                    if msg_type == 25:  # Tomar foto
-                        # img_b64 = self.take_picture_and_save()
-                        # ------ PROBAR ------
-                        resp = self.take_picture_and_save_compressed(addr_sender)
-                        self.send_message(addr_sender, 1, msg_id, "ACK Foto recibida y en proceso de envío.")
-                        if resp is not None:
-                            self.send_bytes(addr_sender, 0, msg_id, resp)
-                        print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
+                    # if msg_type == 25:  # Tomar foto
+                    #     # img_b64 = self.take_picture_and_save()
+                    #     # ------ PROBAR ------
+                    #     resp = self.take_picture_and_save_compressed(addr_sender)
+                    #     self.send_message(addr_sender, 1, msg_id, "ACK Foto recibida y en proceso de envío.")
+                    #     if resp is not None:
+                    #         self.send_bytes(addr_sender, 0, msg_id, resp)
+                    #     print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
 
-                    # ---------------------- VIDEO ----------------------
-                    elif msg_type == 26:  # iniciar grabación
-                        video_bytes = self.start_video_recording()
-                        if video_bytes:
-                            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Vídeo comprimido listo ({len(video_bytes)} bytes).")
+                    # # ---------------------- VIDEO ----------------------
+                    # elif msg_type == 26:  # iniciar grabación
+                    #     video_bytes = self.start_video_recording()
+                    #     if video_bytes:
+                    #         print(f"[{time.strftime('%H:%M:%S')}] Vídeo comprimido listo ({len(video_bytes)} bytes).")
                        
                         # # ---------------------- INICIAR VIDEO ----------------------
                         # if "1" in message:
@@ -479,12 +474,11 @@ class LoRaNode:
                         # else: 
                         #     self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
 
-                    elif msg_type == 27:
+                    if msg_type == 25: # Tomar foto y enviar vía WiFi
                         try:
-                            host_eb, port_eb = message.split(":")
-                            img_bytes, path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
+                            path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
 
-                            if self.lora_cam_sender.send_photo_file_wifi(host_eb, port_eb, img_bytes):
+                            if self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path):
                                 self.db.insert_media(path=path, es_video=False, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
@@ -495,24 +489,28 @@ class LoRaNode:
                             print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
 
 
-                    elif msg_type == 28: 
+                    elif msg_type == 26: # Grabar video y enviar vía WiFi 
                         try:
                             data = json.loads(message)
-                            host_eb = data.get("host", "192.168.1.1")
-                            port_eb = data.get("port", 6000)
-                            duration = data.get("duracion", 3)
+                            duration = data.get("duration", 3)
+                            quality = data.get("quality", "Baja")
 
-                            img_bytes, path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration)
+                            path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration)
 
-                            if self.lora_cam_sender.send_video_file_wifi(host_eb, port_eb, img_bytes):
-                                self.db.insert_media(path=path, es_video=False, sinc=True)
-                                print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
-                                print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
+                            if self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path):
+                                self.db.insert_media(path=path, es_video=True, sinc=True)
+                                print(f"[{time.strftime('%H:%M:%S')}] Video enviado vía WiFi a EB.")
+                                print(f"[{time.strftime('%H:%M:%S')}] Video guardado en SQLite y sincronizada.")
                             else:
                                 self.db.insert_media(path=path, es_video=False)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite.")
                         except Exception as e:
-                            print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
+                            print(f"[{time.strftime('%H:%M:%S')}] Error enviando video vía WiFi: {e}")
+
+                    elif msg_type == 28:  # host:port para enviar foto vía WiFi
+                        self.host_eb, self.port_eb = message.split(":")
+                        self.port_eb = int(self.port_eb)
+                        print(f"[{time.strftime('%H:%M:%S')}] Host EB para multimedia vía WiFi: {self.host_eb}:{self.port_eb}")
 
                 elif msg_type == 31:
                     print("Relay mode set to: ", relay_flag)
@@ -686,10 +684,10 @@ class LoRaNode:
         UDP_IP = "0.0.0.0"
         UDP_PORT = 5005
 
-        radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        radar_sock.bind((UDP_IP, UDP_PORT))
-        radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
-        radar_sock.setblocking(False)
+        self.radar_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.radar_sock.bind((UDP_IP, UDP_PORT))
+        self.radar_sock.settimeout(0.01)         # más rápido para vaciar buffer
+        self.radar_sock.setblocking(False)
 
         print(f"[{time.strftime('%H:%M:%S')}] 🔄 Autonomía iniciada...")
         
@@ -704,7 +702,7 @@ class LoRaNode:
             mensaje = None
             while True:
                 try:
-                    data, _ = radar_sock.recvfrom(1024)
+                    data, _ = self.radar_sock.recvfrom(1024)
                     mensaje = data.decode()
                 except BlockingIOError:
                     break
@@ -746,7 +744,8 @@ class LoRaNode:
                 time.sleep(0.15)  # control loop
                                 
 
-        radar_sock.close()
+        self.radar_sock.close()
+        self.radar_sock = None
         print(f"[{time.strftime('%H:%M:%S')}]🛑 Autonomía detenida.")
             
     def _battery_monitor_loop(self):
@@ -1130,7 +1129,7 @@ class LoRaNode:
             except Exception as e:
                 print(f"[{time.strftime('%H:%M:%S')}] [SENSORS] Error leyendo ESP32: {e}")
             
-            time.sleep(5) #cmabiar a 120 o lo que queramos
+            time.sleep(30) #cmabiar a 120 o lo que queramos
 
     def read_sensors_once(self):
         """Lee datos de temperatura y humedad del ESP32 conectado por serie una vez."""
@@ -1209,20 +1208,21 @@ class LoRaNode:
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando BBDD: {e}")
             time.sleep(30)  # cada 30 segundos
 
-    def sync_BBDD_loop(self):
+    def sync_BBDD_sens_loop(self):
         """Sincroniza datos pendientes con la BBDD local."""
         while self.running:
             print(f"[{time.strftime('%H:%M:%S')}] Iniiciando sincronización.")
-            packets = self.sync.prepare_packets()
+            packets = self.sync.prepare_packets_sensors()
             for pkt in packets:
                 json_string = pkt.to_json()  # Este string es lo que envías por LoRa
                 print(f"[{time.strftime('%H:%M:%S')}] Enviando: {json_string}")
                 self.send_message(0xFFFF, 0, 20, json_string)
-            time.sleep(12)
+                time.sleep(1)
+            time.sleep(63)
 
     def process_packet_base(self, json):
         """Procesa un paquete de BBDD recibido desde un nodo."""
-        print(json)
+        print(f"[{time.strftime('%H:%M:%S')}] Entradas de sincronización recibidas para BBDD. Procesando...")
         return self.sync_base.process_packet(json)
 
     def ack_BBDD_packet(self, json):
@@ -1230,11 +1230,14 @@ class LoRaNode:
         self.sync.handle_ack(json)
 
     # -------------------- WiFi --------------------
-    def listen_robot(self, host="0.0.0.0", port=6000, save_path="./"):
+    def listen_robot(self, host="0.0.0.0", port=6000, save_path=os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/")):
         """
         Hilo que escucha comandos enviados por el robot.
         Maneja fotos y vídeos enviados por TCP.
         """
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+            
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind((host, port))
         s.listen(5)
@@ -1247,9 +1250,11 @@ class LoRaNode:
                 # Primero leemos el header: tipo de dato (PHOTO / VIDEO)
                 header = conn.recv(10).decode().strip()  # suponiendo header <=10 chars
                 print(f"📩 Tipo de dato recibido: {header}")
-
+                #Leemos el nombre
+                name_len = int.from_bytes(conn.recv(2), 'big')
+                filename = conn.recv(name_len).decode("utf-8")
                 # Luego leemos el tamaño (4 bytes)
-                size_bytes = conn.recv(4)
+                size_bytes = conn.recv(8)
                 size = int.from_bytes(size_bytes, byteorder="big")
                 print(f"📦 Tamaño de datos: {size} bytes")
 
@@ -1263,16 +1268,16 @@ class LoRaNode:
 
                 # Guardamos según tipo
                 if header == "PHOTO":
-                    filename = save_path + "foto_recibida.jpg"
-                    with open(filename, "wb") as f:
+                    filename_ = save_path + filename
+                    with open(filename_, "wb") as f:
                         f.write(data)
-                    print(f"📸 Foto guardada en {filename}")
+                    print(f"📸 Foto guardada en {filename_}")
 
                 elif header == "VIDEO":
-                    filename = save_path + "video_recibido.h264"
-                    with open(filename, "wb") as f:
+                    filename_ = save_path + filename
+                    with open(filename_, "wb") as f:
                         f.write(data)
-                    print(f"🎥 Vídeo guardado en {filename}")
+                    print(f"🎥 Vídeo guardado en {filename_}")
 
                 else:
                     print("⚠️ Tipo de dato desconocido")
@@ -1309,7 +1314,7 @@ class LoRaNode:
             print("Creando BBDD SQLite.")
             self.db = RobotDatabase(db_path)
             self.sync = NodeSyncManager(self.db)
-            bbdd_th = threading.Thread(target=self.sync_BBDD_loop, daemon=True).start()
+            bbdd_th = threading.Thread(target=self.sync_BBDD_sens_loop, daemon=True).start()
         else:
             # connect_mongo()
             print("Conectando a MongoDB.")

@@ -8,15 +8,18 @@ import platform
 import socket
 import cv2
 import numpy as np
+import subprocess
 
 class LoRaCamSender:
     if platform.system() == "Linux":
         from picamera2 import Picamera2, Preview  # type: ignore
         from picamera2.encoders import H264Encoder # type: ignore
+        from picamera2.outputs import FileOutput # type: ignore
 
         def __init__(self, camera: Picamera2 = None):
             self.camera = camera
             self.stream = io.BytesIO()
+            print("📷 Cámara inicializada.")
 
             if self.camera is None:
                 print("⚠️ No hay cámara disponible. Modo simulación activado.")
@@ -45,15 +48,16 @@ class LoRaCamSender:
 
             img_bytes = self.stream.getvalue()
             self.camera.stop()
+            print(f"📷 Foto capturada, tamaño: {len(img_bytes)} bytes")
 
             filename = f"img_{int(time.time())}.jpg"
             full_path = os.path.join(photo_dir, filename)
             with open(full_path, "wb") as f:
                 f.write(img_bytes)
-
             # reset stream
             self.stream.seek(0)
             self.stream.truncate()
+            print(f"💾 Foto guardada en: {full_path}")
 
             # Devuelves los bytes y también la ruta
             return full_path
@@ -65,30 +69,30 @@ class LoRaCamSender:
     def video_recording_optimized(self, video_dir, duration=3):
         if self.camera is not None:
             # Reset stream
-            self.stream.seek(0)
-            self.stream.truncate()
 
-            # Configurar la cámara para vídeo
+            filename = f"video_{int(time.time())}.mp4"
+            full_path = os.path.join(video_dir, filename)
+            h264_path = full_path.replace(".mp4", ".h264")
+
             self.camera.configure(self.camera.create_video_configuration(
-                main={"size": (320, 240), "format": "H264"}
+                main={"size": (320, 240)}
             ))
-            self.camera.start()
 
-            # Grabar vídeo (duración configurable)
-            self.camera.start_recording(self.stream, format='h264')
+            from picamera2.encoders import H264Encoder # type: ignore
+            from picamera2.outputs import FileOutput, FfmpegOutput # type: ignore
+
+            encoder = H264Encoder()
+            output = FfmpegOutput(full_path)
+
+            self.camera.start_recording(
+                encoder=encoder,
+                output=output
+            )
             time.sleep(duration)
             self.camera.stop_recording()
 
-            # Obtener bytes del vídeo
-            video_bytes = self.stream.getvalue()
-
-            filename = f"video_{int(time.time())}.h264"
-            full_path = os.path.join(video_dir, filename)
-
-            with open(full_path, "wb") as f:
-                f.write(video_bytes)
-            self.stream.seek(0)
-            self.stream.truncate()
+            print(f"🎥 Vídeo grabado durante {duration} segundos.")
+            print(f"💾 Vídeo guardado en: {full_path}")
 
             return full_path
 
@@ -105,64 +109,73 @@ class LoRaCamSender:
 
 
     def send_photo_file_wifi(self, host: str, port: int, photo_path: str):
-        """
-        Captura una foto comprimida y la envía por TCP (fiable).
-        Devuelve True si se envió con éxito.
-        """
         print("📸 Capturando foto comprimida antes del envío...")
 
         if not os.path.exists(photo_path):
             photo_path = self.capture_recording_optimized()
 
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((host, port))
-            print(f"📡 Enviando {os.path.getsize(photo_path)} bytes de foto a {host}:{port}...")
-            with open(photo_path, "rb") as f:
-                photo_bytes = f.read()
-                s.send(b"PHOTO     ")  # 10 bytes
-                s.send(len(photo_bytes).to_bytes(4, byteorder='big'))
-                s.sendall(photo_bytes)
-                s.close()
+            filename = os.path.basename(photo_path)
+            name_bytes = filename.encode("utf-8")
 
-            print("✅ Foto enviada por TCP con éxito.")
-            return True
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((host, port))
+                file_size = os.path.getsize(photo_path)
+
+                print(f"📡 Enviando foto {filename} ({file_size} bytes) a {host}:{port}...")
+
+                # --- PROTOCOLO ---
+                s.send(b"PHOTO     ")  # 10 bytes
+                s.send(len(name_bytes).to_bytes(2, 'big'))  # longitud nombre
+                s.send(name_bytes)                          # nombre
+                s.send(file_size.to_bytes(8, 'big'))        # tamaño
+
+                # contenido
+                with open(photo_path, "rb") as f:
+                    s.sendall(f.read())
+
+                print("✅ Foto enviada por TCP con éxito.")
+                return True
 
         except Exception as e:
             print(f"❌ Error enviando la foto: {e}")
             return False
 
-    def send_video_file_wifi(self, host: str, port: int, video_path):
-        """
-        Captura un vídeo de 3s comprimido y lo envía por TCP (fiable).
-        Devuelve True si se envió con éxito.
-        """
+
+    def send_video_file_wifi(self, host: str, port: int, video_path: str):
         print("🎥 Grabando vídeo comprimido antes del envío...")
 
         if not os.path.exists(video_path):
             video_path = self.video_recording_optimized()
 
         try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((host, port))
-            video_bytes = os.path.getsize(video_path)
-            print(f"📡 Enviando {video_bytes} bytes de vídeo a {host}:{port}...")
-            s.send(b"VIDEO     ")  # 10 bytes
-            s.send(video_bytes.to_bytes(8, byteorder='big'))
-            with open(video_path, "rb") as f:
-                while True:
-                    chunk = f.read(4096)
-                    if not chunk:
-                        break
-                    s.sendall(chunk)
-            s.close()
+            filename = os.path.basename(video_path)
+            name_bytes = filename.encode("utf-8")
+            file_size = os.path.getsize(video_path)
 
-            print("✅ Vídeo enviado por TCP con éxito.")
-            return True
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((host, port))
+
+                print(f"📡 Enviando vídeo {filename} ({file_size} bytes) a {host}:{port}...")
+
+                # --- PROTOCOLO ---
+                s.send(b"VIDEO     ")                      # 10 bytes
+                s.send(len(name_bytes).to_bytes(2, 'big'))  # longitud nombre
+                s.send(name_bytes)                          # nombre archivo
+                s.send(file_size.to_bytes(8, 'big'))        # tamaño
+
+                # enviar contenido en chunks
+                with open(video_path, "rb") as f:
+                    while (chunk := f.read(4096)):
+                        s.sendall(chunk)
+
+                print("✅ Vídeo enviado por TCP con éxito.")
+                return True
 
         except Exception as e:
             print(f"❌ Error enviando el vídeo: {e}")
             return False
+
 
     def start_h264_streaming(self, host: str, port: int):
         """
