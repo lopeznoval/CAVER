@@ -182,27 +182,30 @@ class LoRaCamSender:
         Inicializa el streaming H.264 y devuelve el encoder y socket
         para poder detenerlo más tarde.
         """
-        if self.camera is None:
-            print("⚠️ No hay cámara real. No se puede iniciar H264 streaming.")
-            return None, None
+        from picamera2.encoders import H264Encoder # type: ignore
+        from picamera2.outputs import GstOutput # type: ignore
 
-        print(f"📡 Iniciando streaming H.264 RTP a {host}:{port}...")
+        try:
+            encoder = H264Encoder(bitrate=2_000_000)
 
-        self.encoder = H264Encoder(bitrate=2_000_000)  # 2 Mbps #type: ignore
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            pipeline = (
+                "appsrc ! h264parse ! rtph264pay config-interval=1 pt=96 "
+                "! udpsink host=192.168.1.50 port=5004"
+            )
 
-        def send_h264_packet(buf):
-            self.sock.sendto(buf, (host, port))
+            output = GstOutput(pipeline)
 
-        self.camera.configure(self.camera.create_video_configuration(
-            main={"size": (640, 480)}
-        ))
-        self.camera.start()
+            self.camera.configure(self.camera.create_video_configuration(
+                main={"size": (640, 480)}
+            ))
 
-        self.camera.start_recording(self.encoder, send_h264_packet)
-        print("🎬 Streaming activo.")
+            self.camera.start_recording(encoder, output)
+            print(f"📡 Iniciando streaming H.264 a udp://{host}:{port}...")
 
-        return self.encoder, self.sock  # para que el hilo principal tenga referencia
+            return True
+        except Exception as e:
+            print(f"❌ Error iniciando streaming H.264: {e}")
+            return False
 
     def stop_h264_streaming(self):
         """
@@ -213,9 +216,9 @@ class LoRaCamSender:
             self.camera.stop_recording()
             self.camera.stop()
         
-        if hasattr(self, "sock") and self.sock is not None:
-            self.sock.close()
-            print("📡 Socket UDP cerrado.")
+        # if hasattr(self, "sock") and self.sock is not None:
+        #     self.sock.close()
+        #     print("📡 Socket UDP cerrado.")
 
         print("✅ Streaming H.264 detenido y cámara liberada.")
 

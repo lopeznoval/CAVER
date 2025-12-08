@@ -235,7 +235,7 @@ class LoRaNode:
                     if msg_id == 20: # hacer lo que sea en la EB
                         ack = self.process_packet_base(message)
                         print(f"[{time.strftime('%H:%M:%S')}] Procesado paquete BBDD, enviando ACK: {ack}")
-                        self.send_message(addr_sender, 0, 21, ack)
+                        self.send_message(addr_sender, 0, 21, json.dumps(ack))
                     if msg_id == 21: 
                         print(f"[{time.strftime('%H:%M:%S')}] Recibido ACK BBDD. Procesando...")
                         self.ack_BBDD_packet(message)
@@ -317,15 +317,15 @@ class LoRaNode:
                         resp += "1" if self.radar_sock is not None else "0"
                         resp += "1" if self.sensores is not None else "0"
                         resp += "1" if self.camera is not None else "0"
-                        time.sleep(0.2*self.addr)  # evitar colisiones
+                        # time.sleep(0.2*self.addr)  # evitar colisiones
                         self.send_message(addr_sender, 2, msg_id, resp)
                     elif msg_type == 6:  # Status
                         status = f"Node {self.addr} OK. Freq: {self.freq} MHz, Power: {self.power} dBm"
-                        time.sleep(0.2*self.addr)  # evitar colisiones
+                        # time.sleep(0.2*self.addr)  # evitar colisiones
                         self.send_message(addr_sender, 2, msg_id, status)
                     elif msg_type == 7:  # Stop
                         resp = "Node stopping..."
-                        time.sleep(0.2*self.addr)  # evitar colisiones
+                        # time.sleep(0.2*self.addr)  # evitar colisiones
                         self.send_message(addr_sender, 2, msg_id, resp)
                         self.stop()
                     elif msg_type == 8: # Check RSSI
@@ -445,35 +445,6 @@ class LoRaNode:
                         self.control_led("AUTO")
 
                 elif 24 < msg_type < 31:  # Comandos para cámara y radar
-                     # ---------------------- FOTO ----------------------
-                    # if msg_type == 25:  # Tomar foto
-                    #     # img_b64 = self.take_picture_and_save()
-                    #     # ------ PROBAR ------
-                    #     resp = self.take_picture_and_save_compressed(addr_sender)
-                    #     self.send_message(addr_sender, 1, msg_id, "ACK Foto recibida y en proceso de envío.")
-                    #     if resp is not None:
-                    #         self.send_bytes(addr_sender, 0, msg_id, resp)
-                    #     print(f"[{time.strftime('%H:%M:%S')}] Foto enviada a {addr_sender}")
-
-                    # # ---------------------- VIDEO ----------------------
-                    # elif msg_type == 26:  # iniciar grabación
-                    #     video_bytes = self.start_video_recording()
-                    #     if video_bytes:
-                    #         print(f"[{time.strftime('%H:%M:%S')}] Vídeo comprimido listo ({len(video_bytes)} bytes).")
-                       
-                        # # ---------------------- INICIAR VIDEO ----------------------
-                        # if "1" in message:
-                        #     filename = self.start_video_recording()
-                        #     self.send_message(addr_sender, 4, msg_id, f"Video recording started: {filename}")
-                        #     print(f"[{time.strftime('%H:%M:%S')}] Grabación iniciada: {filename}")
-                        # elif "0" in message:
-                        #     # ---------------------- DETENER VIDEO ----------------------
-                        #     filename = self.stop_video_recording()
-                        #     self.send_message(addr_sender, 4, msg_id, f"Video recording stopped: {filename}")
-                        #     print(f"[{time.strftime('%H:%M:%S')}] Grabación detenida: {filename}")
-                        # else: 
-                        #     self.on_alert(f"⚠️ Comando camara desconocido: {message}") 
-
                     if msg_type == 25: # Tomar foto y enviar vía WiFi
                         try:
                             path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir)
@@ -482,12 +453,13 @@ class LoRaNode:
                                 self.db.insert_media(path=path, es_video=False, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
+                                self.send_message(addr_sender, 4, msg_id, f"Foto tomada y enviada.")
                             else:
                                 self.db.insert_media(path=path, es_video=False)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite.")
+                                self.send_message(addr_sender, 4, msg_id, f"Foto tomada y guardada.")
                         except Exception as e:
                             print(f"[{time.strftime('%H:%M:%S')}] Error enviando foto vía WiFi: {e}")
-
 
                     elif msg_type == 26: # Grabar video y enviar vía WiFi 
                         try:
@@ -501,11 +473,24 @@ class LoRaNode:
                                 self.db.insert_media(path=path, es_video=True, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Video enviado vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Video guardado en SQLite y sincronizada.")
+                                self.send_message(addr_sender, 4, msg_id, f"Video tomado y enviado.")
                             else:
-                                self.db.insert_media(path=path, es_video=False)
-                                print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite.")
+                                self.db.insert_media(path=path, es_video=True)
+                                print(f"[{time.strftime('%H:%M:%S')}] Video guardado en SQLite.")
+                                self.send_message(addr_sender, 4, msg_id, f"Video tomado y guardado.")
                         except Exception as e:
                             print(f"[{time.strftime('%H:%M:%S')}] Error enviando video vía WiFi: {e}")
+
+                    elif msg_type == 27:  # empezar/parar streaming vía WiFi
+                        if message == "1":
+                            self.streaming_running = True
+                            self.stream_dest = addr_sender
+                            self.streaming_thread = threading.Thread(target=self._streaming_loop, daemon=True)
+                            self.streaming_thread.start()
+                            self.send_message(addr_sender, 4, msg_id, "Streaming started.")
+                        elif message == "0":
+                            self.streaming_running = False
+                            self.send_message(addr_sender, 4, msg_id, "Streaming stopped.")
 
                     elif msg_type == 28:  # host:port para enviar foto vía WiFi
                         self.host_eb, self.port_eb = message.split(":")
@@ -994,100 +979,24 @@ class LoRaNode:
                 self._save_pending_list()
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Archivo enviado/limpiado: {filepath}")
 
-    # -------------------- FOTO --------------------
-    def take_picture_and_save(self, quality_jpeg=80, max_lora_bytes=18000):
-        """
-        Toma una foto con Picamera2, la guarda en fotos/ y devuelve:
-        (filename_on_disk, b64_string_if_small_or_None)
-        Si la imagen es > max_lora_bytes se devuelve None como b64 y queda en pending.
-        """
-        if self.camera is None:
-            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Cámara no disponible para foto.")
-            return None, None
-
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = os.path.join(self.photo_dir, f"photo_{timestamp}.jpg")
-
-            # Captura a archivo (más robusto que capturar en stream en algunas versiones)
-            # Usamos capture_file para guardar directamente
-            try:
-                # picamera2 API: capture_file
-                self.camera.start()
-            except Exception:
-                # start puede fallar si ya está arrancada; ignorar
-                pass
-
-            # capturar directamente en archivo
-            try:
-                self.camera.capture_file(filename, format="jpeg")
-            except TypeError:
-                # en algunas versiones capture_file acepta objecto, intentamos con IO
-                buf = io.BytesIO()
-                self.camera.capture_file(buf, format="jpeg")
-                with open(filename, "wb") as f:
-                    f.write(buf.getvalue())
-
-            # Leer bytes
-            with open(filename, "rb") as f:
-                data = f.read()
-
-            # Si el tamaño es pequeño, devolver base64 listo para enviar por LoRa
-            if len(data) <= max_lora_bytes:
-                b64 = base64.b64encode(data).decode("utf-8")
-                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto tomada y codificada (size {len(data)} bytes).")
-                return filename, b64
-            else:
-                # Guardar como pendiente para envio por WiFi
-                self._mark_pending(filename)
-                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto tomada (size {len(data)} bytes) — marcada pendiente (demasiado grande para LoRa).")
-                return filename, None
-
-        except Exception as e:
-            self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error tomando foto: {e}")
-            return None, None
-    
-    # ------ PROBAR ------
-    def take_picture_and_save_compressed(self, photo_dest, max_lora_bytes=18000, quality=15):
-        """
-        Captura imagen usando capture_recording_optimized de LoRaCamSender.
-        """
-        img_bytes = self.lora_cam_sender.capture_recording_optimized()
-        if img_bytes is not None:
-            if len(img_bytes) <= 18000:  # tamaño máximo LoRa
-                return img_bytes
-            else:
-                self.on_alert(f"[{time.strftime('%H:%M:%S')}] ⚠️ Imagen demasiado grande para LoRa, marcada como pendiente.")
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = os.path.join(self.photo_dir, f"photo_{timestamp}.jpg")
-                with open(filename, "wb") as f:
-                    f.write(img_bytes)
-                self._mark_pending(filename)
-                print(f"[{time.strftime('%H:%M:%S')}] Foto guardada y marcada como pendiente: {filename}")
-                return None
-        else:
-            self.on_alert("⚠️ Error tomando foto.")
-    
-    # ---------- VIDEO ----------      
-    def start_video_recording(self):
-        """
-        Captura vídeo usando video_recording_optimized de LoRaCamSender.
-        """
-        self.video_bytes = self.lora_cam_sender.video_recording_optimized()
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(self.video_dir, f"video_{timestamp}.h264")
-        with open(filename, "wb") as f:
-            f.write(self.video_bytes)
-        self._mark_pending(filename)
-        print(f"[{time.strftime('%H:%M:%S')}] Vídeo guardado y marcado como pendiente: {filename}")
-        self.video_bytes = None
-
-
-    # ---------- UTILIDADES ----------
     def list_pending(self):
         """Devuelve lista actual de pendientes (ruta completa)."""
         self._load_pending_list()
         return list(self.pending)
+    
+    def _streaming_loop(self):
+        """Envía frames de video periódicamente al nodo solicitante mientras self.streaming_running sea True."""
+        while getattr(self, "streaming_running", False) and self.running:
+            try:
+                path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration=3)
+                if self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path):
+                    print(f"[{time.strftime('%H:%M:%S')}] Frame de video enviado vía WiFi a EB.")
+                    self.send_message(self.stream_dest, 0, 70, f"Frame enviado.")
+                else:
+                    print(f"[{time.strftime('%H:%M:%S')}] Error enviando frame de video vía WiFi.")
+            except Exception as e:
+                print(f"[{time.strftime('%H:%M:%S')}] Error en streaming loop: {e}")
+            time.sleep(1)  # intervalo entre frames
 
     # -------------------- SENSORES --------------------
     def connect_sensors(self):
@@ -1213,7 +1122,11 @@ class LoRaNode:
         while self.running:
             print(f"[{time.strftime('%H:%M:%S')}] Iniiciando sincronización.")
             packets = self.sync.prepare_packets_sensors()
+            count = 0
             for pkt in packets:
+                count += 1
+                if count > 2:
+                    break  # enviar máximo 2 paquetes por ciclo
                 json_string = pkt.to_json()  # Este string es lo que envías por LoRa
                 print(f"[{time.strftime('%H:%M:%S')}] Enviando: {json_string}")
                 self.send_message(0xFFFF, 0, 20, json_string)
