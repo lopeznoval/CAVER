@@ -35,6 +35,7 @@ class BaseStationSyncManager:
             "saved": []
         }
 
+        print(f"Processing packet {packet_id} with {len(entries)} entries")
         for e in entries:
             table = e.get("table")
             data = e.get("data", {})
@@ -75,6 +76,8 @@ class BaseStationSyncManager:
                 "original_id": e.get("id"),
                 "inserted_id": inserted_id
             })
+
+        print(f"Se guardaron {len(ack['saved'])} registros del paquete {packet_id}")
 
         return ack
     

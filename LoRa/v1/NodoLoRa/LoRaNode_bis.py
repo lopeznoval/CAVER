@@ -1204,11 +1204,11 @@ class LoRaNode:
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando BBDD: {e}")
             time.sleep(30)  # cada 30 segundos
 
-    def sync_BBDD_loop(self):
+    def sync_BBDD_sens_loop(self):
         """Sincroniza datos pendientes con la BBDD local."""
         while self.running:
             print(f"[{time.strftime('%H:%M:%S')}] Iniiciando sincronización.")
-            packets = self.sync.prepare_packets()
+            packets = self.sync.prepare_packets_sensors()
             for pkt in packets:
                 json_string = pkt.to_json()  # Este string es lo que envías por LoRa
                 print(f"[{time.strftime('%H:%M:%S')}] Enviando: {json_string}")
@@ -1310,7 +1310,7 @@ class LoRaNode:
             print("Creando BBDD SQLite.")
             self.db = RobotDatabase(db_path)
             self.sync = NodeSyncManager(self.db)
-            bbdd_th = threading.Thread(target=self.sync_BBDD_loop, daemon=True).start()
+            bbdd_th = threading.Thread(target=self.sync_BBDD_sens_loop, daemon=True).start()
         else:
             # connect_mongo()
             print("Conectando a MongoDB.")

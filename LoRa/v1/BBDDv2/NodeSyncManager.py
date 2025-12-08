@@ -34,7 +34,79 @@ class NodeSyncManager:
     # ---------------------------
     # Preparar paquetes JSON
     # ---------------------------
-    def prepare_packets(self):
+    def prepare_packets_sensors(self):
+        """
+        Lee registros pendientes de sincronización y los divide en paquetes ≤ max_bytes
+        Devuelve lista de SyncPacket, listos para serializar a JSON.
+        """
+        unsynced = self.db.get_unsynced_sensors()  # lista de dicts por tabla
+        packets = []
+        current_entries = []
+
+        for entry in unsynced:
+            entry["data"]["robot_id"] = self.robot_id
+            current_entries.append(entry)
+            packet_size = len(json.dumps(current_entries).encode('utf-8'))
+            if packet_size > self.max_bytes:
+                current_entries.pop()  # quitar último registro
+                if current_entries:
+                    packets.append(SyncPacket(current_entries))
+                current_entries = [entry]  # empezar nuevo paquete
+
+        if current_entries:
+            packets.append(SyncPacket(current_entries))
+
+        return packets
+    
+    def prepare_packets_movs(self):
+        """
+        Lee registros pendientes de sincronización y los divide en paquetes ≤ max_bytes
+        Devuelve lista de SyncPacket, listos para serializar a JSON.
+        """
+        unsynced = self.db.get_unsynced_movimientos()  # lista de dicts por tabla
+        packets = []
+        current_entries = []
+
+        for entry in unsynced:
+            entry["data"]["robot_id"] = self.robot_id
+            current_entries.append(entry)
+            packet_size = len(json.dumps(current_entries).encode('utf-8'))
+            if packet_size > self.max_bytes:
+                current_entries.pop()  # quitar último registro
+                if current_entries:
+                    packets.append(SyncPacket(current_entries))
+                current_entries = [entry]  # empezar nuevo paquete
+
+        if current_entries:
+            packets.append(SyncPacket(current_entries))
+
+        return packets
+    
+    def prepare_packets_media(self):
+        """
+        Lee registros pendientes de sincronización y los divide en paquetes ≤ max_bytes
+        Devuelve lista de SyncPacket, listos para serializar a JSON.
+        """
+        unsynced = self.db.get_unsynced_media()  # lista de dicts por tabla
+        packets = []
+        current_entries = []
+
+        for entry in unsynced:
+            entry["data"]["robot_id"] = self.robot_id
+            current_entries.append(entry)
+            packet_size = len(json.dumps(current_entries).encode('utf-8'))
+            if packet_size > self.max_bytes:
+                current_entries.pop()  # quitar último registro
+                if current_entries:
+                    packets.append(SyncPacket(current_entries))
+                current_entries = [entry]  # empezar nuevo paquete
+
+        if current_entries:
+            packets.append(SyncPacket(current_entries))
+
+        return packets
+    
+    def prepare_packets_all(self):
         """
         Lee registros pendientes de sincronización y los divide en paquetes ≤ max_bytes
         Devuelve lista de SyncPacket, listos para serializar a JSON.
