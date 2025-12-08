@@ -582,7 +582,6 @@ class EB_RobotGUI_bis(QWidget):
         # Añadir la TAB 8 al conjunto de tabs
         tabs.addTab(tab_radar, "🚗")
 
-
         # ------------------ Añadir pestañas a la columna ------------------
         col1.addWidget(tabs)
 
