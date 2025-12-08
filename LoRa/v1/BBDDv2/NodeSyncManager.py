@@ -22,7 +22,7 @@ class SyncPacket:
 
 
 class NodeSyncManager:
-    def __init__(self, db, max_bytes=240, r_id=0) -> list[SyncPacket]:
+    def __init__(self, db, r_id=0, max_bytes=240) -> list[SyncPacket]:
         """
         db: instancia de RobotDatabase
         max_bytes: tamaño máximo del paquete en bytes
