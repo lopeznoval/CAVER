@@ -97,6 +97,8 @@ class LoRaNode:
             self.camera = None
             self.stream = None
 
+        self.stop_send = False
+
         self.auto_move_running = False
         self.detect_collisions_running = False
 
@@ -177,6 +179,9 @@ class LoRaNode:
             time.sleep(40) # intervalos de 40 segundos entre envío y envío
 
     def send_message(self, addr_dest: int, msg_type: int, msg_id: int, message: str, relay_flag: int = 0, callback=None):
+        if self.stop_send:
+            print("⚠️ Sending paused, message not sent.")
+            return
         data = self.pack_message(addr_dest, msg_type, msg_id, message, relay_flag)
         if data is None:
             return
@@ -185,6 +190,7 @@ class LoRaNode:
             self.add_pending(addr_dest, msg_id)
 
     def send_bytes(self, addr_dest: int, msg_type: int, msg_id: int, data: bytes, relay_flag: int = 0, callback=None):
+        self.stop_send = True
         while len(data) > 230:
             chunk = data[:230]
             data = data[230:]
@@ -193,10 +199,11 @@ class LoRaNode:
             if packed_data is None:
                 return
             self.node.send_bytes(packed_data)
-            time.sleep(0.5)  # pequeño retardo entre fragmentos
+            time.sleep(1)  # pequeño retardo entre fragmentos
         part = 0
         packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag, part)
         self.node.send_bytes(packed_data)
+        self.stop_send = False
         # packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag)
         # self.node.send_bytes(packed_data)
         # if self.is_base and addr_dest != 0xFFFF:
@@ -248,11 +255,14 @@ class LoRaNode:
                         try:
                             if part == 1:
                                 if self.photo is None:
+                                    print(f"[{time.strftime('%H:%M:%S')}] Encadenando parte de foto...")
                                     self.photo = bytearray()
                                 self.photo.extend(message)
                             if part == 0 and self.photo is not None:
+                                print(f"[{time.strftime('%H:%M:%S')}] Finalizando foto...")
                                 self.photo.extend(message)
                                 img = Image.open(io.BytesIO(bytes(self.photo)))
+                                img.save(os.path.join(self.photo_dir, f"photo_from_{addr_sender}_{int(time.time())}.jpg"))
                                 self.on_photo(img)
                                 self.photo = None  
 

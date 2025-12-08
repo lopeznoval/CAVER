@@ -281,14 +281,19 @@ class EB_RobotGUI_bis(QWidget):
         vlay.addLayout(hbtn_video)
         start_str.clicked.connect(self.start_streaming)
         stop_str.clicked.connect(self.stop_streaming)
+        
+        # --- Imagen LoRa ---
+        self.lora_im = QPushButton("Ver archivos pendientes")
+        self.lora_im.clicked.connect(self.lora_img_cmd)
+        vlay.addWidget(self.lora_im)
 
         # --- Archivos pendientes ---
-        self.btn_view_pending = QPushButton("Ver archivos pendientes")
-        self.btn_view_pending.clicked.connect(self.show_pending)
-        vlay.addWidget(self.btn_view_pending)
+        # self.btn_view_pending = QPushButton("Ver archivos pendientes")
+        # self.btn_view_pending.clicked.connect(self.show_pending)
+        # vlay.addWidget(self.btn_view_pending)
 
-        self.pending_list_widget = QListWidget()
-        vlay.addWidget(self.pending_list_widget)
+        # self.pending_list_widget = QListWidget()
+        # vlay.addWidget(self.pending_list_widget)
 
         tab_video.setLayout(vlay)
         tabs.addTab(tab_video, "📹")
@@ -1093,6 +1098,11 @@ class EB_RobotGUI_bis(QWidget):
         self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Deteniendo reproducción de streaming de vídeo")
         self.send_cmd("0")
 
+    def lora_img_cmd(self):
+        """Envía comando para capturar imagen vía LoRa."""
+        self.set_selected_type(29, self.grups["Cámara/Radar (25–30)"][29])
+        self.append_general_log(f"[{time.strftime('%H:%M:%S')}] Solicitando captura de imagen vía LoRa")
+        self.send_cmd(" ")
 
     # -------------------- IMU inicio --------------------
     def _on_refresh_position (self, pos):
