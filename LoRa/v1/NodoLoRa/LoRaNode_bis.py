@@ -1092,9 +1092,9 @@ class LoRaNode:
                     path = item['data']['path']
                     es_video = item['data']['es_video']
                     if es_video:
-                        sent = self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path)
+                        sent = self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path, datetime.now(), self.addr)
                     else:
-                        sent = self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path)
+                        sent = self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path, datetime.now(), self.addr)
                     if sent:
                         packet_entry = {"table": "media", "id": id}
                         packet_entries.append(packet_entry)
