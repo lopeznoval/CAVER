@@ -530,7 +530,7 @@ class LoRaNode:
                             path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir, resolution=quality)
                             timestamp = datetime.now()
 
-                            if self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path, timestamp):
+                            if self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path, timestamp, self.addr):
                                 self.db.insert_media(path=path, es_video=False, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
@@ -551,7 +551,7 @@ class LoRaNode:
 
                             path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration, resolution=quality)
 
-                            if self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path, timestamp):
+                            if self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path, timestamp, self.addr):
                                 self.db.insert_media(path=path, es_video=True, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Video enviado vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Video guardado en SQLite y sincronizada.")
@@ -1153,10 +1153,18 @@ class LoRaNode:
                 #Leemos el nombre
                 name_len = int.from_bytes(conn.recv(2), 'big')
                 filename = conn.recv(name_len).decode("utf-8")
-                # Timestamp (8 bytes float) 
+                # Robot ID (2 bytes)
+                robot_id_bytes = conn.recv(2)
+                robot_id = int.from_bytes(robot_id_bytes, 'big')
+                print(f"🤖 Robot ID: {robot_id}")
+                # Timestamp (8 bytes double)
                 ts_bytes = conn.recv(8)
-                timestamp = struct.unpack('>d', ts_bytes)[0]  # float en segundos
+                timestamp = struct.unpack('>d', ts_bytes)[0]
                 timestamp_dt = datetime.fromtimestamp(timestamp)
+                print(f"⏱ Timestamp: {timestamp_dt.isoformat()}")
+                # Checksum  (32 bytes SHA256)
+                checksum_bytes = conn.recv(32)  
+                print(f"🛡 Checksum recibido: {checksum_bytes.hex()}")
                 print(f"⏱ Timestamp recibido: {timestamp_dt.isoformat()}")
                 # Luego leemos el tamaño (4 bytes)
                 size_bytes = conn.recv(8)
@@ -1177,7 +1185,7 @@ class LoRaNode:
                     with open(filename_, "wb") as f:
                         f.write(data)
                     print(f"📸 Foto guardada en {filename_}")
-                    self.db_base.insert_media(path=filename_, es_video=False, timestamp=timestamp_dt)
+                    self.db_base.insert_media(robot_id=robot_id, path=filename_, es_video=False, checksum=checksum_bytes, timestamp=timestamp_dt)
                     self.on_img(filename_)
 
                 elif header == "VIDEO":
@@ -1185,7 +1193,7 @@ class LoRaNode:
                     with open(filename_, "wb") as f:
                         f.write(data)
                     print(f"🎥 Vídeo guardado en {filename_}")
-                    self.db_base.insert_media(path=filename_, es_video=True, timestamp=timestamp_dt)
+                    self.db_base.insert_media(robot_id=robot_id, path=filename_, es_video=True, checksum=checksum_bytes, timestamp=timestamp_dt)
                     self.on_video(filename_)
 
                 else:

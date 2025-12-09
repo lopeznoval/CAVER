@@ -1,4 +1,5 @@
 from datetime import datetime
+import hashlib
 import io
 import os
 import struct
@@ -130,7 +131,7 @@ class LoRaCamSender:
             return video_bytes, full_path
 
 
-    def send_photo_file_wifi(self, host: str, port: int, photo_path: str, timestamp: datetime = None):
+    def send_photo_file_wifi(self, host: str, port: int, photo_path: str, timestamp: datetime, robot_id: int):
         print("📸 Capturando foto comprimida antes del envío...")
 
         if not os.path.exists(photo_path):
@@ -139,8 +140,12 @@ class LoRaCamSender:
         if timestamp is None:
             timestamp = datetime.now() 
 
-        ts_float = timestamp.timestamp()  
-        ts_bytes = struct.pack('>d', ts_float) 
+        with open(photo_path, "rb") as f:
+            file_bytes = f.read()
+            checksum = hashlib.sha256(file_bytes).digest()  # 32 bytes fijos
+
+        ts_bytes = struct.pack('>d', timestamp.timestamp())  # 8 bytes float
+        robot_id_bytes = robot_id.to_bytes(2, 'big')         # 2 bytes
 
         try:
             filename = os.path.basename(photo_path)
@@ -156,7 +161,9 @@ class LoRaCamSender:
                 s.send(b"PHOTO     ")  # 10 bytes
                 s.send(len(name_bytes).to_bytes(2, 'big'))  # longitud nombre
                 s.send(name_bytes)                          # nombre
-                s.send(ts_bytes)                            # timestamp 8 bytes
+                s.send(robot_id_bytes)                      # 2 bytes robot_id
+                s.send(ts_bytes)                            # 8 bytes timestamp
+                s.send(checksum)                            # 32 bytes SHA256
                 s.send(file_size.to_bytes(8, 'big'))        # tamaño
 
                 # contenido
@@ -171,7 +178,7 @@ class LoRaCamSender:
             return False
 
 
-    def send_video_file_wifi(self, host: str, port: int, video_path: str, timestamp: datetime):
+    def send_video_file_wifi(self, host: str, port: int, video_path: str, timestamp: datetime, robot_id: int):
         print("🎥 Grabando vídeo comprimido antes del envío...")
 
         if not os.path.exists(video_path):
@@ -180,8 +187,12 @@ class LoRaCamSender:
         if timestamp is None:
             timestamp = datetime.now()  
 
-        ts_float = timestamp.timestamp() 
-        ts_bytes = struct.pack('>d', ts_float) 
+        with open(video_path, "rb") as f:
+            file_bytes = f.read()
+            checksum = hashlib.sha256(file_bytes).digest()  # 32 bytes fijos
+
+        ts_bytes = struct.pack('>d', timestamp.timestamp())  # 8 bytes float
+        robot_id_bytes = robot_id.to_bytes(2, 'big')         # 2 bytes
 
         try:
             filename = os.path.basename(video_path)
@@ -197,7 +208,9 @@ class LoRaCamSender:
                 s.send(b"VIDEO     ")                      # 10 bytes
                 s.send(len(name_bytes).to_bytes(2, 'big'))  # longitud nombre
                 s.send(name_bytes)                          # nombre archivo
-                s.send(ts_bytes)                            # timestamp 8 bytes
+                s.send(robot_id_bytes)                      # 2 bytes robot_id
+                s.send(ts_bytes)                            # 8 bytes timestamp
+                s.send(checksum)                            # 32 bytes SHA256
                 s.send(file_size.to_bytes(8, 'big'))        # tamaño
 
                 # enviar contenido en chunks
