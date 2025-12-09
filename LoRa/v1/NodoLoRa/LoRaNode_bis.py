@@ -1,5 +1,6 @@
 # LoRaNode organizado
 from ast import arg
+from datetime import date
 import io
 from operator import is_
 import struct
@@ -10,6 +11,7 @@ import time
 import threading
 import platform
 import base64
+from bson import Timestamp
 from matplotlib.pylab import f
 import numpy as np
 import cv2
@@ -526,8 +528,9 @@ class LoRaNode:
                             data = json.loads(message)
                             quality = data.get("quality", "Baja")
                             path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir, resolution=quality)
+                            timestamp = datetime.now()
 
-                            if self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path):
+                            if self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path, timestamp):
                                 self.db.insert_media(path=path, es_video=False, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto enviada vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Foto guardada en SQLite y sincronizada.")
@@ -544,10 +547,11 @@ class LoRaNode:
                             data = json.loads(message)
                             duration = data.get("duration", 3)
                             quality = data.get("quality", "Baja")
+                            timestamp = datetime.now()
 
                             path = self.lora_cam_sender.video_recording_optimized(self.video_dir, duration, resolution=quality)
 
-                            if self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path):
+                            if self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path, timestamp):
                                 self.db.insert_media(path=path, es_video=True, sinc=True)
                                 print(f"[{time.strftime('%H:%M:%S')}] Video enviado vía WiFi a EB.")
                                 print(f"[{time.strftime('%H:%M:%S')}] Video guardado en SQLite y sincronizada.")
