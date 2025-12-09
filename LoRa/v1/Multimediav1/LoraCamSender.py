@@ -197,73 +197,44 @@ class LoRaCamSender:
             print(f"❌ Error enviando el vídeo: {e}")
             return False
 
-    def _streaming_loop(self, host, port, width, height, fps):
-        import cv2, socket, struct
-        self.camera.configure(self.camera.create_preview_configuration(main={"size": (width, height)}))
+    def _streaming_loop(self, host, port):
+        self.camera.configure(self.camera.create_video_configuration(main={"size": (640, 480)}))
         self.camera.start()
 
-        # Crear socket TCP cliente
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect((host, port))
-        print(f"📡 Conectado a {host}:{port}")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
+        print(f"📡 Enviando streaming UDP a {host}:{port}...")
         try:
             while self.streaming_active:
-                # Capturar frame
                 frame = self.camera.capture_array()
-
-                # Codificar a JPEG
-                ret, buffer = cv2.imencode('.jpg', frame)
-                data = buffer.tobytes()
-
-                # Enviar tamaño del frame + datos
-                self.sock.sendall(struct.pack('>I', len(data)) + data)
-
-        except Exception as e:
-            print(f"❌ Error en streaming: {e}")
-        finally:
-            self.camera.stop()
-            self.sock.close()
-            print("🛑 Streaming detenido")
-
-    def start_streaming(self, host: str, port: int = 5004, width=640, height=480, fps=20):
-        self.camera.configure(self.camera.create_video_configuration(main={"size": (640, 480)}, display=None))
-        self.camera.start()
-        
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
-        print(f"Intentando conectar a {host}:{port}...")
-        client_socket.connect((host, port))
-        print("Conexión establecida. Iniciando transmisión.")
-
-        try:
-            while self.streaming_active:
-                # --- Lógica de captura y envío (igual que antes) ---
-
-                # Captura un fotograma
-                frame = self.camera.capture_array()
-                # Codifica el fotograma a JPEG para reducir el tamaño
                 _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
                 data = buffer.tobytes()
-
-                # Envía el tamaño del fotograma primero, seguido de los datos del fotograma
-                size = len(data)
-                client_socket.sendall(size.to_bytes(4, byteorder='little'))
-                client_socket.sendall(data)
+                # Enviar cada frame como un solo paquete UDP
+                print(f"Enviando frame de tamaño {len(data)} bytes")
+                sock.sendto(data, (host, port))
         except Exception as e:
             print(f"❌ Error en streaming: {e}")
         finally:
-            client_socket.close()
             self.camera.stop()
+            sock.close()
             print("🛑 Streaming detenido")
+
+    def start_streaming(self, host, port=5400):
+        if self.streaming_active:
+            print("⚠️ Streaming ya activo")
+            return
+
+        self.streaming_active = True
+        self.streaming_thread = threading.Thread(target=self._streaming_loop, args=(host, port), daemon=True)
+        self.streaming_thread.start()
 
     def stop_streaming(self):
         if not self.streaming_active:
             print("⚠️ No hay streaming activo")
             return False
-
         self.streaming_active = False
-        print("🛑 Streaming detenido")
+        if self.streaming_thread:
+            self.streaming_thread.join(timeout=2)
         return True
 
         # Para la recepción en windows usar GSTREAMER:
