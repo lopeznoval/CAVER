@@ -2,6 +2,7 @@
 from ast import arg
 import io
 from operator import is_
+import struct
 import sys
 import json
 import queue
@@ -9,6 +10,7 @@ import time
 import threading
 import platform
 import base64
+from matplotlib.pylab import f
 import numpy as np
 import cv2
 import math
@@ -1077,10 +1079,10 @@ class LoRaNode:
     def sync_BBDD_sens_loop(self):
         """Sincroniza datos pendientes con la BBDD local."""
         while self.running:
-            print(f"[{time.strftime('%H:%M:%S')}] Iniiciando sincronización.")
             packets = self.sync.prepare_packets_sensors()
             count = 0
             for pkt in packets:
+                print(f"[{time.strftime('%H:%M:%S')}] Iniiciando sincronización.")
                 count += 1
                 if count > 1:
                     break  # enviar máximo 1 paquetes por ciclo
@@ -1088,7 +1090,7 @@ class LoRaNode:
                 print(f"[{time.strftime('%H:%M:%S')}] Enviando: {json_string}")
                 self.send_message(0xFFFF, 0, 20, json_string)
                 time.sleep(1)
-            time.sleep(40)
+            time.sleep(20)
 
     def process_packet_base(self, json):
         """Procesa un paquete de BBDD recibido desde un nodo."""
@@ -1100,6 +1102,30 @@ class LoRaNode:
         self.sync.handle_ack(json)
 
     # -------------------- WiFi --------------------
+    def sync_BDDD_wifi_loop(self):
+        """Sincroniza datos pendientes con la BBDD en la base vía WiFi."""
+        while self.running:
+            try:
+                media_list = self.db.get_unsynced_media()
+                packet_entries = []
+                for item in media_list:
+                    id = item['id']
+                    path = item['data']['path']
+                    es_video = item['data']['es_video']
+                    if es_video:
+                        sent = self.lora_cam_sender.send_video_file_wifi(self.host_eb, self.port_eb, path)
+                    else:
+                        sent = self.lora_cam_sender.send_photo_file_wifi(self.host_eb, self.port_eb, path)
+                    if sent:
+                        packet_entry = {"table": "media", "id": id}
+                        packet_entries.append(packet_entry)
+                        print(f"[{time.strftime('%H:%M:%S')}] Multimedia sincronizada vía WiFi: {path}")
+                self.db.mark_as_synced(packet_entries)
+
+            except Exception as e:
+                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando BBDD vía WiFi: {e}")
+            time.sleep(70)  # cada 70 segundos
+
     def listen_robot(self, host="0.0.0.0", port=6000, save_path=os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/")):
         """
         Hilo que escucha comandos enviados por el robot.
@@ -1123,6 +1149,11 @@ class LoRaNode:
                 #Leemos el nombre
                 name_len = int.from_bytes(conn.recv(2), 'big')
                 filename = conn.recv(name_len).decode("utf-8")
+                # Timestamp (8 bytes float) 
+                ts_bytes = conn.recv(8)
+                timestamp = struct.unpack('>d', ts_bytes)[0]  # float en segundos
+                timestamp_dt = datetime.fromtimestamp(timestamp)
+                print(f"⏱ Timestamp recibido: {timestamp_dt.isoformat()}")
                 # Luego leemos el tamaño (4 bytes)
                 size_bytes = conn.recv(8)
                 size = int.from_bytes(size_bytes, byteorder="big")
@@ -1142,6 +1173,7 @@ class LoRaNode:
                     with open(filename_, "wb") as f:
                         f.write(data)
                     print(f"📸 Foto guardada en {filename_}")
+                    self.db_base.insert_media(path=filename_, es_video=False, timestamp=timestamp_dt)
                     self.on_img(filename_)
 
                 elif header == "VIDEO":
@@ -1149,6 +1181,7 @@ class LoRaNode:
                     with open(filename_, "wb") as f:
                         f.write(data)
                     print(f"🎥 Vídeo guardado en {filename_}")
+                    self.db_base.insert_media(path=filename_, es_video=True, timestamp=timestamp_dt)
                     self.on_video(filename_)
 
                 else:
