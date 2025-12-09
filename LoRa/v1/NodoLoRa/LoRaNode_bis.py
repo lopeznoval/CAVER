@@ -156,6 +156,10 @@ class LoRaNode:
             self.on_alert(f"[{time.strftime('%H:%M:%S')}] Paquete recibido demasiado corto")
             return None
         
+        if self.stop_send:
+            print("⚠️ Receiving paused, message not processed.")
+            return None
+        
         addr_dest = (r_buff[0] << 8) + r_buff[1]
         addr_sender = (r_buff[2] << 8) + r_buff[3]
         part = r_buff[4] & 0x02
@@ -205,7 +209,7 @@ class LoRaNode:
                 if packed_data is None:
                     return
                 self.node.send_bytes(packed_data)
-                time.sleep(1)  # pequeño retardo entre fragmentos
+                time.sleep(2)  # pequeño retardo entre fragmentos
             part = 0
             packed_data = self.pack_bytes(addr_dest, msg_type, msg_id, data, relay_flag, part)
             self.node.send_bytes(packed_data)
@@ -233,7 +237,7 @@ class LoRaNode:
             if is_b == 0:
                 print(f"[{time.strftime('%H:%M:%S')}] Received from {addr_sender}: {message}")
             else:
-                print(f"[{time.strftime('%H:%M:%S')}] Received bytes from {addr_sender}: {len(message)} bytes")
+                print(f"[{time.strftime('%H:%M:%S')}] Received bytes from {addr_sender}: {message}")
             
             if addr_dest != self.addr and addr_dest != 0xFFFF:
                 if self.is_relay:
@@ -265,27 +269,61 @@ class LoRaNode:
                     
                     elif msg_id == 30:
                         try:
+                            # if part == 2:
+                            #     if self.photo is None:
+                            #         self.photo = bytearray()
+                            #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Encadenando parte de foto...")
+                            #     self.photo.extend(message)
+                            #     return
+                            # if part == 0 and self.photo is not None:
+                            #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Finalizando foto...")
+                            #     self.photo.extend(message)
+                            #     img = Image.open(io.BytesIO(bytes(self.photo)))
+                            #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Guardando foto...")
+                            #     save_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/")
+                            #     if not os.path.exists(save_path):
+                            #         os.makedirs(save_path)
+                            #     img.save(os.path.join(save_path, f"photo_from_{addr_sender}_{int(time.time())}.jpg"))
+                            #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto guardada.")
+                            #     #self.on_photo(img)
+                            #     self.photo = None  
+                            # Carpeta donde guardar las imágenes
+                            save_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket")
+                            os.makedirs(save_dir, exist_ok=True)
+
+                            # Nombre temporal del archivo mientras se reciben partes
+                            tmp_filename = f"tmp_photo_from_{addr_sender}.jpg"
+                            tmp_path = os.path.join(save_dir, tmp_filename)
+
+                            # Escribir bytes recibidos en el archivo temporal
+                            with open(tmp_path, "ab") as f:  # 'ab' = append en modo binario
+                                f.write(message)
+
                             if part == 2:
-                                if self.photo is None:
-                                    self.photo = bytearray()
+                                # Parte intermedia
                                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Encadenando parte de foto...")
-                                self.photo.extend(message)
                                 return
-                            if part == 0 and self.photo is not None:
+
+                            if part == 0:
+                                # Última parte recibida
                                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Finalizando foto...")
-                                self.photo.extend(message)
-                                img = Image.open(io.BytesIO(bytes(self.photo)))
-                                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Guardando foto...")
-                                save_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/")
-                                if not os.path.exists(save_path):
-                                    os.makedirs(save_path)
-                                img.save(os.path.join(save_path, f"photo_from_{addr_sender}_{int(time.time())}.jpg"))
-                                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto guardada.")
-                                #self.on_photo(img)
-                                self.photo = None  
+
+                                # Abrir imagen desde el archivo temporal
+                                img = Image.open(tmp_path)
+
+                                # Guardar la imagen final con timestamp y sender en el nombre
+                                final_filename = f"photo_from_{addr_sender}_{int(time.time())}.jpg"
+                                final_path = os.path.join(save_dir, final_filename)
+                                img.save(final_path)
+
+                                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto guardada en {final_path}.")
+
+                                # Limpiar archivo temporal
+                                os.remove(tmp_path)
 
                         except Exception as e:
                             self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error decodificando foto: {e}")
+
                     elif msg_id == 40: # sensores
                         try:
                             self.temp_hum(message)
@@ -535,6 +573,7 @@ class LoRaNode:
                         try:
                             #self.send_message(addr_sender, 4, msg_id, "OK STARTING")
                             path = self.lora_cam_sender.capture_recording_optimized(self.photo_dir, resolution="Baja")
+                            time.sleep(0.5)
                             self.send_bytes(addr_sender, 0, 30, path)
                         except Exception as e:
                             self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error decodificando imagen LoRa: {e}")

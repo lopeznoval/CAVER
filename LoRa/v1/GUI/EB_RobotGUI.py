@@ -691,7 +691,7 @@ class EB_RobotGUI_bis(QWidget):
                 27: "Iniciar/Detener streaming",
                 28: "Enviar IP y puerto",
                 # 27: "Detección de movimiento",
-                29: "Seguimiento de objetivo",
+                29: "Envío de foto por LoRa",
                 30: "Reset del módulo"
             },
             "Relay Flag (31)": {
