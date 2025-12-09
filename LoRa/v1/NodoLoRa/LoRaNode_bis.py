@@ -1,4 +1,5 @@
 # LoRaNode organizado
+from ast import arg
 import io
 from operator import is_
 import sys
@@ -1158,12 +1159,11 @@ class LoRaNode:
                 conn.close()
         s.close()
 
-    def listen_streaming(host='0.0.0.0', port=5400):
+    def listen_streaming(self):
         """Escucha y muestra un stream de video H.264 enviado por el robot vía UDP."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.bind((host, port))
-        print(f"Servidor escuchando en {host}:{port}...")
-
+        sock.bind(('0.0.0.0', 5400))
+        print(f"Servidor escuchando en 0.0.0.0:5400...")
         try:
             while True:
                 data, addr = sock.recvfrom(65536)  # UDP máximo ~64 KB

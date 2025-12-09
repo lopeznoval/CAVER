@@ -21,6 +21,7 @@ class LoRaCamSender:
         def __init__(self, camera: Picamera2 = None):
             self.camera = camera
             self.stream = io.BytesIO()
+            self.streaming_active = False
             print("📷 Cámara inicializada.")
 
             if self.camera is None:
