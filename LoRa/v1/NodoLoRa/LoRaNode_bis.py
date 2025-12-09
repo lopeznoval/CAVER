@@ -320,6 +320,7 @@ class LoRaNode:
                                 img.save(final_path)
 
                                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto guardada en {final_path}.")
+                                self.on_img(final_path)
 
                                 # Limpiar archivo temporal
                                 os.remove(tmp_path)
