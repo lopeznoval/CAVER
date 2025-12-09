@@ -558,11 +558,13 @@ class LoRaNode:
                     elif msg_type == 27:  # empezar/parar streaming vía WiFi
                         if message == "1":
                             print("📥 Comando: iniciar streaming H.264")
-                            ack = self.lora_cam_sender.start_h264_streaming(self.host_eb)
-                            self.send_message(addr_sender, 4, msg_id, f"OK" if ack else "Error")
+                            self.streaming_thread = threading.Thread(target=self.lora_cam_sender.start_streaming, args=(self.host_eb,)).start()
+                            self.send_message(addr_sender, 4, msg_id, f"OK")
                         elif message == "0":
                             print("📥 Comando: detener streaming H.264")
-                            ack = self.lora_cam_sender.stop_h264_streaming()
+                            ack = self.lora_cam_sender.stop_streaming()
+                            if self.streaming_thread:
+                                self.streaming_thread.join(timeout=2)
                             self.send_message(addr_sender, 4, msg_id, f"OK" if ack else "Error")
 
                     elif msg_type == 28:  # host:port para enviar foto vía WiFi

@@ -259,12 +259,11 @@ class LoRaCamSender:
     def stop_streaming(self):
         if not self.streaming_active:
             print("⚠️ No hay streaming activo")
-            return
+            return False
 
         self.streaming_active = False
-        if self.streaming_thread:
-            self.streaming_thread.join(timeout=2)
         print("🛑 Streaming detenido")
+        return True
 
         # Para la recepción en windows usar GSTREAMER:
         # https://gstreamer.freedesktop.org/download/
