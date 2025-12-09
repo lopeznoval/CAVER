@@ -1,3 +1,4 @@
+from datetime import datetime
 import io
 import os
 import struct
@@ -129,11 +130,17 @@ class LoRaCamSender:
             return video_bytes, full_path
 
 
-    def send_photo_file_wifi(self, host: str, port: int, photo_path: str):
+    def send_photo_file_wifi(self, host: str, port: int, photo_path: str, timestamp: datetime = None):
         print("📸 Capturando foto comprimida antes del envío...")
 
         if not os.path.exists(photo_path):
             photo_path = self.capture_recording_optimized()
+
+        if timestamp is None:
+            timestamp = datetime.now() 
+
+        ts_float = timestamp.timestamp()  
+        ts_bytes = struct.pack('>d', ts_float) 
 
         try:
             filename = os.path.basename(photo_path)
@@ -149,6 +156,7 @@ class LoRaCamSender:
                 s.send(b"PHOTO     ")  # 10 bytes
                 s.send(len(name_bytes).to_bytes(2, 'big'))  # longitud nombre
                 s.send(name_bytes)                          # nombre
+                s.send(ts_bytes)                            # timestamp 8 bytes
                 s.send(file_size.to_bytes(8, 'big'))        # tamaño
 
                 # contenido
@@ -163,11 +171,17 @@ class LoRaCamSender:
             return False
 
 
-    def send_video_file_wifi(self, host: str, port: int, video_path: str):
+    def send_video_file_wifi(self, host: str, port: int, video_path: str, timestamp: datetime):
         print("🎥 Grabando vídeo comprimido antes del envío...")
 
         if not os.path.exists(video_path):
             video_path = self.video_recording_optimized()
+
+        if timestamp is None:
+            timestamp = datetime.now()  
+
+        ts_float = timestamp.timestamp() 
+        ts_bytes = struct.pack('>d', ts_float) 
 
         try:
             filename = os.path.basename(video_path)
@@ -183,6 +197,7 @@ class LoRaCamSender:
                 s.send(b"VIDEO     ")                      # 10 bytes
                 s.send(len(name_bytes).to_bytes(2, 'big'))  # longitud nombre
                 s.send(name_bytes)                          # nombre archivo
+                s.send(ts_bytes)                            # timestamp 8 bytes
                 s.send(file_size.to_bytes(8, 'big'))        # tamaño
 
                 # enviar contenido en chunks
