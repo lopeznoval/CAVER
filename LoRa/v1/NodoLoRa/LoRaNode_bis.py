@@ -272,37 +272,15 @@ class LoRaNode:
                         print(f"[{time.strftime('%H:%M:%S')}] Recibido ACK BBDD. Procesando...")
                         self.ack_BBDD_packet(message)
                         print(f"[{time.strftime('%H:%M:%S')}] Borrando registros sincronizados...")
-                        self.db.delete_synced_entries()
                     
                     elif msg_id == 30:
                         try:
-                            # if part == 2:
-                            #     if self.photo is None:
-                            #         self.photo = bytearray()
-                            #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Encadenando parte de foto...")
-                            #     self.photo.extend(message)
-                            #     return
-                            # if part == 0 and self.photo is not None:
-                            #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Finalizando foto...")
-                            #     self.photo.extend(message)
-                            #     img = Image.open(io.BytesIO(bytes(self.photo)))
-                            #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Guardando foto...")
-                            #     save_path = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/")
-                            #     if not os.path.exists(save_path):
-                            #         os.makedirs(save_path)
-                            #     img.save(os.path.join(save_path, f"photo_from_{addr_sender}_{int(time.time())}.jpg"))
-                            #     self.on_alert(f"[{time.strftime('%H:%M:%S')}] Foto guardada.")
-                            #     #self.on_photo(img)
-                            #     self.photo = None  
-                            # Carpeta donde guardar las imágenes
                             save_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket")
                             os.makedirs(save_dir, exist_ok=True)
 
-                            # Nombre temporal del archivo mientras se reciben partes
                             tmp_filename = f"tmp_photo_from_{addr_sender}.jpg"
                             tmp_path = os.path.join(save_dir, tmp_filename)
 
-                            # Escribir bytes recibidos en el archivo temporal
                             with open(tmp_path, "ab") as f:  # 'ab' = append en modo binario
                                 f.write(message)
 
@@ -1069,17 +1047,6 @@ class LoRaNode:
             print(f"[LED] ❌ Error enviando orden al ESP32: {e}")
 
     # -------------------- BBDD --------------------
-    def sinc_BBDD_loop(self):
-        """Sincroniza datos pendientes con la BBDD en la base."""
-        while self.running:
-            try:
-                with get_db_session() as session:
-                    payload = sincronizar_sensores_lora(session)
-                self.send_message(0xFFFF, 0, 20, payload)
-            except Exception as e:
-                self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando BBDD: {e}")
-            time.sleep(30)  # cada 30 segundos
-
     def sync_BBDD_sens_loop(self):
         """Sincroniza datos pendientes con la BBDD local."""
         while self.running:
@@ -1104,6 +1071,12 @@ class LoRaNode:
     def ack_BBDD_packet(self, json):
         """Marca un paquete de BBDD como recibido."""
         self.sync.handle_ack(json)
+
+    def delete_BBDD_data(self):
+        """Elimina los datos sincronizados de la BBDD local."""
+        while self.running:
+            self.db.delete_synced_entries()
+            time.sleep(180)  # cada 3 minutos
 
     # -------------------- WiFi --------------------
     def sync_BDDD_wifi_loop(self):
@@ -1235,7 +1208,6 @@ class LoRaNode:
         if self.robot_port and self.robot_baudrate:
             flag_robot = self.connect_robot()
         # -------------------- RADAR --------------------
-
         # if (self.ip_sock is not None) and (self.port_sock is not None):
         #     radar_th = threading.Thread(target=self.listen_udp_radar, daemon=True).start()
         # -------------------- SENSORES --------------------
@@ -1244,8 +1216,6 @@ class LoRaNode:
             sensor_th = threading.Thread(target=self.read_sensors_loop, daemon=True).start()
         # -------------------- BBDD --------------------
         if not self.is_base:
-            # crear_tablas()
-            # bbdd_th = threading.Thread(target=self.sinc_BBDD_loop, daemon=True).start()
             data_dir = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "datos")
             os.makedirs(data_dir, exist_ok=True)
             db_path = os.path.join(data_dir, "robot_data.db")
@@ -1255,6 +1225,7 @@ class LoRaNode:
             self.db = RobotDatabase(db_path)
             self.sync = NodeSyncManager(self.db, self.addr)
             bbdd_th = threading.Thread(target=self.sync_BBDD_sens_loop, daemon=True).start()
+            delete_data_th = threading.Thread(target=self.delete_BBDD_data, daemon=True).start()
         else:
             # connect_mongo()
             print("Conectando a MongoDB.")
@@ -1268,19 +1239,8 @@ class LoRaNode:
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()
 
-        # if platform.system() != "Windows":
-            # self.imu_thread = threading.Thread(target=self._get_imu_loop_raspi, daemon=True)
-        # else:
-        #     self.imu_thread = threading.Thread(target=self._get_imu_loop_EB, daemon=True)
         print(f"[{time.strftime('%H:%M:%S')}] LoRaNode running... Ctrl+C to stop")
-        # try:
-        #     while True:
-        #         # self.receive_loop()
-        #         time.sleep(1)
-        # except KeyboardInterrupt:
-        #     self.stop()
     
-
     def stop(self):
         print(f"[{time.strftime('%H:%M:%S')}] Stopping LoRaNode...")
         self.running = False
@@ -1289,12 +1249,3 @@ class LoRaNode:
             self.robot.close()
             self.sensores.close()
         self.node.close()
-
-
-# recibir orden de gui para activar movimiento automatico
-# cuando se reciba la orden, mandar comando de hacia adelante cada 3 segundos minimo
-# si flag de colision = 1 mandar girar a la derecha (o random)
-# 
-# importante que si esta el movimiento automatico activado no se puedan mandar comandos de movimiento
-#
-

@@ -385,6 +385,17 @@ class RobotDatabase:
         try:
             s.query(SensorData).filter_by(sinc=True).delete()
             s.query(RobotMovimiento).filter_by(sinc=True).delete()
+            to_delete = s.query(Media).filter_by(sinc=True).all()
+            paths = [m.path for m in to_delete]
+            for p in paths:
+                try:
+                    if os.path.exists(p):
+                        os.remove(p)
+                        print(f"🗑 Archivo eliminado: {p}")
+                    else:
+                        print(f"⚠ Archivo no encontrado: {p}")
+                except Exception as e:
+                    print(f"❌ Error borrando {p}: {e}")
             s.query(Media).filter_by(sinc=True).delete()
             s.commit()
         finally:
