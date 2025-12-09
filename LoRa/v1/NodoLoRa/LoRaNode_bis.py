@@ -1185,7 +1185,7 @@ class LoRaNode:
                     with open(filename_, "wb") as f:
                         f.write(data)
                     print(f"📸 Foto guardada en {filename_}")
-                    self.db_base.insert_media(robot_id=robot_id, path=filename_, es_video=False, checksum=checksum_bytes, timestamp=timestamp_dt)
+                    self.db_base.insert_media(robot_id=robot_id, path=filename_, es_video=False, checksum=base64.b64encode(checksum_bytes).decode("utf-8"), timestamp=timestamp_dt)
                     self.on_img(filename_)
 
                 elif header == "VIDEO":
@@ -1193,7 +1193,7 @@ class LoRaNode:
                     with open(filename_, "wb") as f:
                         f.write(data)
                     print(f"🎥 Vídeo guardado en {filename_}")
-                    self.db_base.insert_media(robot_id=robot_id, path=filename_, es_video=True, checksum=checksum_bytes, timestamp=timestamp_dt)
+                    self.db_base.insert_media(robot_id=robot_id, path=filename_, es_video=True, checksum=base64.b64encode(checksum_bytes).decode("utf-8"), timestamp=timestamp_dt)
                     self.on_video(filename_)
 
                 else:
