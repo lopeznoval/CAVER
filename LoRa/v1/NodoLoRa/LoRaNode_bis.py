@@ -3,6 +3,7 @@ from ast import arg
 from datetime import date
 import io
 from operator import is_
+import os
 import struct
 import sys
 import json
@@ -1053,7 +1054,7 @@ class LoRaNode:
             packets = self.sync.prepare_packets_sensors()
             count = 0
             for pkt in packets:
-                print(f"[{time.strftime('%H:%M:%S')}] Iniiciando sincronización.")
+                print(f"[{time.strftime('%H:%M:%S')}] Iniciando sincronización SENSORES.")
                 count += 1
                 if count > 1:
                     break  # enviar máximo 1 paquetes por ciclo
@@ -1083,6 +1084,7 @@ class LoRaNode:
         """Sincroniza datos pendientes con la BBDD en la base vía WiFi."""
         while self.running:
             try:
+                print(f"[{time.strftime('%H:%M:%S')}] Iniciando sincronización de multimedia vía WiFi...")
                 media_list = self.db.get_unsynced_media()
                 packet_entries = []
                 for item in media_list:
@@ -1235,6 +1237,8 @@ class LoRaNode:
         if self.is_base:
             wifi_th = threading.Thread(target=self.listen_robot, daemon=True).start()
             stream_th = threading.Thread(target=self.listen_streaming, daemon=True).start()
+        else:
+            sync_wifi_th = threading.Thread(target=self.sync_BDDD_wifi_loop, daemon=True).start()
         # -------------------- INFO PERIODICA --------------------
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()
