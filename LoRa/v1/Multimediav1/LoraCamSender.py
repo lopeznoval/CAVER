@@ -226,16 +226,35 @@ class LoRaCamSender:
             print("🛑 Streaming detenido")
 
     def start_streaming(self, host: str, port: int = 5004, width=640, height=480, fps=20):
-        if self.streaming_active:
-            print("⚠️ Streaming ya activo")
-            return
+        self.camera.configure(self.camera.create_video_configuration(main={"size": (640, 480)}, display=None))
+        self.camera.start()
 
-        self.streaming_active = True
-        self.streaming_thread = threading.Thread(target=self._streaming_loop,
-                                                 args=(host, port, width, height, fps),
-                                                 daemon=True)
-        self.streaming_thread.start()
-        print("🎬 Streaming iniciado en hilo separado")
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+        print(f"Intentando conectar a {host}:{port}...")
+        client_socket.connect((host, port))
+        print("Conexión establecida. Iniciando transmisión.")
+
+        try:
+            while self.streaming_active:
+                # --- Lógica de captura y envío (igual que antes) ---
+
+                # Captura un fotograma
+                frame = self.camera.capture_array()
+                # Codifica el fotograma a JPEG para reducir el tamaño
+                _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                data = buffer.tobytes()
+
+                # Envía el tamaño del fotograma primero, seguido de los datos del fotograma
+                size = len(data)
+                client_socket.sendall(size.to_bytes(4, byteorder='little'))
+                client_socket.sendall(data)
+        except Exception as e:
+            print(f"❌ Error en streaming: {e}")
+        finally:
+            client_socket.close()
+            self.camera.stop()
+            print("🛑 Streaming detenido")
 
     def stop_streaming(self):
         if not self.streaming_active:

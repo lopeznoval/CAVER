@@ -8,6 +8,8 @@ import time
 import threading
 import platform
 import base64
+import numpy as np
+import cv2
 import math
 import socket
 import serial
@@ -1155,6 +1157,57 @@ class LoRaNode:
             finally:
                 conn.close()
         s.close()
+
+    def listen_streming(self):
+        """Escucha el streaming de video enviado por la Raspberry Pi."""
+
+        # Configuración del socket (servidor)
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        # Escucha en todas las interfaces de red de tu ordenador
+        host = '0.0.0.0' 
+        port = 8000
+        server_socket.bind((host, port))
+        server_socket.listen(1) # Solo esperamos una conexión (la Pi)
+        print(f"Servidor escuchando en {host}:{port}. Esperando conexión de la Pi...")
+
+        # Acepta la conexión entrante de la Raspberry Pi
+        connection, address = server_socket.accept()
+        print(f"Conexión aceptada desde {address} (Raspberry Pi)")
+
+        try:
+            while True:
+                # --- Lógica de recepción y visualización (igual que antes) ---
+                
+                # Recibe el tamaño del fotograma
+                size_bytes = connection.recv(4)
+                if not size_bytes:
+                    break
+                size = int.from_bytes(size_bytes, byteorder='little')
+
+                # Recibe los datos del fotograma
+                data = b''
+                while len(data) < size:
+                    packet = connection.recv(size - len(data))
+                    if not packet:
+                        break
+                    data += packet
+                
+                if not data:
+                    break
+
+                # Decodifica el fotograma JPEG y lo muestra
+                frame = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+                cv2.imshow('Live Stream - Client Mode', frame)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+
+        except KeyboardInterrupt:
+            print("Recepción detenida por el usuario")
+        finally:
+            connection.close()
+            server_socket.close()
+            cv2.destroyAllWindows()
+
 
     # -------------------- EJECUCIÓN --------------------
     def run(self):
