@@ -21,6 +21,7 @@ class LoRaCamSender:
         def __init__(self, camera: Picamera2 = None):
             self.camera = camera
             self.stream = io.BytesIO()
+
             print("📷 Cámara inicializada.")
 
             if self.camera is None:
@@ -228,7 +229,7 @@ class LoRaCamSender:
     def start_streaming(self, host: str, port: int = 5004, width=640, height=480, fps=20):
         self.camera.configure(self.camera.create_video_configuration(main={"size": (640, 480)}, display=None))
         self.camera.start()
-
+        
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
         print(f"Intentando conectar a {host}:{port}...")
