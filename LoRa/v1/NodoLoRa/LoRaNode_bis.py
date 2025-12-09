@@ -558,13 +558,11 @@ class LoRaNode:
                     elif msg_type == 27:  # empezar/parar streaming vía WiFi
                         if message == "1":
                             print("📥 Comando: iniciar streaming H.264")
-                            self.streaming_thread = threading.Thread(target=self.lora_cam_sender.start_streaming, args=(self.host_eb,)).start()
+                            self.lora_cam_sender.start_streaming(self.host_eb, 5400)
                             self.send_message(addr_sender, 4, msg_id, f"OK")
                         elif message == "0":
                             print("📥 Comando: detener streaming H.264")
                             ack = self.lora_cam_sender.stop_streaming()
-                            if self.streaming_thread:
-                                self.streaming_thread.join(timeout=2)
                             self.send_message(addr_sender, 4, msg_id, f"OK" if ack else "Error")
 
                     elif msg_type == 28:  # host:port para enviar foto vía WiFi
@@ -1160,54 +1158,27 @@ class LoRaNode:
                 conn.close()
         s.close()
 
-    def listen_streming(self):
-        """Escucha el streaming de video enviado por la Raspberry Pi."""
-
-        # Configuración del socket (servidor)
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # Escucha en todas las interfaces de red de tu ordenador
-        host = '0.0.0.0' 
-        port = 8000
-        server_socket.bind((host, port))
-        server_socket.listen(1) # Solo esperamos una conexión (la Pi)
-        print(f"Servidor escuchando en {host}:{port}. Esperando conexión de la Pi...")
-
-        # Acepta la conexión entrante de la Raspberry Pi
-        connection, address = server_socket.accept()
-        print(f"Conexión aceptada desde {address} (Raspberry Pi)")
+    def listen_streaming(host='0.0.0.0', port=5400):
+        """Escucha y muestra un stream de video H.264 enviado por el robot vía UDP."""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((host, port))
+        print(f"Servidor escuchando en {host}:{port}...")
 
         try:
             while True:
-                # --- Lógica de recepción y visualización (igual que antes) ---
-                
-                # Recibe el tamaño del fotograma
-                size_bytes = connection.recv(4)
-                if not size_bytes:
-                    break
-                size = int.from_bytes(size_bytes, byteorder='little')
-
-                # Recibe los datos del fotograma
-                data = b''
-                while len(data) < size:
-                    packet = connection.recv(size - len(data))
-                    if not packet:
-                        break
-                    data += packet
-                
+                data, addr = sock.recvfrom(65536)  # UDP máximo ~64 KB
                 if not data:
-                    break
-
-                # Decodifica el fotograma JPEG y lo muestra
-                frame = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
-                cv2.imshow('Live Stream - Client Mode', frame)
+                    continue
+                print(f"📥 Frame recibido de {len(data)} bytes")
+                frame = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+                if frame is not None:
+                    cv2.imshow("Live Stream", frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
-
         except KeyboardInterrupt:
-            print("Recepción detenida por el usuario")
+            print("🛑 Recepción detenida")
         finally:
-            connection.close()
-            server_socket.close()
+            sock.close()
             cv2.destroyAllWindows()
 
 
@@ -1246,6 +1217,7 @@ class LoRaNode:
         # -------------------- MuMULTIMEDIA --------------------
         if self.is_base:
             wifi_th = threading.Thread(target=self.listen_robot, daemon=True).start()
+            stream_th = threading.Thread(target=self.listen_streaming, daemon=True).start()
         # -------------------- INFO PERIODICA --------------------
         if self.is_base:
             status_th = threading.Thread(target=self.periodic_status, daemon=True).start()
