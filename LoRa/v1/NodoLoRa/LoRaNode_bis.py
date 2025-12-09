@@ -1101,7 +1101,7 @@ class LoRaNode:
 
             except Exception as e:
                 self.on_alert(f"[{time.strftime('%H:%M:%S')}] Error sincronizando BBDD vía WiFi: {e}")
-            time.sleep(70)  # cada 70 segundos
+            time.sleep(90)  # cada 90 segundos
 
     def listen_robot(self, host="0.0.0.0", port=6000, save_path=os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "multi_socket/")):
         """
